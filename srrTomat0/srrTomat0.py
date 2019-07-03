@@ -91,7 +91,7 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
 # TODO: make this a thing
 def get_srr_file(srr_id, target_path):
     """
-    Take a SRR ID string and get the SRR file for it from NCBI. Raise a ValueError if it cannot be found
+    Take a SRR ID string and get the SRR file for it from NCBI. Raise a ValueError if it cannot be found.
 
     :param srr_id: str
         NCBI SRR ID string
@@ -108,6 +108,7 @@ def get_srr_file(srr_id, target_path):
 # TODO: make this a thing
 def unpack_srr_file(srr_id, srr_file_name, target_path):
     """
+    Take an SRR file and unpack it into a set of FASTQ files
 
     :param srr_id: str
         NCBI SRR ID string
@@ -126,6 +127,7 @@ def unpack_srr_file(srr_id, srr_file_name, target_path):
 # TODO: make this a thing
 def star_align_fastq(srr_id, fastq_file_names, reference_genome, output_path):
     """
+    Take a set of FASTQ files and align them with the STAR aligner (in quantMode)
 
     :param srr_id: str
         NCBI SRR ID string
