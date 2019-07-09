@@ -1,4 +1,3 @@
-import subprocess
 import os
 import asyncio
 
@@ -21,28 +20,30 @@ def get_srr_files(srr_list, target_path, num_workers=5):
     """
     sem = asyncio.Semaphore(num_workers)
 
+    srr_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), x + ".sra"), srr_list))
+
     async def gather_results():
-        await asyncio.gather(*[get_srr_file(srr_id, target_path, sem) for srr_id in srr_list])
+        await asyncio.gather(*[get_srr_file(sid, sfn, sem) for sid, sfn in zip(srr_list, srr_file_names)])
 
-    return asyncio.get_event_loop().run_until_complete(gather_results())
+    asyncio.get_event_loop().run_until_complete(gather_results())
+
+    return srr_file_names
 
 
-async def get_srr_file(srr_id, target_path, semaphore):
+async def get_srr_file(srr_id, srr_file_name, semaphore):
     """
     Take a SRR ID string and get the SRR file for it from NCBI.
 
     :param srr_id: str
         NCBI SRR ID string
-    :param target_path: str
-        The path to put the SRR file
+    :param srr_file_name: str
+        The path to the SRR file (the FULL path)
     :param semaphore: asyncio.Semaphore
         Semaphore for resource utilization
     :return srr_file_name: str
         The SRR file name (including path)
     """
     async with semaphore:
-        srr_file_name = os.path.join(file_path_abs(target_path), srr_id + ".sra")
-
         # If the file is already downloaded, don't do anything
         if os.path.exists(srr_file_name):
             print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
