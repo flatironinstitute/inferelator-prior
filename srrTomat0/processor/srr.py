@@ -22,12 +22,12 @@ def get_srr_files(srr_list, target_path, num_workers=5):
     sem = asyncio.Semaphore(num_workers)
 
     async def gather_results():
-        await asyncio.gather(*[get_srr_file(srr_id, target_path) for srr_id in srr_list])
+        await asyncio.gather(*[get_srr_file(srr_id, target_path, sem) for srr_id in srr_list])
 
     return asyncio.get_event_loop().run_until_complete(gather_results())
 
 
-async def get_srr_file(srr_id, target_path):
+async def get_srr_file(srr_id, target_path, semaphore):
     """
     Take a SRR ID string and get the SRR file for it from NCBI. Raise a ValueError if it cannot be found.
 
@@ -40,17 +40,19 @@ async def get_srr_file(srr_id, target_path):
     :return srr_file_name: str
         The SRR file name (including path)
     """
-    srr_file_name = os.path.join(file_path_abs(target_path), srr_id + ".sra")
+    async with semaphore:
+        srr_file_name = os.path.join(file_path_abs(target_path), srr_id + ".sra")
 
-    # If the file is already downloaded, don't do anything
-    if os.path.exists(srr_file_name):
+        # If the file is already downloaded, don't do anything
+        if os.path.exists(srr_file_name):
+            return srr_file_name
+
+        prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name]
+        print(" ".join(prefetch_call))
+        process = asyncio.create_subprocess_exec(*prefetch_call)
+        await process.communicate()
+
         return srr_file_name
-
-    prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name]
-    print(" ".join(prefetch_call))
-    subprocess.call(prefetch_call)
-
-    return srr_file_name
 
 
 # Unpack the SRR file to a fastQ file
