@@ -49,9 +49,8 @@ async def get_srr_file(srr_id, target_path, semaphore):
 
         prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name]
         print(" ".join(prefetch_call))
-        process = asyncio.create_subprocess_exec(*prefetch_call)
+        process = await asyncio.create_subprocess_exec(*prefetch_call)
         await process.communicate()
-
         return srr_file_name
 
 
