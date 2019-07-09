@@ -29,7 +29,7 @@ def get_srr_files(srr_list, target_path, num_workers=5):
 
 async def get_srr_file(srr_id, target_path, semaphore):
     """
-    Take a SRR ID string and get the SRR file for it from NCBI. Raise a ValueError if it cannot be found.
+    Take a SRR ID string and get the SRR file for it from NCBI.
 
     :param srr_id: str
         NCBI SRR ID string
@@ -45,12 +45,17 @@ async def get_srr_file(srr_id, target_path, semaphore):
 
         # If the file is already downloaded, don't do anything
         if os.path.exists(srr_file_name):
+            print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
             return srr_file_name
 
         prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name]
         print(" ".join(prefetch_call))
         process = await asyncio.create_subprocess_exec(*prefetch_call)
-        await process.communicate()
+        code = await process.wait()
+
+        if int(code) != 0:
+            raise ValueError("NCBI Prefetch failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+
         return srr_file_name
 
 
