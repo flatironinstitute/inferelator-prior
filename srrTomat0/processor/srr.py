@@ -20,7 +20,7 @@ def get_srr_files_async(srr_list, target_path, num_workers=5):
     :return:
     """
     sem = asyncio.Semaphore(num_workers)
-    return asyncio.gather([async_wrapper_get_srr_file(srr_id, target_path, sem) for srr_id in srr_list])
+    return asyncio.gather(*[async_wrapper_get_srr_file(srr_id, target_path, sem) for srr_id in srr_list])
 
 
 async def async_wrapper_get_srr_file(srr_id, target_path, semaphore):
