@@ -47,7 +47,7 @@ def get_srr_file(srr_id, target_path):
     :return srr_file_name: str
         The SRR file name (including path)
     """
-    srr_file_name = os.path.join(file_path_abs(target_path), srr_id, ".sra")
+    srr_file_name = os.path.join(file_path_abs(target_path), srr_id + ".sra")
 
     # If the file is already downloaded, don't do anything
     if os.path.exists(srr_file_name):
