@@ -1,5 +1,28 @@
+import subprocess
+import os
+
+import numpy as np
+from srrTomat0.processor.utils import get_file_from_url, file_path_abs
+
+STAR_EXECUTABLE = "STAR"
+
 STAR_COUNT_FILE_METAINDEXES = ["N_unmapped", "N_multimapping", "N_noFeature", "N_ambiguous"]
 STAR_COUNT_FILE_HEADER = ["Total", "MinusStrand", "PlusStrand"]
+STAR_COUNT_COLUMN = "Total"
+
+STAR_DEFAULT_MKREF_OPTIONS=[]
+
+# Key by genome name
+# Tuple of ((fasta_url, fasta_file_name), (gff_url, gff_file_name))
+
+DEFAULT_GENOMES = {"hg38":
+                       (("ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz", "hg38.fa.gz"),
+                        ("ftp://ftp.ensembl.org/pub/release-97/gff3/homo_sapiens/Homo_sapiens.GRCh38.97.gff3.gz", "hg38.gff3.gz")),
+                   "sc64":
+                       (("ftp://ftp.ensembl.org/pub/release-97/fasta/saccharomyces_cerevisiae/dna/Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz", "sc64.fa.gz"),
+                        ("ftp://ftp.ensembl.org/pub/release-97/gff3/saccharomyces_cerevisiae/Saccharomyces_cerevisiae.R64-1-1.97.gff3.gz", "sc64.gff3.gz"))
+                   }
+
 
 # Align and count the fastQ file with STAR
 # TODO: make this a thing
@@ -20,3 +43,96 @@ def star_align_fastq(srr_id, fastq_file_names, reference_genome, output_path):
     """
     count_file_name = ""
     return count_file_name
+
+
+def star_mkref(output_path, genome_file=None, annotation_file=None, default_genome=None,
+               star_options=STAR_DEFAULT_MKREF_OPTIONS, cores=1, gff_annotations=None, star_executable=STAR_EXECUTABLE):
+
+    """
+    Make a reference genome index for STAR to align reads to
+    :param output_path: str
+        Path to output reference index into
+    :param genome_file: str
+        Genome sequences (usually FASTA)
+    :param annotation_file: str
+        Annotation file (usually GTF or GFF)
+    :param default_genome: str
+        A string to identify one of the common genomes
+        This will cause the genome data to be downloaded from ENSEMBL
+    :param star_options: list
+        A list of additional options to pass to STAR
+    :param cores: int
+        Number of cores to pass to STAR
+    :param gff_annotations: bool
+        Flag for GFF3 (instead of GTF) annotations. If None, it will autodetect .gff files.
+    :param star_executable: str
+        Path to the STAR executable
+    :return:
+    """
+
+    # Get default genome files from the internet if needed
+    if (genome_file is None or annotation_file is None) and default_genome is None:
+        raise ValueError("star_mkref() requires (genome_file AND annotation_file) OR default_genome to be passed")
+    elif default_genome is not None and default_genome in DEFAULT_GENOMES.keys():
+        ((genome_url, genome_file), (annotation_url, annotation_file)) = DEFAULT_GENOMES[default_genome]
+        genome_file = get_file_from_url(genome_url, genome_file)
+        annotation_file = get_file_from_url(annotation_url, annotation_file)
+    elif default_genome is not None:
+        raise ValueError("default_genome must be one of: {}".format(" ".join(DEFAULT_GENOMES.keys())))
+
+    # Create the output path
+    output_path = file_path_abs(output_path)
+    try:
+        os.makedirs(output_path)
+    except FileExistsError:
+        pass
+
+    # Uncompress the genome file if it's gzipped
+    if genome_file.endswith(".gz"):
+        subprocess.call(["gunzip", genome_file])
+        genome_file = genome_file[:-3]
+
+    # Uncompress the annotation file if it's gzipped
+    if annotation_file.endswith(".gz"):
+        subprocess.call(["gunzip", annotation_file])
+        annotation_file = annotation_file[:-3]
+
+    # Build the STAR executable call
+    star_call = [star_executable,
+                 "--runThreadN", str(cores),
+                 "--runMode", "genomeGenerate",
+                 "--genomeDir", output_path,
+                 "--genomeFastaFiles", genome_file,
+                 "--sjdbGTFfile", annotation_file]
+
+    # Add any passed-in options
+    star_call.extend(star_options)
+
+    # Set a flag for STAR if it's a small genome
+    star_sa_idx_size = int(np.floor(np.log2(os.path.getsize(genome_file))/2 - 1))
+    if star_sa_idx_size < 14:
+        star_call.extend(["--genomeSAindexNbases", str(star_sa_idx_size)])
+
+    # Set a flag for STAR if the annotation file is GFF3
+    if (gff_annotations is None and ".gff" in annotation_file) or gff_annotations:
+        star_call.extend(["--sjdbGTFtagExonParentTranscript", "Parent"])
+
+    # Execute STAR
+    print(" ".join(star_call))
+    subprocess.call(star_call)
+
+    # Clean up the downloaded files if necessary
+    if default_genome is not None:
+        os.remove(genome_file)
+        os.remove(annotation_file)
+
+    return output_path
+
+
+
+
+
+
+
+
+

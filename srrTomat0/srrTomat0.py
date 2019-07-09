@@ -1,10 +1,12 @@
 import argparse
 import os
+import asyncio
 
 import pandas as pd
 
-from srrTomat0.processor.srr import get_srr_file, unpack_srr_file
+from srrTomat0.processor.srr import get_srr_files_async, unpack_srr_file
 from srrTomat0.processor.star import star_align_fastq
+from srrTomat0.processor.matrix import pileup_raw_counts, normalize_matrix_to_fpkm
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
@@ -12,8 +14,6 @@ STAR_ALIGNMENT_SUBPATH = "STAR"
 
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
 OUTPUT_FPKM_FILE_NAME = "srr_fpkm.tsv"
-
-COUNT_FILE_HEADER_FOR_OUTPUT = "Total"
 
 
 def main():
@@ -49,12 +49,17 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
     output_path = os.path.abspath(os.path.expanduser(output_path))
     os.makedirs(output_path, exist_ok=True)
 
+    # Download all the SRR files
+    os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
+    srr_file_names = get_srr_files_async(srr_ids, os.path.join(output_path, SRR_SUBPATH))
+
+    os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
+    os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
+
     # For each SRR id, get the SRR file, unpack it to a fastq, and align it
     # Then save the path to the count file in a dict, keyed by SRR id
     aligned_data = {}
-    for srr_id in srr_ids:
-        srr_file_name = get_srr_file(srr_id,
-                                     os.path.join(output_path, SRR_SUBPATH))
+    for srr_id, srr_file_name in zip(srr_ids, srr_file_names):
         fastq_file_names = unpack_srr_file(srr_id, srr_file_name,
                                            os.path.join(output_path, FASTQ_SUBPATH))
         count_file_name = star_align_fastq(srr_id, fastq_file_names, star_reference_genome,
