@@ -36,7 +36,7 @@ async def async_wrapper_get_srr_file(srr_id, target_path, semaphore):
 
 
 # Download the SRR file from NCBI
-def get_srr_file(srr_id, target_path):
+async def get_srr_file(srr_id, target_path):
     """
     Take a SRR ID string and get the SRR file for it from NCBI. Raise a ValueError if it cannot be found.
 
