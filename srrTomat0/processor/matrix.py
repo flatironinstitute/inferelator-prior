@@ -19,7 +19,7 @@ def pileup_raw_counts(srr_ids, count_files, count_meta_names=STAR_COUNT_FILE_MET
     for srr_id, count_file_name in zip(srr_ids, count_files):
 
         # Load in the count data
-        count_data = pd.read_csv(count_file_name, sep="\t", index_col=0, header=False)
+        count_data = pd.read_csv(count_file_name, sep="\t", index_col=0, header=None)
         count_data.columns = STAR_COUNT_FILE_HEADER
 
         # Pull off the metadata
