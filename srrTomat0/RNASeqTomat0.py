@@ -2,7 +2,6 @@ import argparse
 import os
 
 import pandas as pd
-
 from srrTomat0.processor.matrix import pileup_raw_counts
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
@@ -71,3 +70,7 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
         count_matrix.to_csv(count_file_name + ".gz", compression='gzip', sep="\t")
     else:
         count_matrix.to_csv(count_file_name, sep="\t")
+
+
+if __name__ == '__main__':
+    main()

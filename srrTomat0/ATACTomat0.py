@@ -1,10 +1,6 @@
 import argparse
-import os
 
 import pandas as pd
-
-from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
-from srrTomat0.processor.star import star_align_fastqs
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
@@ -48,3 +44,7 @@ def main():
 
 def atac_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
     pass
+
+
+if __name__ == '__main__':
+    main()
