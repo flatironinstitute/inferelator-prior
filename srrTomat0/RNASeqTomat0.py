@@ -22,6 +22,7 @@ def main():
     ap.add_argument("-g", "--genome", dest="genome", help="STAR reference genome", metavar="PATH", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
     ap.add_argument("--gzip", dest="gzip", help="GZIP output file", action='store_const', const=True, default=False)
+    ap.add_argument("--cpu", dest="cpu", help="NUMBER of cores to use", metavar="PATH", type=int, default=4)
 
     args = ap.parse_args()
     srr_ids = list()
@@ -41,28 +42,31 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip)
+    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu)
 
 
-def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
+def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4):
     output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
 
     # Download all the SRR files
     os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
-    srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH))
+    srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH), num_workers=cores)
 
     print("SRR Files Downloaded:")
     print("\n".join(srr_file_names))
 
     # Unpack all the SRR files into FASTQ files
     os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
-    fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH))
+    fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
+                                        num_workers=cores)
 
     # Run all the FASTQ files through STAR to align and count genes
     os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
+    thread_count = max(int(cores / len(srr_ids)), int(cores / 4))
     count_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
-                                         os.path.join(output_path, STAR_ALIGNMENT_SUBPATH))
+                                         os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
+                                         num_workers=4, threads_per_worker=thread_count)
 
     # Convert the count files into a matrix and save it to a TSV
     count_matrix = pileup_raw_counts(srr_ids, count_file_names)
@@ -73,6 +77,8 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
         count_matrix.to_csv(count_file_name + ".gz", compression='gzip', sep="\t")
     else:
         count_matrix.to_csv(count_file_name, sep="\t")
+
+    return count_matrix
 
 
 if __name__ == '__main__':
