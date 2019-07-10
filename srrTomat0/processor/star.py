@@ -186,7 +186,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
 
     # Clean up the downloaded files if necessary
     if default_genome is not None:
-        os.remove(genome_file)
+        [os.remove(gf) for gf in genome_file]
         os.remove(annotation_file)
 
     return output_path
