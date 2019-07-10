@@ -26,7 +26,7 @@ def get_srr_files(srr_list, target_path, num_workers=5):
     srr_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), x + ".sra"), srr_list))
     tasks = [_get_srr(sid, sfn, sem) for sid, sfn in zip(srr_list, srr_file_names)]
 
-    return [asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))]
+    return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
 
 
 # TODO: test this
@@ -80,7 +80,7 @@ def unpack_srr_files(srr_ids, srr_file_names, target_path, num_workers=5):
     sem = asyncio.Semaphore(num_workers)
 
     tasks = [_unpack_srr(sid, sfn, target_path, sem) for sid, sfn in zip(srr_ids, srr_file_names)]
-    return [asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))]
+    return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
 
 
 # TODO: test this
