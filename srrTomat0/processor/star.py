@@ -48,7 +48,7 @@ def star_align_fastqs(srr_ids, fastq_file_names, reference_genome, output_path, 
              sid, fqfn, sout in zip(srr_ids, fastq_file_names, output_paths)]
 
     # Run and return STAR tasks
-    return [asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))]
+    return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
 
 
 # TODO: test this
