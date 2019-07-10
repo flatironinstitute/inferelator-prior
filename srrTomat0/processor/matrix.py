@@ -1,9 +1,12 @@
 import pandas as pd
+
 from srrTomat0.processor.star import STAR_COUNT_COLUMN, STAR_COUNT_FILE_METAINDEXES
+
 
 # Turn count files into a count matrix
 # TODO: test this
-def pileup_raw_counts(aligned_data, count_meta_names=STAR_COUNT_FILE_METAINDEXES, count_column=STAR_COUNT_COLUMN):
+def pileup_raw_counts(srr_ids, count_files, count_meta_names=STAR_COUNT_FILE_METAINDEXES,
+                      count_column=STAR_COUNT_COLUMN):
     """
     Convert the STAR alignment GeneCount files to a dataframe of SRR-derived expression values
 
@@ -13,7 +16,7 @@ def pileup_raw_counts(aligned_data, count_meta_names=STAR_COUNT_FILE_METAINDEXES
         A dataframe of raw, unnormalized count values from all SRR alignments
     """
     matrix_data = pd.DataFrame()
-    for srr_id, count_file_name in aligned_data.items():
+    for srr_id, count_file_name in zip(srr_ids, count_files):
 
         # Load in the count data
         count_data = pd.read_csv(count_file_name, sep="\t")

@@ -1,12 +1,12 @@
 import argparse
 import os
-import asyncio
 
 import pandas as pd
 
-from srrTomat0.processor.srr import get_srr_files_async, unpack_srr_file
-from srrTomat0.processor.star import star_align_fastq
-from srrTomat0.processor.matrix import pileup_raw_counts, normalize_matrix_to_fpkm
+from srrTomat0.processor.matrix import pileup_raw_counts
+from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
+from srrTomat0.processor.star import star_align_fastqs
+from srrTomat0.processor.utils import file_path_abs
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
@@ -46,51 +46,28 @@ def main():
 
 
 def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
-    output_path = os.path.abspath(os.path.expanduser(output_path))
+    output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
 
     # Download all the SRR files
     os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
-    srr_file_names = get_srr_files_async(srr_ids, os.path.join(output_path, SRR_SUBPATH))
+    srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH))
 
+    # Unpack all the SRR files into FASTQ files
     os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
+    fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH))
+
+    # Run all the FASTQ files through STAR to align and count genes
     os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
+    count_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
+                                         os.path.join(output_path, STAR_ALIGNMENT_SUBPATH))
 
-    # For each SRR id, get the SRR file, unpack it to a fastq, and align it
-    # Then save the path to the count file in a dict, keyed by SRR id
-    aligned_data = {}
-    for srr_id, srr_file_name in zip(srr_ids, srr_file_names):
-        fastq_file_names = unpack_srr_file(srr_id, srr_file_name,
-                                           os.path.join(output_path, FASTQ_SUBPATH))
-        count_file_name = star_align_fastq(srr_id, fastq_file_names, star_reference_genome,
-                                           os.path.join(output_path, STAR_ALIGNMENT_SUBPATH))
-        aligned_data[srr_id] = count_file_name
-
-    # Turn the count files into a count matrix
+    # Convert the count files into a matrix and save it to a TSV
+    count_matrix = pileup_raw_counts(srr_ids, count_file_names)
     count_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME)
 
-    if os.path.exists(count_file_name):
-        count_matrix = pd.read_csv(count_file_name, sep="\t")
-    elif os.path.exists(count_file_name + ".gz"):
-        count_matrix = pd.read_csv(count_file_name + ".gz", sep="\t")
-    else:
-        count_matrix = pileup_raw_counts(aligned_data)
-
-        # Save the raw counts file
-        if gzip_output:
-            count_matrix.to_csv(count_file_name + ".gz", compression='gzip', sep="\t")
-        else:
-            count_matrix.to_csv(count_file_name, sep="\t")
-
-    # Normalize the count matrix to FPKM and save it
-    normalized_matrix = normalize_matrix_to_fpkm(count_matrix)
-
-    # Save the fpkm counts file
-    fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME)
+    # Save the raw counts file
     if gzip_output:
-        count_matrix.to_csv(fpkm_file_name + ".gz", compression='gzip', sep="\t")
+        count_matrix.to_csv(count_file_name + ".gz", compression='gzip', sep="\t")
     else:
-        count_matrix.to_csv(fpkm_file_name, sep="\t")
-
-    return normalized_matrix
-
+        count_matrix.to_csv(count_file_name, sep="\t")

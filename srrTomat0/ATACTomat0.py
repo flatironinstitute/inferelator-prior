@@ -3,7 +3,8 @@ import os
 
 import pandas as pd
 
-from srrTomat0.processor.srr import get_srr_file, unpack_srr_file
+from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
+from srrTomat0.processor.star import star_align_fastqs
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
@@ -17,7 +18,7 @@ COUNT_FILE_HEADER_FOR_OUTPUT = "Total"
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Turn a list of ATAC-seq expression SRRs from NCBI GEO into a prior matrix")
+    ap = argparse.ArgumentParser(description="Turn ATAC-seq expression SRRs from NCBI GEO into a prior matrix")
     ap.add_argument("-s", "--srr", dest="srr", help="SRR record IDs", nargs="+", metavar="SRRID", default=None)
     ap.add_argument("-f", "--file", dest="file", help="List of SRR records in a TXT file", metavar="FILE", default=None)
     ap.add_argument("-g", "--genome", dest="genome", help="STAR reference genome", metavar="PATH", required=True)
@@ -43,3 +44,7 @@ def main():
         raise ValueError("There is something wrong with this switch")
 
     atac_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip)
+
+
+def atac_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False):
+    pass
