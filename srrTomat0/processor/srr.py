@@ -6,10 +6,13 @@ from srrTomat0.processor.utils import file_path_abs
 NCBI_PREFETCH_EXECUTABLE = "prefetch"
 NCBI_FASTQDUMP_EXECUTABLE = "fastq-dump"
 
+PREFETCH_OPTIONS = []
+
 POSSIBLE_FASTQ_EXTENSIONS = [".fastq.gz", "_1.fastq.gz", "_2.fastq.gz", "_3.fastq.gz", "_4.fastq.gz"]
 
+
 # TODO: test this
-def get_srr_files(srr_list, target_path, num_workers=5):
+def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETCH_OPTIONS):
     """
     Take a list of SRR ID strings, download them async with num_workers concurrent jobs, and return a list of the
     paths to the SRR files that have been downloaded.
@@ -19,6 +22,8 @@ def get_srr_files(srr_list, target_path, num_workers=5):
         Target path for the SRA files
     :param num_workers: int
         Number of concurrent jobs to run
+    :param prefetch_options: list(str)
+        Any additional command line arguments to pass to prefetch
     :return:
     """
     sem = asyncio.Semaphore(num_workers)
@@ -30,7 +35,7 @@ def get_srr_files(srr_list, target_path, num_workers=5):
 
 
 # TODO: test this
-async def _get_srr(srr_id, srr_file_name, semaphore):
+async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_OPTIONS):
     """
     Take a SRR ID string and get the SRR file for it from NCBI.
 
@@ -40,6 +45,8 @@ async def _get_srr(srr_id, srr_file_name, semaphore):
         The path to the SRR file (the FULL path)
     :param semaphore: asyncio.Semaphore
         Semaphore for resource utilization
+    :param prefetch_options: list(str)
+        Any additional command line arguments to pass to prefetch
     :return srr_file_name: str
         The SRR file name (including path)
     """
@@ -49,7 +56,7 @@ async def _get_srr(srr_id, srr_file_name, semaphore):
             print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
             return srr_file_name
 
-        prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name]
+        prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name, *prefetch_options]
         print(" ".join(prefetch_call))
         process = await asyncio.create_subprocess_exec(*prefetch_call)
         code = await process.wait()
