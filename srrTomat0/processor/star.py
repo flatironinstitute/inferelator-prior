@@ -112,7 +112,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
     Make a reference genome index for STAR to align reads to
     :param output_path: str
         Path to output reference index into
-    :param genome_file: str
+    :param genome_file: list(str)
         Genome sequences (usually FASTA)
     :param annotation_file: str
         Annotation file (usually GTF or GFF)
@@ -136,7 +136,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
         raise ValueError("star_mkref() requires (genome_file AND annotation_file) OR default_genome to be passed")
     elif default_genome is not None:
         ((genome_url, genome_file), (annotation_url, annotation_file)) = get_genome_file_locs(default_genome)
-        genome_file = get_file_from_url(genome_url, genome_file)
+        genome_file = [get_file_from_url(genome_url, genome_file)]
         annotation_file = get_file_from_url(annotation_url, annotation_file)
 
     # Create the output path
@@ -147,9 +147,10 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
         pass
 
     # Uncompress the genome file if it's gzipped
-    if genome_file.endswith(".gz"):
-        subprocess.call(["gunzip", genome_file])
-        genome_file = genome_file[:-3]
+    for i, gf in enumerate(genome_file):
+        if gf.endswith(".gz"):
+            subprocess.call(["gunzip", gf])
+            genome_file[i] = gf[:-3]
 
     # Uncompress the annotation file if it's gzipped
     if annotation_file.endswith(".gz"):
@@ -161,7 +162,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
                  "--runThreadN", str(cores),
                  "--runMode", "genomeGenerate",
                  "--genomeDir", output_path,
-                 "--genomeFastaFiles", genome_file,
+                 "--genomeFastaFiles", *genome_file,
                  "--sjdbGTFfile", annotation_file]
 
     # Add any passed-in options
