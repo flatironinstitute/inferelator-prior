@@ -169,7 +169,10 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
     star_call.extend(star_options)
 
     # Set a flag for STAR if it's a small genome
-    star_sa_idx_size = int(np.floor(np.log2(os.path.getsize(genome_file)) / 2 - 1))
+    # Sum file sizes as a proxy for genome size (approximately correct for ASCII files)
+    star_sa_idx_size = sum(map(lambda x: os.path.getsize(x), genome_file))
+    # Calculate genomeSAindexNbases value with the weird equation from the STAR manual
+    star_sa_idx_size = int(np.floor(np.log2(star_sa_idx_size) / 2 - 1))
     if star_sa_idx_size < 14:
         star_call.extend(["--genomeSAindexNbases", str(star_sa_idx_size)])
 
