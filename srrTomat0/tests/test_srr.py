@@ -30,8 +30,8 @@ class TestSRR(unittest.TestCase):
         self.assertEqual(srr_files[0], srr_files_2[0])
 
     def test_srr_get_fail(self):
-        with self.assertRaises(ValueError):
-            get_srr_files([""], os.path.join(self.temp_path, "blah", "blah"), prefetch_options=["--transport", "http"])
+        self.assertIsNone(get_srr_files([""], os.path.join(self.temp_path, "blah", "blah"),
+                                        prefetch_options=["--transport", "http"])[0])
 
     def test_srr_unpack_success(self):
         srr_files = get_srr_files(self.srr_ids, self.temp_path, prefetch_options=["--transport", "http"])
@@ -43,6 +43,8 @@ class TestSRR(unittest.TestCase):
         self.assertListEqual(fastq_files[0], fastq_files2[0])
 
     def test_srr_unpack_fail(self):
-        with self.assertRaises(ValueError):
-            fastq_files = unpack_srr_files(self.srr_ids, [""], self.temp_path)
+        self.assertListEqual(unpack_srr_files(self.srr_ids, [""], self.temp_path)[0], [None])
+
+    def test_srr_unpack_skip(self):
+        self.assertIsNone(unpack_srr_files(self.srr_ids, [None], self.temp_path)[0])
 
