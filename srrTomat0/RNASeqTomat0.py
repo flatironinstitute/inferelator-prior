@@ -2,6 +2,7 @@ import argparse
 import os
 
 import pandas as pd
+
 from srrTomat0.processor.matrix import pileup_raw_counts
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
@@ -70,13 +71,21 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, c
 
     # Convert the count files into a matrix and save it to a TSV
     count_matrix = pileup_raw_counts(srr_ids, count_file_names)
-    count_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME)
+    count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME)
 
     # Save the raw counts file
     if gzip_output:
-        count_matrix.to_csv(count_file_name + ".gz", compression='gzip', sep="\t")
+        count_matrix.to_csv(count_matrix_file_name + ".gz", compression='gzip', sep="\t")
     else:
-        count_matrix.to_csv(count_file_name, sep="\t")
+        count_matrix.to_csv(count_matrix_file_name, sep="\t")
+
+    print("Count file {sh} generated from {srlen} SRA files".format(sh=count_matrix.shape, srlen=len(srr_ids)))
+
+    failed_counts = list(map(lambda x: x is None, count_file_names))
+
+    if any(failed_counts):
+        print("{n} Sequence Records could not be counted:".format(n=sum(failed_counts)), end="")
+        print("\n\t".join([sid for sid, fail in zip(srr_ids, failed_counts) if fail]))
 
     return count_matrix
 
