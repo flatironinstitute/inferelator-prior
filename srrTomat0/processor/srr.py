@@ -108,7 +108,7 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
     async with semaphore:
 
         if srr_file_name is None:
-            return None
+            return [None]
 
         # Check and see if this has already been done
         output_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), srr_id + x),

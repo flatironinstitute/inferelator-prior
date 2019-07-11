@@ -46,5 +46,5 @@ class TestSRR(unittest.TestCase):
         self.assertListEqual(unpack_srr_files(self.srr_ids, [""], self.temp_path)[0], [None])
 
     def test_srr_unpack_skip(self):
-        self.assertIsNone(unpack_srr_files(self.srr_ids, [None], self.temp_path)[0])
+        self.assertListEqual(unpack_srr_files(self.srr_ids, [None], self.temp_path)[0], [None])
 
