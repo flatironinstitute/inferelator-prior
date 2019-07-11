@@ -54,9 +54,6 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, c
     os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
     srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH), num_workers=cores)
 
-    print("SRR Files Downloaded:")
-    print("\n".join(srr_file_names))
-
     # Unpack all the SRR files into FASTQ files
     os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
     fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
