@@ -94,7 +94,9 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
                      "--quantMode", "GeneCounts",
                      "--genomeDir", reference_genome,
                      "--outFileNamePrefix", os.path.join(file_path_abs(output_path), ''),
-                     "--readFilesIn", *fastq_file_names]
+                     "--readFilesIn", *fastq_file_names,
+                     "--outFilterType", "BySJout",
+                     "--outFilterIntronMotifs", "RemoveNoncanonicalUnannotated"]
 
         # Add in any additional options
         star_call.extend(star_options)
