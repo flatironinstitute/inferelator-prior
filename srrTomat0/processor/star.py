@@ -75,6 +75,9 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
     """
     async with semaphore:
 
+        if fastq_file_names[0] is None:
+            return None
+
         try:
             os.makedirs(output_path)
         except FileExistsError:
@@ -94,9 +97,7 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
                      "--quantMode", "GeneCounts",
                      "--genomeDir", reference_genome,
                      "--outFileNamePrefix", os.path.join(file_path_abs(output_path), ''),
-                     "--readFilesIn", *fastq_file_names,
-                     "--outFilterType", "BySJout",
-                     "--outFilterIntronMotifs", "RemoveNoncanonicalUnannotated"]
+                     "--readFilesIn", *fastq_file_names]
 
         # Add in any additional options
         star_call.extend(star_options)
@@ -106,7 +107,8 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
         code = await process.wait()
 
         if int(code) != 0:
-            raise ValueError("STAR failed for {id} ({files})".format(id=srr_id, files=" ".join(fastq_file_names)))
+            print("STAR failed for {id} ({files})".format(id=srr_id, files=" ".join(fastq_file_names)))
+            return None
 
         return output_file
 

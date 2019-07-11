@@ -62,7 +62,8 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
         code = await process.wait()
 
         if int(code) != 0:
-            raise ValueError("NCBI Prefetch failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+            print("NCBI Prefetch failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+            return None
 
         return srr_file_name
 
@@ -106,6 +107,9 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
     """
     async with semaphore:
 
+        if srr_file_name is None:
+            return None
+
         # Check and see if this has already been done
         output_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), srr_id + x),
                                      POSSIBLE_FASTQ_EXTENSIONS))
@@ -124,7 +128,8 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
         code = await process.wait()
 
         if int(code) != 0:
-            raise ValueError("NCBI fastq-dump failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+            print("NCBI fastq-dump failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+            return [None]
 
         # Find out which read files were created by looking into the output folder
         return check_list_of_files_exist(output_file_names)
