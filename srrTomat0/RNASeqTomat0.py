@@ -45,7 +45,7 @@ def main():
     srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu)
 
 
-def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4):
+def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4, star_jobs=2):
     output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
 
@@ -63,10 +63,10 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, c
 
     # Run all the FASTQ files through STAR to align and count genes
     os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
-    thread_count = max(int(cores / len(srr_ids)), int(cores / 4))
+    thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
     count_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
                                          os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
-                                         num_workers=4, threads_per_worker=thread_count)
+                                         num_workers=star_jobs, threads_per_worker=thread_count)
 
     # Convert the count files into a matrix and save it to a TSV
     count_matrix = pileup_raw_counts(srr_ids, count_file_names)
