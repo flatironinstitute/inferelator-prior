@@ -26,7 +26,7 @@ def main():
     ap.add_argument("--cpu", dest="cpu", help="NUM of cores to use", metavar="NUM", type=int, default=4)
     ap.add_argument("--star_jobs", dest="sjob", help="NUM of STAR workers to use", metavar="NUM", type=int, default=4)
 
-    args = ap.parse_args()
+    args, star_args = ap.parse_known_args()
     srr_ids = list()
 
     if args.srr is None and args.file is None:
@@ -44,10 +44,11 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob)
+    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob,
+               star_args=star_args)
 
 
-def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4, star_jobs=2):
+def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4, star_jobs=2, star_args=[]):
     output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
 
@@ -65,7 +66,7 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, c
     thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
     count_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
                                          os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
-                                         num_workers=star_jobs, threads_per_worker=thread_count)
+                                         num_workers=star_jobs, threads_per_worker=thread_count, star_options=star_args)
 
     # Convert the count files into a matrix and save it to a TSV
     count_matrix = pileup_raw_counts(srr_ids, count_file_names)
