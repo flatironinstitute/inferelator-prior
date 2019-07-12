@@ -23,7 +23,8 @@ def main():
     ap.add_argument("-g", "--genome", dest="genome", help="STAR reference genome", metavar="PATH", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
     ap.add_argument("--gzip", dest="gzip", help="GZIP output file", action='store_const', const=True, default=False)
-    ap.add_argument("--cpu", dest="cpu", help="NUMBER of cores to use", metavar="PATH", type=int, default=4)
+    ap.add_argument("--cpu", dest="cpu", help="NUM of cores to use", metavar="NUM", type=int, default=4)
+    ap.add_argument("--star_jobs", dest="sjob", help="NUM of STAR workers to use", metavar="NUM", type=int, default=4)
 
     args = ap.parse_args()
     srr_ids = list()
