@@ -44,7 +44,7 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu)
+    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob)
 
 
 def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4, star_jobs=2):
