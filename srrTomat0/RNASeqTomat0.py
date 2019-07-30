@@ -3,6 +3,7 @@ import os
 
 import pandas as pd
 
+from srrTomat0.processor.htseq_count import htseq_count_aligned
 from srrTomat0.processor.matrix import pileup_raw_counts
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
@@ -52,7 +53,6 @@ def main():
 
 def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzip_output=False, cores=4, star_jobs=2,
                star_args=None):
-
     star_args = [] if star_args is None else star_args
 
     output_path = file_path_abs(output_path)
@@ -71,13 +71,13 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzi
     os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
     thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
     sam_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
-                                         os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
-                                         num_workers=star_jobs, threads_per_worker=thread_count, star_options=star_args)
+                                       os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
+                                       num_workers=star_jobs, threads_per_worker=thread_count, star_options=star_args)
 
     # Run all the SAM files through HTSeq.count to count
     os.makedirs(os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), exist_ok=True)
-    count_file_names = star_align_fastqs(srr_ids, sam_file_names, annotation_file,
-                                         os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), num_workers=cores,)
+    count_file_names = htseq_count_aligned(srr_ids, sam_file_names, annotation_file,
+                                           os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), num_workers=cores)
 
     # Convert the count files into a matrix and save it to a TSV
     count_matrix = pileup_raw_counts(srr_ids, count_file_names)
