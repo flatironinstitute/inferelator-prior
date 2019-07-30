@@ -1,4 +1,5 @@
 import os
+import subprocess
 import shutil
 import urllib.parse
 import urllib.request
@@ -52,4 +53,23 @@ def file_path_abs(file_path):
     :return: str
     """
     return os.path.abspath(os.path.expanduser(file_path))
+
+
+def test_requirements_exist():
+
+    code = subprocess.call(["prefetch", "--version"])
+    if code != 0:
+        raise FileNotFoundError("prefetch executable not found [prefetch <args>]")
+
+    code = subprocess.call(["fastq-dump", "--version"])
+    if code != 0:
+        raise FileNotFoundError("fastq-dump executable not found [fastq-dump <args>]")
+
+    code = subprocess.call(["STAR", "--version"])
+    if code != 0:
+        raise FileNotFoundError("STAR executable not found [STAR <args>]")
+
+    code = subprocess.call(["python", "-c", "'import HTSeq.scripts.count'"])
+    if code != 0:
+        raise FileNotFoundError("HTSeq.scripts.count is not available to python [python -m HTSeq.scripts.count <args>]")
 

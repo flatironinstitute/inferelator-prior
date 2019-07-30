@@ -7,7 +7,7 @@ from srrTomat0.processor.htseq_count import htseq_count_aligned
 from srrTomat0.processor.matrix import pileup_raw_counts
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
-from srrTomat0.processor.utils import file_path_abs
+from srrTomat0.processor.utils import file_path_abs, test_requirements_exist
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
@@ -46,6 +46,8 @@ def main():
         srr_ids = pd.read_csv(args.file, sep="\t", index_col=None, header=None).iloc[:, 0].tolist()
     else:
         raise ValueError("There is something wrong with this switch")
+
+    test_requirements_exist()
 
     srr_tomat0(srr_ids, args.out, args.genome, args.anno, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob,
                star_args=star_args)
