@@ -1,7 +1,8 @@
 import pandas as pd
 
-HTSEQ_HEADER = ["gene", "count"]
+INDEX_NAME = "gene"
 COUNT_COLUMN = "count"
+
 META_STARTSWITH_FLAG = "__"
 
 
@@ -24,7 +25,8 @@ def pileup_raw_counts(srr_ids, count_files):
 
         # Load in the count data
         count_data = pd.read_csv(count_file_name, sep="\t", index_col=0, header=None)
-        count_data.columns = HTSEQ_HEADER
+        count_data.index.name = INDEX_NAME
+        count_data.columns = [COUNT_COLUMN]
 
         # Pull off the metadata
         count_metadata_indexes = count_data.index.str.startswith(META_STARTSWITH_FLAG)
