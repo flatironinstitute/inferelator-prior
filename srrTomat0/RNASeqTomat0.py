@@ -11,6 +11,7 @@ from srrTomat0.processor.utils import file_path_abs
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
 STAR_ALIGNMENT_SUBPATH = "STAR"
+HTSEQ_ALIGNMENT_SUBPATH = "HTSEQ"
 
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
 OUTPUT_FPKM_FILE_NAME = "srr_fpkm.tsv"
@@ -21,6 +22,7 @@ def main():
     ap.add_argument("-s", "--srr", dest="srr", help="SRR record IDs", nargs="+", metavar="SRRID", default=None)
     ap.add_argument("-f", "--file", dest="file", help="List of SRR records in a TXT file", metavar="FILE", default=None)
     ap.add_argument("-g", "--genome", dest="genome", help="STAR reference genome", metavar="PATH", required=True)
+    ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
     ap.add_argument("--gzip", dest="gzip", help="GZIP output file", action='store_const', const=True, default=False)
     ap.add_argument("--cpu", dest="cpu", help="NUM of cores to use", metavar="NUM", type=int, default=4)
@@ -44,11 +46,15 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    srr_tomat0(srr_ids, args.out, args.genome, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob,
+    srr_tomat0(srr_ids, args.out, args.genome, args.anno, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob,
                star_args=star_args)
 
 
-def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, cores=4, star_jobs=2, star_args=[]):
+def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzip_output=False, cores=4, star_jobs=2,
+               star_args=None):
+
+    star_args = [] if star_args is None else star_args
+
     output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
 
@@ -61,12 +67,17 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, gzip_output=False, c
     fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
                                         num_workers=cores)
 
-    # Run all the FASTQ files through STAR to align and count genes
+    # Run all the FASTQ files through STAR to align
     os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
     thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
-    count_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
+    sam_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
                                          os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
                                          num_workers=star_jobs, threads_per_worker=thread_count, star_options=star_args)
+
+    # Run all the SAM files through HTSeq.count to count
+    os.makedirs(os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), exist_ok=True)
+    count_file_names = star_align_fastqs(srr_ids, sam_file_names, annotation_file,
+                                         os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), num_workers=cores,)
 
     # Convert the count files into a matrix and save it to a TSV
     count_matrix = pileup_raw_counts(srr_ids, count_file_names)
