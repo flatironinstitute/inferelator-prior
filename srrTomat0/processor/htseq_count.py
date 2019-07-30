@@ -3,8 +3,8 @@ import os
 
 from srrTomat0.processor.utils import file_path_abs
 
-HTSEQ_COUNT_FILE_NAME = "count.out"
-HTSEQ_EXECUTABLE_CALL = "python -m HTSeq.scripts.count"
+HTSEQ_COUNT_FILE_NAME = "htseq_count.out"
+HTSEQ_EXECUTABLE_CALL = ["python", "-m", "HTSeq.scripts.count"]
 
 
 def htseq_count_aligned(srr_ids, sam_file_names, annotation_file, output_path, num_workers=5):
@@ -70,17 +70,23 @@ async def _htseq_count(srr_id, sam_file_name, annotation_file_name, output_path,
             return output_file
 
         # Call out to an external interpreter
-        star_call = [HTSEQ_EXECUTABLE_CALL,
+        htseq_call = [*HTSEQ_EXECUTABLE_CALL,
                      "--stranded=no",
                      sam_file_name,
                      annotation_file_name]
 
-        print(" ".join(star_call))
-        process = await asyncio.create_subprocess_exec(*star_call)
-        code = await process.wait()
+        print(" ".join(htseq_call))
+        process = await asyncio.create_subprocess_exec(*htseq_call,
+                                                       stdout=asyncio.subprocess.PIPE,
+                                                       stderr=asyncio.subprocess.PIPE)
 
-        if int(code) != 0:
+        (output_data, output_err) = await process.communicate()
+
+        if int(process.returncode) != 0:
             print("HTSeq.count failed for {id} ({file})".format(id=srr_id, file=sam_file_name))
             return None
+
+        with open(output_file, mode="w") as out_fh:
+            print(output_data, file=out_fh)
 
         return output_file
