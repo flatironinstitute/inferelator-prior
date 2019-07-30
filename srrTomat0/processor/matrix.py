@@ -1,12 +1,13 @@
 import pandas as pd
 
-from srrTomat0.processor.star import STAR_COUNT_COLUMN, STAR_COUNT_FILE_METAINDEXES, STAR_COUNT_FILE_HEADER
+HTSEQ_HEADER = ["gene", "count"]
+COUNT_COLUMN = "count"
+META_STARTSWITH_FLAG = "__"
 
 
 # Turn count files into a count matrix
 # TODO: test this
-def pileup_raw_counts(srr_ids, count_files, count_meta_names=STAR_COUNT_FILE_METAINDEXES,
-                      count_column=STAR_COUNT_COLUMN):
+def pileup_raw_counts(srr_ids, count_files):
     """
     Convert the STAR alignment GeneCount files to a dataframe of SRR-derived expression values
 
@@ -23,10 +24,10 @@ def pileup_raw_counts(srr_ids, count_files, count_meta_names=STAR_COUNT_FILE_MET
 
         # Load in the count data
         count_data = pd.read_csv(count_file_name, sep="\t", index_col=0, header=None)
-        count_data.columns = STAR_COUNT_FILE_HEADER
+        count_data.columns = HTSEQ_HEADER
 
         # Pull off the metadata
-        count_metadata_indexes = count_data.index.intersection(count_meta_names)
+        count_metadata_indexes = count_data.index.str.startswith(META_STARTSWITH_FLAG)
         count_metadata = count_data.loc[count_metadata_indexes, :]
         count_data = count_data.drop(count_metadata_indexes, errors="ignore")
 
@@ -41,7 +42,7 @@ def pileup_raw_counts(srr_ids, count_files, count_meta_names=STAR_COUNT_FILE_MET
 
         # Stick the count data onto the data frame
         count_data = count_data.reindex(matrix_data.index)
-        matrix_data[srr_id] = count_data[count_column]
+        matrix_data[srr_id] = count_data[COUNT_COLUMN]
 
     return matrix_data
 
