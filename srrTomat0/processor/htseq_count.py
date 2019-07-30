@@ -87,6 +87,6 @@ async def _htseq_count(srr_id, sam_file_name, annotation_file_name, output_path,
             return None
 
         with open(output_file, mode="w") as out_fh:
-            print(output_data.read().decode('utf-8'), file=out_fh)
+            print(output_data.decode('utf-8'), file=out_fh)
 
         return output_file
