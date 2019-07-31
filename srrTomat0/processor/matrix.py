@@ -34,7 +34,7 @@ def pileup_raw_counts(srr_ids, count_files):
 
         # Process metadata
         count_meta_data = count_data.loc[count_metadata_indexes, :].rename(columns={COUNT_COLUMN: srr_id}).transpose()
-        count_meta_data.index = count_meta_data.index.str.strip(META_STARTSWITH_FLAG)
+        count_meta_data.columns = count_meta_data.columns.str.strip(META_STARTSWITH_FLAG)
 
         # Remove metadata from count dataframe
         count_data = count_data.drop(count_metadata_indexes, errors="ignore")
