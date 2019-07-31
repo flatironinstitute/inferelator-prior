@@ -41,7 +41,7 @@ def pileup_raw_counts(srr_ids, count_files):
         count_meta_data.columns = count_meta_data.columns.str.strip(META_STARTSWITH_FLAG)
 
         # Remove metadata from count dataframe
-        count_data = count_data.drop(count_metadata_indexes, errors="ignore")
+        count_data = count_data.drop(count_metadata_indexes)
 
         # Make sure that the pileup matrix has all the genes
         if len(count_data.index.difference(matrix_data.index)) > 0:
