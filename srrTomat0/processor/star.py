@@ -119,7 +119,8 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
 
 # TODO: test this
 def star_mkref(output_path, genome_file=None, annotation_file=None, default_genome=None,
-               star_options=STAR_DEFAULT_MKREF_OPTIONS, cores=1, gff_annotations=None, star_executable=STAR_EXECUTABLE):
+               star_options=STAR_DEFAULT_MKREF_OPTIONS, cores=1, gff_annotations=None,
+               star_executable=STAR_EXECUTABLE_PATH):
     """
     Make a reference genome index for STAR to align reads to
     :param output_path: str
@@ -170,7 +171,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
         annotation_file = annotation_file[:-3]
 
     # Build the STAR executable call
-    star_call = [star_executable,
+    star_call = [file_path_abs(star_executable),
                  "--runThreadN", str(cores),
                  "--runMode", "genomeGenerate",
                  "--genomeDir", output_path,
