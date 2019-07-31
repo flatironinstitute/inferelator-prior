@@ -1,4 +1,3 @@
-import argparse
 import os
 
 import pandas as pd
@@ -7,7 +6,7 @@ from srrTomat0.processor.htseq_count import htseq_count_aligned
 from srrTomat0.processor.matrix import pileup_raw_counts
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
-from srrTomat0.processor.utils import file_path_abs, test_requirements_exist
+from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
@@ -20,7 +19,7 @@ OUTPUT_FPKM_FILE_NAME = "srr_fpkm.tsv"
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Turn a list of RNA-seq expression SRRs from NCBI GEO into a count matrix")
+    ap = ArgParseTestRequirements(description="Turn a list of RNAseq expression SRRs from NCBI GEO into a count matrix")
     ap.add_argument("-s", "--srr", dest="srr", help="SRR record IDs", nargs="+", metavar="SRRID", default=None)
     ap.add_argument("-f", "--file", dest="file", help="List of SRR records in a TXT file", metavar="FILE", default=None)
     ap.add_argument("-g", "--genome", dest="genome", help="STAR reference genome", metavar="PATH", required=True)
@@ -31,9 +30,9 @@ def main():
     ap.add_argument("--star_jobs", dest="sjob", help="NUM of STAR workers to use", metavar="NUM", type=int, default=4)
 
     args, star_args = ap.parse_known_args()
-    srr_ids = list()
-
     test_requirements_exist()
+
+    srr_ids = list()
 
     if args.srr is None and args.file is None:
         print("One of --srr or --file must be set")

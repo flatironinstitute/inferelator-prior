@@ -1,7 +1,7 @@
 import os
 import subprocess
 import shutil
-import sys
+import argparse
 import urllib.parse
 import urllib.request
 
@@ -88,4 +88,13 @@ def test_requirements_exist(test_package=_TEST_REQUIREMENTS, test_htseq=True):
         raise FileNotFoundError
 
 
+# ArgumentParser that tests requirements if it fails to parse arguments
+class ArgParseTestRequirements(argparse.ArgumentParser):
 
+    def error(self, message):
+        try:
+            test_requirements_exist()
+        except FileNotFoundError:
+            pass
+        finally:
+            super(ArgParseTestRequirements, self).error(message)
