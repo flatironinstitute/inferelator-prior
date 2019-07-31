@@ -2,10 +2,11 @@ import asyncio
 import os
 import sys
 
+from srrTomat0 import HTSEQ_MODULE_NAME
 from srrTomat0.processor.utils import file_path_abs
 
 HTSEQ_COUNT_FILE_EXTENSION = ".count.out"
-HTSEQ_EXECUTABLE_CALL = [str(sys.executable), "-m", "HTSeq.scripts.count"]
+HTSEQ_EXECUTABLE_CALL = [str(sys.executable), "-m", HTSEQ_MODULE_NAME]
 
 
 def htseq_count_aligned(srr_ids, sam_file_names, annotation_file, output_path, num_workers=5):
@@ -68,10 +69,7 @@ async def _htseq_count(srr_id, sam_file_name, annotation_file_name, output_path,
             return output_file
 
         # Call out to an external interpreter
-        htseq_call = [*HTSEQ_EXECUTABLE_CALL,
-                     "--stranded=no",
-                     sam_file_name,
-                     annotation_file_name]
+        htseq_call = [*HTSEQ_EXECUTABLE_CALL, "--stranded=no", sam_file_name, annotation_file_name]
 
         print(" ".join(htseq_call))
         process = await asyncio.create_subprocess_exec(*htseq_call,
