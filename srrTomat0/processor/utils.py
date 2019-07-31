@@ -1,6 +1,7 @@
 import os
 import subprocess
 import shutil
+import sys
 import urllib.parse
 import urllib.request
 
@@ -18,6 +19,11 @@ _SC64 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/saccharomyces_cerevisiae/d
 
 # Key by genome name
 _DEFAULT_GENOMES = {"hg38": _HG38, "sc64": _SC64}
+
+# Requirements tests (produce version for each requirement)
+_TEST_REQUIREMENTS = {'prefetch': ("", ["prefetch", "--version"]),
+                      'fastq-dump': ("", ["fastq-dump", "--version"]),
+                      'STAR': ("STAR : ", ["STAR", "--version"])}
 
 
 def get_genome_file_locs(genome):
@@ -55,21 +61,31 @@ def file_path_abs(file_path):
     return os.path.abspath(os.path.expanduser(file_path))
 
 
-def test_requirements_exist():
+def test_requirements_exist(test_package=_TEST_REQUIREMENTS, test_htseq=True):
 
-    code = subprocess.call(["prefetch", "--version"])
-    if code != 0:
-        raise FileNotFoundError("prefetch executable not found [prefetch <args>]")
+    ret_code = {}
+    for req, (pref, cmd) in test_package.items():
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ret_code[req] = proc.returncode
+        stdout = pref + " ".join([l for l in proc.stdout.decode().strip().split("\n") if l.strip() != ""])
+        print(stdout)
 
-    code = subprocess.call(["fastq-dump", "--version"])
-    if code != 0:
-        raise FileNotFoundError("fastq-dump executable not found [fastq-dump <args>]")
+    failed = False
+    for req, code in ret_code.items():
+        if code != 0:
+            print("{req} not found [{args}]".format(req=req, args=" ".join(test_package[req])))
+            failed = True
 
-    code = subprocess.call(["STAR", "--version"])
-    if code != 0:
-        raise FileNotFoundError("STAR executable not found [STAR <args>]")
+    if test_htseq:
+        try:
+            import HTSeq
+            print("HTSeq : " + str(HTSeq.__version__))
+        except ImportError:
+            print("HTSeq : HTSeq not found (ImportError)")
+            failed=True
 
-    code = subprocess.call(["python", "-c", "'import HTSeq.scripts.count'"])
-    if code != 0:
-        raise FileNotFoundError("HTSeq.scripts.count is not available to python [python -m HTSeq.scripts.count <args>]")
+    if failed:
+        raise FileNotFoundError
+
+
 
