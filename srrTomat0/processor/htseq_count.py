@@ -4,7 +4,7 @@ import sys
 
 from srrTomat0.processor.utils import file_path_abs
 
-HTSEQ_COUNT_FILE_NAME = "htseq_count.out"
+HTSEQ_COUNT_FILE_EXTENSION = ".count.out"
 HTSEQ_EXECUTABLE_CALL = [str(sys.executable), "-m", "HTSeq.scripts.count"]
 
 
@@ -26,12 +26,9 @@ def htseq_count_aligned(srr_ids, sam_file_names, annotation_file, output_path, n
 
     sem = asyncio.Semaphore(num_workers)
 
-    # Build output paths for STAR from SRR ids
-    output_paths = list(map(lambda x: os.path.join(output_path, x, ''), srr_ids))
-
     # Build HTseq.count tasks
-    tasks = [_htseq_count(sid, samfn, annotation_file, sout, sem)
-             for sid, samfn, sout in zip(srr_ids, sam_file_names, output_paths)]
+    tasks = [_htseq_count(sid, samfn, annotation_file, output_path, sem)
+             for sid, samfn in zip(srr_ids, sam_file_names)]
 
     # Run and return STAR tasks
     return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
@@ -64,7 +61,7 @@ async def _htseq_count(srr_id, sam_file_name, annotation_file_name, output_path,
         except FileExistsError:
             pass
 
-        output_file = os.path.join(file_path_abs(output_path), HTSEQ_COUNT_FILE_NAME)
+        output_file = os.path.join(file_path_abs(output_path), srr_id + HTSEQ_COUNT_FILE_EXTENSION)
 
         if os.path.exists(output_file):
             print("{id} countfile exists ({path})".format(id=srr_id, path=output_path))
