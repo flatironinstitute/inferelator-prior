@@ -2,9 +2,7 @@ import asyncio
 import os
 
 from srrTomat0.processor.utils import file_path_abs
-
-NCBI_PREFETCH_EXECUTABLE = "prefetch"
-NCBI_FASTQDUMP_EXECUTABLE = "fastq-dump"
+from srrTomat0 import FASTQDUMP_EXECUTABLE_PATH, PREFETCH_EXECUTABLE_PATH
 
 PREFETCH_OPTIONS = []
 
@@ -56,7 +54,7 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
             print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
             return srr_file_name
 
-        prefetch_call = [NCBI_PREFETCH_EXECUTABLE, srr_id, "-o", srr_file_name, *prefetch_options]
+        prefetch_call = [file_path_abs(PREFETCH_EXECUTABLE_PATH), srr_id, "-o", srr_file_name, *prefetch_options]
         print(" ".join(prefetch_call))
         process = await asyncio.create_subprocess_exec(*prefetch_call)
         code = await process.wait()
@@ -122,7 +120,9 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
             return files_created
 
         # Build a fastq-dump call and execute it
-        fastq_dump_call = [NCBI_FASTQDUMP_EXECUTABLE, "--gzip", "--split-files", "--outdir", target_path, srr_file_name]
+        fastq_dump_call = [file_path_abs(FASTQDUMP_EXECUTABLE_PATH), "--gzip", "--split-files", "--outdir", target_path,
+                           srr_file_name]
+
         print(" ".join(fastq_dump_call))
         process = await asyncio.create_subprocess_exec(*fastq_dump_call)
         code = await process.wait()

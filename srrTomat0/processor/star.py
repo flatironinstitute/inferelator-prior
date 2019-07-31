@@ -5,8 +5,7 @@ import subprocess
 import numpy as np
 
 from srrTomat0.processor.utils import get_file_from_url, file_path_abs, get_genome_file_locs
-
-STAR_EXECUTABLE = "STAR"
+from srrTomat0 import STAR_EXECUTABLE_PATH
 
 STAR_COUNT_FILE_NAME = "ReadsPerGene.out.tab"
 STAR_ALIGNMENT_FILE_NAME = "Aligned.out.sam"
@@ -95,7 +94,7 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
             return output_file
 
         # Build the STAR executable call
-        star_call = [STAR_EXECUTABLE,
+        star_call = [file_path_abs(STAR_EXECUTABLE_PATH),
                      "--runThreadN", str(threads_per_worker),
                      "--runMode", "alignReads",
                      "--readFilesCommand", "zcat",
