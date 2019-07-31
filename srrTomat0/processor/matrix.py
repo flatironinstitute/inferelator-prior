@@ -80,11 +80,12 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
 
     gene_lengths = gene_lengths.reindex(matrix_data.index)
 
+
     # Normalize the libraries by read depth
-    normalized_matrix = matrix_data.divide(matrix_data.sum()) * 10e6
+    normalized_matrix = matrix_data.divide(matrix_data.sum(), axis=1) * 10e6
 
     # Normalize the libraries by gene length
-    normalized_matrix = normalized_matrix.divide(gene_lengths, axis=1)
+    normalized_matrix = normalized_matrix.divide(gene_lengths, axis=0)
 
     return normalized_matrix
 
