@@ -28,6 +28,11 @@ _SC64 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/saccharomyces_cerevisiae/d
 # Key by genome name
 _DEFAULT_GENOMES = {"hg38": _HG38, "sc64": _SC64}
 
+# Requirements tests (produce version for each requirement)
+_TEST_REQUIREMENTS = {'prefetch': ("", [PREFETCH_EXECUTABLE_PATH, "--version"]),
+                      'fastq-dump': ("", [FASTQDUMP_EXECUTABLE_PATH, "--version"]),
+                      'STAR': ("STAR : ", [STAR_EXECUTABLE_PATH, "--version"])}
+
 
 def get_genome_file_locs(genome):
     if genome in _DEFAULT_GENOMES.keys():
@@ -62,12 +67,6 @@ def file_path_abs(file_path):
     :return: str
     """
     return os.path.abspath(os.path.expanduser(file_path))
-
-
-# Requirements tests (produce version for each requirement)
-_TEST_REQUIREMENTS = {'prefetch': ("", [file_path_abs(PREFETCH_EXECUTABLE_PATH), "--version"]),
-                      'fastq-dump': ("", [file_path_abs(PREFETCH_EXECUTABLE_PATH), "--version"]),
-                      'STAR': ("STAR : ", [file_path_abs(STAR_EXECUTABLE_PATH), "--version"])}
 
 
 def test_requirements_exist(test_package=_TEST_REQUIREMENTS, test_htseq=True):

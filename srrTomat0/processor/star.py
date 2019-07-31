@@ -94,7 +94,7 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
             return output_file
 
         # Build the STAR executable call
-        star_call = [file_path_abs(STAR_EXECUTABLE_PATH),
+        star_call = [STAR_EXECUTABLE_PATH,
                      "--runThreadN", str(threads_per_worker),
                      "--runMode", "alignReads",
                      "--readFilesCommand", "zcat",
@@ -171,7 +171,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
         annotation_file = annotation_file[:-3]
 
     # Build the STAR executable call
-    star_call = [file_path_abs(star_executable),
+    star_call = [star_executable,
                  "--runThreadN", str(cores),
                  "--runMode", "genomeGenerate",
                  "--genomeDir", output_path,

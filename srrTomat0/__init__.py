@@ -1,3 +1,5 @@
-STAR_EXECUTABLE_PATH = "STAR"
-PREFETCH_EXECUTABLE_PATH = "prefetch"
-FASTQDUMP_EXECUTABLE_PATH = "fastq-dump"
+import os
+
+STAR_EXECUTABLE_PATH = os.path.expanduser("STAR")
+PREFETCH_EXECUTABLE_PATH = os.path.expanduser("prefetch")
+FASTQDUMP_EXECUTABLE_PATH = os.path.expanduser("fastq-dump")
