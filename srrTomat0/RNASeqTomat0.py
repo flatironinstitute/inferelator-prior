@@ -1,12 +1,13 @@
-import os
+from __future__ import print_function
 
+import os
 import pandas as pd
 
+from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
 from srrTomat0.processor.htseq_count import htseq_count_aligned
 from srrTomat0.processor.matrix import pileup_raw_counts
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
-from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"

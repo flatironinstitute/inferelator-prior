@@ -2,6 +2,12 @@ import os
 import subprocess
 import shutil
 import argparse
+import sys
+
+if sys.version_info[0] < 3:
+    print("The srrTomat0 package requires python3")
+    exit(1)
+
 import urllib.parse
 import urllib.request
 
