@@ -1,10 +1,11 @@
 import asyncio
 import os
+import sys
 
 from srrTomat0.processor.utils import file_path_abs
 
 HTSEQ_COUNT_FILE_NAME = "htseq_count.out"
-HTSEQ_EXECUTABLE_CALL = ["python", "-m", "HTSeq.scripts.count"]
+HTSEQ_EXECUTABLE_CALL = [str(sys.executable), "-m", "HTSeq.scripts.count"]
 
 
 def htseq_count_aligned(srr_ids, sam_file_names, annotation_file, output_path, num_workers=5):
