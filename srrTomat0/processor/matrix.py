@@ -56,7 +56,7 @@ def pileup_raw_counts(srr_ids, count_files):
 
         # Stick the count data onto the data frame
         count_data = count_data.reindex(matrix_data.index)
-        matrix_data[srr_id] = count_data[COUNT_COLUMN]
+        matrix_data[srr_id] = count_data[COUNT_COLUMN].astype(int)
 
         # Add the total counts to the metadata
         count_meta_data[META_ALIGNED_COUNTS] = count_data[COUNT_COLUMN].sum()
@@ -76,16 +76,16 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
 
     diff = matrix_data.index.difference(gene_lengths.index)
     if len(diff) > 0:
-        print("Gene lengths unknown for: {genes}".format(genes=" ".join(diff.tolist())))
+        print("Dropping genes with unknown lengths: {genes}".format(genes=" ".join(diff.tolist())))
 
+    normalized_matrix = matrix_data.drop(diff, axis=0)
     gene_lengths = gene_lengths.reindex(matrix_data.index)
 
-
     # Normalize the libraries by read depth
-    normalized_matrix = matrix_data.divide(matrix_data.sum(), axis=1) * 10e6
+    normalized_matrix = normalized_matrix.divide(matrix_data.sum()) * 10e6
 
     # Normalize the libraries by gene length
-    normalized_matrix = normalized_matrix.divide(gene_lengths, axis=0)
+    normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
 
     return normalized_matrix
 
