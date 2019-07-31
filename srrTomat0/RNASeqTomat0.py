@@ -15,6 +15,7 @@ STAR_ALIGNMENT_SUBPATH = "STAR"
 HTSEQ_ALIGNMENT_SUBPATH = "HTSEQ"
 
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
+OUTPUT_COUNT_METADATA_NAME = "srr_alignment_metadata.tsv"
 OUTPUT_FPKM_FILE_NAME = "srr_fpkm.tsv"
 
 
@@ -82,7 +83,7 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzi
                                            os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), num_workers=cores)
 
     # Convert the count files into a matrix and save it to a TSV
-    count_matrix = pileup_raw_counts(srr_ids, count_file_names)
+    count_matrix, count_metadata = pileup_raw_counts(srr_ids, count_file_names)
     count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME)
 
     # Save the raw counts file
@@ -91,8 +92,10 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzi
     else:
         count_matrix.to_csv(count_matrix_file_name, sep="\t")
 
-    print("Count file {sh} generated from {srlen} SRA files".format(sh=count_matrix.shape, srlen=len(srr_ids)))
+    # Save the count metadata file
+    count_metadata.to_csv(os.path.join(output_path, OUTPUT_COUNT_METADATA_NAME), sep="\t")
 
+    print("Count file {sh} generated from {srlen} SRA files".format(sh=count_matrix.shape, srlen=len(srr_ids)))
     failed_counts = list(map(lambda x: x is None, count_file_names))
 
     if any(failed_counts):
