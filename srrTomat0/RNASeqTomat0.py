@@ -33,6 +33,8 @@ def main():
     args, star_args = ap.parse_known_args()
     srr_ids = list()
 
+    test_requirements_exist()
+
     if args.srr is None and args.file is None:
         print("One of --srr or --file must be set")
         exit(1)
@@ -47,8 +49,6 @@ def main():
         srr_ids = pd.read_csv(args.file, sep="\t", index_col=None, header=None).iloc[:, 0].tolist()
     else:
         raise ValueError("There is something wrong with this switch")
-
-    test_requirements_exist()
 
     srr_tomat0(srr_ids, args.out, args.genome, args.anno, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob,
                star_args=star_args)
