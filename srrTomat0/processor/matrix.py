@@ -4,7 +4,7 @@ INDEX_NAME = "gene"
 COUNT_COLUMN = "count"
 
 META_STARTSWITH_FLAG = "__"
-
+META_ALIGNED_COUNTS = "aligned_feature_sum"
 
 # Turn count files into a count matrix
 # TODO: test this
@@ -29,9 +29,14 @@ def pileup_raw_counts(srr_ids, count_files):
         count_data.index.name = INDEX_NAME
         count_data.columns = [COUNT_COLUMN]
 
-        # Pull off the metadata
+        # Find the metadata
         count_metadata_indexes = count_data.index.str.startswith(META_STARTSWITH_FLAG)
-        meta_data.append(count_data.loc[count_metadata_indexes, :].rename(columns={COUNT_COLUMN: srr_id}).transpose())
+
+        # Process metadata
+        count_meta_data = count_data.loc[count_metadata_indexes, :].rename(columns={COUNT_COLUMN: srr_id}).transpose()
+        count_meta_data.index = count_meta_data.index.str.strip(META_STARTSWITH_FLAG)
+
+        # Remove metadata from count dataframe
         count_data = count_data.drop(count_metadata_indexes, errors="ignore")
 
         # Make sure that the pileup matrix has all the genes
@@ -48,6 +53,10 @@ def pileup_raw_counts(srr_ids, count_files):
         # Stick the count data onto the data frame
         count_data = count_data.reindex(matrix_data.index)
         matrix_data[srr_id] = count_data[COUNT_COLUMN]
+
+        # Add the total counts to the metadata
+        count_meta_data[META_ALIGNED_COUNTS] = count_data[COUNT_COLUMN].sum()
+        meta_data.append(count_meta_data)
 
     # Combine the meta_data into a single dataframe
     meta_data = pd.concat(meta_data)
