@@ -1,3 +1,4 @@
+import HTSeq
 import pandas as pd
 
 INDEX_NAME = "gene"
@@ -6,14 +7,17 @@ COUNT_COLUMN = "count"
 META_STARTSWITH_FLAG = "__"
 META_ALIGNED_COUNTS = "aligned_feature_sum"
 
+
 # Turn count files into a count matrix
 # TODO: test this
 def pileup_raw_counts(srr_ids, count_files):
     """
     Convert the STAR alignment GeneCount files to a dataframe of SRR-derived expression values
 
-    :param aligned_data: dict
-        A dict of STAR count files that's keyed by SRR ID
+    :param srr_ids: list(str)
+        NCBI SRR ID string
+    :param count_files: list(str)
+        A list of HTSeq count files
     :return matrix_data: pd.DataFrame [Genes x Samples]
         A dataframe of raw, unnormalized count values from all SRR alignments
     """
@@ -64,8 +68,26 @@ def pileup_raw_counts(srr_ids, count_files):
     return matrix_data, meta_data
 
 
-# Turn a raw read count into a normalized FPKM per gene
-# TODO: make this a thing
-def normalize_matrix_to_fpkm(matrix_data):
-    normalized_matrix = pd.DataFrame()
+# Turn a raw read count into a normalized RPKM / FPKM per gene
+def normalize_matrix_to_fpkm(matrix_data, annotation_file):
+    gff_reader = HTSeq.GFF_Reader(annotation_file)
+    gene_lengths = pd.DataFrame.from_dict({gf.name: _gene_length(gf) for gf in gff_reader if gf.type == "gene"},
+                                          orient='index', columns=['length'])
+
+    diff = matrix_data.index.difference(gene_lengths.index)
+    if len(diff) > 0:
+        print("Gene lengths unknown for: {genes}".format(genes=" ".join(diff.tolist())))
+
+    gene_lengths = gene_lengths.reindex(matrix_data.index)
+
+    # Normalize the libraries by read depth
+    normalized_matrix = matrix_data.divide(matrix_data.sum()) * 10e6
+
+    # Normalize the libraries by gene length
+    normalized_matrix = normalized_matrix.divide(gene_lengths, axis=1)
+
     return normalized_matrix
+
+
+def _gene_length(htseq_genomic_feature):
+    return abs(htseq_genomic_feature.iv.start - htseq_genomic_feature.iv.end)
