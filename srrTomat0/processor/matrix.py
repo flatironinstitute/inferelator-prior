@@ -34,7 +34,7 @@ def pileup_raw_counts(srr_ids, count_files):
         count_data.columns = [COUNT_COLUMN]
 
         # Find the metadata
-        count_metadata_indexes = count_data.index.str.startswith(META_STARTSWITH_FLAG)
+        count_metadata_indexes = count_data.index[count_data.index.str.startswith(META_STARTSWITH_FLAG)]
 
         # Process metadata
         count_meta_data = count_data.loc[count_metadata_indexes, :].rename(columns={COUNT_COLUMN: srr_id}).transpose()
