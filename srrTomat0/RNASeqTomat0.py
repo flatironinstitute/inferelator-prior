@@ -62,15 +62,18 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzi
     os.makedirs(output_path, exist_ok=True)
 
     # Download all the SRR files
+    print("Downloading SRR files")
     os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
     srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH), num_workers=cores)
 
     # Unpack all the SRR files into FASTQ files
+    print("Unpacking SRR files")
     os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
     fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
                                         num_workers=cores)
 
     # Run all the FASTQ files through STAR to align
+    print("Aligning FASTQ files")
     os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
     thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
     sam_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
@@ -78,11 +81,13 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzi
                                        num_workers=star_jobs, threads_per_worker=thread_count, star_options=star_args)
 
     # Run all the SAM files through HTSeq.count to count
+    print("Counting SAM alignments")
     os.makedirs(os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), exist_ok=True)
     count_file_names = htseq_count_aligned(srr_ids, sam_file_names, annotation_file,
                                            os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), num_workers=cores)
 
     # Convert the count files into a matrix and save it to a TSV
+    print("Assembling result matrix")
     count_matrix, count_metadata = pileup_raw_counts(srr_ids, count_file_names)
     count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME)
 

@@ -91,7 +91,7 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
         output_file = os.path.join(file_path_abs(output_path), STAR_ALIGNMENT_FILE_NAME)
 
         if os.path.exists(output_file):
-            print("{id} countfile exists ({path})".format(id=srr_id, path=output_path))
+            print("{id} SAM alignment file exists ({path})".format(id=srr_id, path=output_path))
             return output_file
 
         # Build the STAR executable call
