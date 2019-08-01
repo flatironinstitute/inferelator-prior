@@ -197,9 +197,13 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
     print(" ".join(star_call))
     subprocess.call(star_call)
 
-    # Clean up the downloaded files if necessary
-    if default_genome is not None:
-        [os.remove(gf) for gf in genome_file]
-        os.remove(annotation_file)
+    output_file_path = os.path.join(output_path, "files")
+    try:
+        os.mkdir(output_file_path)
+    except FileExistsError:
+        pass
+
+    [os.rename(file, os.path.join(output_file_path, os.path.basename(file))) for file in genome_file]
+    os.rename(annotation_file, os.path.join(output_file_path, os.path.basename(annotation_file)))
 
     return output_path
