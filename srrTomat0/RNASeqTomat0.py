@@ -1,18 +1,15 @@
 from __future__ import print_function
 
 import os
+
 import pandas as pd
 
-from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
+from srrTomat0 import SRR_SUBPATH, FASTQ_SUBPATH, STAR_ALIGNMENT_SUBPATH, HTSEQ_ALIGNMENT_SUBPATH
 from srrTomat0.processor.htseq_count import htseq_count_aligned
 from srrTomat0.processor.matrix import pileup_raw_counts, normalize_matrix_to_fpkm
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
-
-SRR_SUBPATH = "SRR"
-FASTQ_SUBPATH = "FASTQ"
-STAR_ALIGNMENT_SUBPATH = "STAR"
-HTSEQ_ALIGNMENT_SUBPATH = "HTSEQ"
+from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
 
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
 OUTPUT_COUNT_METADATA_NAME = "srr_alignment_metadata.tsv"
