@@ -6,6 +6,7 @@ from srrTomat0 import FASTQDUMP_EXECUTABLE_PATH, PREFETCH_EXECUTABLE_PATH
 
 PREFETCH_OPTIONS = ["--max-size", "1000000000"]
 
+SRA_EXTENSION = ".sra"
 POSSIBLE_FASTQ_EXTENSIONS = [".fastq.gz", "_1.fastq.gz", "_2.fastq.gz", "_3.fastq.gz", "_4.fastq.gz"]
 
 
@@ -26,8 +27,8 @@ def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETC
     """
     sem = asyncio.Semaphore(num_workers)
 
-    srr_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), x + ".sra"), srr_list))
-    tasks = [_get_srr(sid, sfn, sem) for sid, sfn in zip(srr_list, srr_file_names)]
+    srr_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), x + SRA_EXTENSION), srr_list))
+    tasks = [_get_srr(sid, sfn, sem, prefetch_options=prefetch_options) for sid, sfn in zip(srr_list, srr_file_names)]
 
     return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
 
