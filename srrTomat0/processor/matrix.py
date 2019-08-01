@@ -7,6 +7,8 @@ COUNT_COLUMN = "count"
 META_STARTSWITH_FLAG = "__"
 META_ALIGNED_COUNTS = "aligned_feature_sum"
 
+TRANSCRIPT_TYPE_FLAG = "exon"
+
 
 # Turn count files into a count matrix
 # TODO: test this
@@ -70,8 +72,21 @@ def pileup_raw_counts(srr_ids, count_files):
 
 # Turn a raw read count into a normalized RPKM / FPKM per gene
 def normalize_matrix_to_fpkm(matrix_data, annotation_file):
+
+    # Load a GFF reader from HTSeq
     gff_reader = HTSeq.GFF_Reader(annotation_file)
-    gene_lengths = pd.DataFrame.from_dict({gf.name: _gene_length(gf) for gf in gff_reader if gf.type == "gene"},
+
+    # Get exons for each gene
+    gene_lengths = {}
+    for gf in gff_reader:
+        if gf.type == TRANSCRIPT_TYPE_FLAG:
+            try:
+                gene_lengths[gf.name].append(_gene_length(gf))
+            except KeyError:
+                gene_lengths[gf.name] = [_gene_length(gf)]
+
+    # Sum exon lengths and pack into a dataframe
+    gene_lengths = pd.DataFrame.from_dict({gn: sum(exons) for gn, exons in gene_lengths.items()},
                                           orient='index', columns=['length'])
 
     diff = matrix_data.index.difference(gene_lengths.index)
