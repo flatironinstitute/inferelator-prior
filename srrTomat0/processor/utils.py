@@ -15,19 +15,19 @@ from srrTomat0 import STAR_EXECUTABLE_PATH, PREFETCH_EXECUTABLE_PATH, FASTQDUMP_
 
 # Tuple of ((fasta_url, fasta_file_name), (gff_url, gff_file_name))
 
-_HG38 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz",
+_HG38 = (("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GCF_000001405.39_GRCh38.p13_genomic.fna.gz",
           "hg38.fa.gz"),
-         ("ftp://ftp.ensembl.org/pub/release-97/gff3/homo_sapiens/Homo_sapiens.GRCh38.97.gff3.gz",
-          "hg38.gff3.gz"))
+         ("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GCF_000001405.39_GRCh38.p13_genomic.gtf.gz",
+          "hg38.gtf.gz"))
 
-_SC64 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/saccharomyces_cerevisiae/dna/Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa.gz",
+_SC64 = (("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/146/045/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna.gz",
           "sc64.fa.gz"),
-         ("ftp://ftp.ensembl.org/pub/release-97/gff3/saccharomyces_cerevisiae/Saccharomyces_cerevisiae.R64-1-1.97.gff3.gz",
-          "sc64.gff3.gz"))
+         ("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/146/045/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.gtf.gz",
+          "sc64.gtf.gz"))
 
-_MM10 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.toplevel.fa.gz",
+_MM10 = (("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.26_GRCm38.p6/GCF_000001635.26_GRCm38.p6_genomic.fna.gz",
           "mm10.fa.gz"),
-         ("ftp://ftp.ensembl.org/pub/release-97/gtf/mus_musculus/Mus_musculus.GRCm38.97.chr.gtf.gz",
+         ("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.26_GRCm38.p6/GCF_000001635.26_GRCm38.p6_genomic.gtf.gz",
           "mm10.gtf.gz"))
 
 # Key by genome name
