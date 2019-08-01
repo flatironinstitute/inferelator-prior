@@ -11,3 +11,4 @@ FASTQDUMP_EXECUTABLE_PATH = os.path.expanduser("fastq-dump")
 CHROMA_EXECUTABLE_PATH = os.path.expanduser("ChromA")
 
 HTSEQ_MODULE_NAME = "HTSeq.scripts.count"
+CHROMA_MODULE_NAME = "ChromA"
