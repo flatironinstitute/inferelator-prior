@@ -4,7 +4,7 @@ import os
 from srrTomat0.processor.utils import file_path_abs
 from srrTomat0 import FASTQDUMP_EXECUTABLE_PATH, PREFETCH_EXECUTABLE_PATH
 
-PREFETCH_OPTIONS = []
+PREFETCH_OPTIONS = ["--max-size", "1000000000"]
 
 POSSIBLE_FASTQ_EXTENSIONS = [".fastq.gz", "_1.fastq.gz", "_2.fastq.gz", "_3.fastq.gz", "_4.fastq.gz"]
 
@@ -52,7 +52,6 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
         # If the file is already downloaded, don't do anything
         if os.path.exists(srr_file_name):
             print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
-            return srr_file_name
 
         prefetch_call = [PREFETCH_EXECUTABLE_PATH, srr_id, "-o", srr_file_name, *prefetch_options]
         print(" ".join(prefetch_call))
