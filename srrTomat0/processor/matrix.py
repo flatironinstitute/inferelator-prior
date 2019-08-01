@@ -14,7 +14,7 @@ TRANSCRIPT_TYPE_FLAG = "exon"
 # TODO: test this
 def pileup_raw_counts(srr_ids, count_files):
     """
-    Convert the STAR alignment GeneCount files to a dataframe of SRR-derived expression values
+    Convert the HTSeq count files to a dataframe of SRR-derived expression values
 
     :param srr_ids: list(str)
         NCBI SRR ID string
@@ -72,6 +72,16 @@ def pileup_raw_counts(srr_ids, count_files):
 
 # Turn a raw read count into a normalized RPKM / FPKM per gene
 def normalize_matrix_to_fpkm(matrix_data, annotation_file):
+    """
+    Convert a raw count dataframe to a library and gene size normalized dataframe (RPKM / FPKM)
+
+    :param matrix_data: pd.DataFrame [Genes x Samples]
+        Dataframe of raw counts per gene
+    :param annotation_file: str
+        Path to the genome annotation (GTF) file
+    :return normalized_matrix: pd.DataFrame [Genes x Samples]
+        Normalized dataframe
+    """
 
     # Load a GFF reader from HTSeq
     gff_reader = HTSeq.GFF_Reader(annotation_file)
@@ -106,4 +116,11 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
 
 
 def _gene_length(htseq_genomic_feature):
+    """
+    Get feature length
+    :param htseq_genomic_feature: HTSeq.GenomeFeature
+        GenomeFeature from a GFF_Reader iterable
+    :return: int
+        Feature length
+    """
     return abs(htseq_genomic_feature.iv.start - htseq_genomic_feature.iv.end)
