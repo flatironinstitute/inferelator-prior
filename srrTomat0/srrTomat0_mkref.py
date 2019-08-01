@@ -10,6 +10,7 @@ def main():
                     default=None)
     ap.add_argument("-g", "--genome", dest="genome", help="Create standard ref genome", metavar="PATH", default=None)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
+    ap.add_argument("--cpu", dest="cpu", help="NUMBER of cores to use", metavar="PATH", type=int, default=4)
     args = ap.parse_args()
 
     if (args.fasta is None or args.annotation is None) and args.genome is None:
@@ -18,9 +19,9 @@ def main():
     elif (args.fasta is not None or args.annotation is not None) and args.genome is not None:
         print("One of (--fasta and --annotation) or --genome must be set. Not both.")
     elif args.genome is not None:
-        star_mkref(args.out, default_genome=args.genome)
+        star_mkref(args.out, default_genome=args.genome, cores=args.cpu)
     elif args.fasta is not None and args.annotation is not None:
-        star_mkref(args.out, genome_file=args.fasta, annotation_file=args.annotation)
+        star_mkref(args.out, genome_file=args.fasta, annotation_file=args.annotation, cores=args.cpu)
     else:
         raise ValueError("Switch error")
 
