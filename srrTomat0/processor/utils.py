@@ -26,7 +26,9 @@ _SC64 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/saccharomyces_cerevisiae/d
           "sc64.gff3.gz"))
 
 _MM10 = (("ftp://ftp.ensembl.org/pub/release-97/fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.toplevel.fa.gz",
-          "ftp: // ftp.ensembl.org / pub / release-97 / gtf / mus_musculus / Mus_musculus.GRCm38.97.chr.gtf.gz"))
+          "mm10.fa.gz"),
+         ("ftp://ftp.ensembl.org/pub/release-97/gtf/mus_musculus/Mus_musculus.GRCm38.97.chr.gtf.gz",
+          "mm10.gtf.gz"))
 
 # Key by genome name
 _DEFAULT_GENOMES = {"hg38": _HG38, "sc64": _SC64, "mm10": _MM10}
