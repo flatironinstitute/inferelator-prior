@@ -135,7 +135,7 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
             file_output = [None]
             raise
         finally:
-            # If the fastq-dump failed, clean up the files associated with it and then
+            # If the fastq-dump failed, clean up the files associated with it and then move on
             if int(return_code) != 0:
                 print("NCBI fastq-dump failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
                 files_created = check_list_of_files_exist(output_file_names)
@@ -144,6 +144,7 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
                         os.remove(f)
                     except FileNotFoundError:
                         pass
+                file_output = [None]
 
         # Find out which read files were created by looking into the output folder
         return file_output
