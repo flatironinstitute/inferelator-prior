@@ -123,15 +123,30 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
                            srr_file_name]
 
         print(" ".join(fastq_dump_call))
-        process = await asyncio.create_subprocess_exec(*fastq_dump_call)
-        code = await process.wait()
 
-        if int(code) != 0:
-            print("NCBI fastq-dump failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
-            return [None]
+        # Run fastq-dump and get the files that were created from it
+        return_code = 0
+        try:
+            process = await asyncio.create_subprocess_exec(*fastq_dump_call)
+            return_code = await process.wait()
+            file_output = check_list_of_files_exist(output_file_names)
+        except:
+            return_code = 1
+            file_output = [None]
+            raise
+        finally:
+            # If the fastq-dump failed, clean up the files associated with it and then
+            if int(return_code) != 0:
+                print("NCBI fastq-dump failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+                files_created = check_list_of_files_exist(output_file_names)
+                for f in files_created:
+                    try:
+                        os.remove(f)
+                    except FileNotFoundError:
+                        pass
 
         # Find out which read files were created by looking into the output folder
-        return check_list_of_files_exist(output_file_names)
+        return file_output
 
 
 def check_list_of_files_exist(file_list):
