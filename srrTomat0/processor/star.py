@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 import subprocess
 
 import numpy as np
@@ -120,7 +121,7 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
 # TODO: test this
 def star_mkref(output_path, genome_file=None, annotation_file=None, default_genome=None,
                star_options=STAR_DEFAULT_MKREF_OPTIONS, cores=1, gff_annotations=None,
-               star_executable=STAR_EXECUTABLE_PATH):
+               star_executable=STAR_EXECUTABLE_PATH, move_files=True):
     """
     Make a reference genome index for STAR to align reads to
     :param output_path: str
@@ -140,6 +141,8 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
         Flag for GFF3 (instead of GTF) annotations. If None, it will autodetect .gff files.
     :param star_executable: str
         Path to the STAR executable
+    :param move_files: bool
+        Move the genome/annotation files to a `files` path in the STAR reference genome. If false, just copy.
     :return output_path: str
         Location where the reference genome has been created
     """
@@ -203,7 +206,12 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
     except FileExistsError:
         pass
 
-    [os.rename(file, os.path.join(output_file_path, os.path.basename(file))) for file in genome_file]
-    os.rename(annotation_file, os.path.join(output_file_path, os.path.basename(annotation_file)))
+    if move_files:
+        file_func = os.rename
+    else:
+        file_func = shutil.copy2
+
+    [file_func(file, os.path.join(output_file_path, os.path.basename(file))) for file in genome_file]
+    file_func(annotation_file, os.path.join(output_file_path, os.path.basename(annotation_file)))
 
     return output_path
