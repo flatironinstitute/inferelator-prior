@@ -175,6 +175,7 @@ def star_mkref(output_path, genome_file=None, annotation_file=None, default_geno
 
     # Build the STAR executable call
     star_call = [star_executable,
+                 "--outFileNamePrefix", os.path.join(file_path_abs(output_path), ''),
                  "--runThreadN", str(cores),
                  "--runMode", "genomeGenerate",
                  "--genomeDir", output_path,
