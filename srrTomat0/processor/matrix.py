@@ -104,12 +104,14 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
         print("Dropping genes with unknown lengths: {genes}".format(genes=" ".join(diff.tolist())))
 
     normalized_matrix = matrix_data.drop(diff, axis=0)
-    gene_lengths = gene_lengths.reindex(matrix_data.index)
 
-    # Normalize the libraries by read depth
+    # Convert gene lengths from bases to kilobases
+    gene_lengths = gene_lengths.reindex(normalized_matrix.index) / 10e3
+
+    # Normalize the libraries by read depth to counts per million reads
     normalized_matrix = normalized_matrix.divide(matrix_data.sum()) * 10e6
 
-    # Normalize the libraries by gene length
+    # Normalize the libraries by gene length to counts per kilobase per million reads
     normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
 
     return normalized_matrix
