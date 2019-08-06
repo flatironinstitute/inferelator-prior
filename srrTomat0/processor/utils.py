@@ -1,7 +1,7 @@
-import os
-import subprocess
-import shutil
 import argparse
+import os
+import shutil
+import subprocess
 import sys
 
 if sys.version_info[0] < 3:
@@ -15,20 +15,25 @@ from srrTomat0 import STAR_EXECUTABLE_PATH, PREFETCH_EXECUTABLE_PATH, FASTQDUMP_
 
 # Tuple of ((fasta_url, fasta_file_name), (gff_url, gff_file_name))
 
-_HG38 = (("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GCF_000001405.39_GRCh38.p13_genomic.fna.gz",
-          "hg38.fa.gz"),
-         ("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GCF_000001405.39_GRCh38.p13_genomic.gtf.gz",
-          "hg38.gtf.gz"))
+_HG38 = ((
+         "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GCF_000001405.39_GRCh38.p13_genomic.fna.gz",
+         "hg38.fa.gz"),
+         (
+         "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GCF_000001405.39_GRCh38.p13_genomic.gtf.gz",
+         "hg38.gtf.gz"))
 
-_SC64 = (("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/146/045/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna.gz",
-          "sc64.fa.gz"),
-         ("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/146/045/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.gtf.gz",
-          "sc64.gtf.gz"))
+_SC64 = (
+("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/146/045/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.fna.gz",
+ "sc64.fa.gz"),
+("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/146/045/GCF_000146045.2_R64/GCF_000146045.2_R64_genomic.gtf.gz",
+ "sc64.gtf.gz"))
 
-_MM10 = (("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.26_GRCm38.p6/GCF_000001635.26_GRCm38.p6_genomic.fna.gz",
-          "mm10.fa.gz"),
-         ("ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.26_GRCm38.p6/GCF_000001635.26_GRCm38.p6_genomic.gtf.gz",
-          "mm10.gtf.gz"))
+_MM10 = ((
+         "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.26_GRCm38.p6/GCF_000001635.26_GRCm38.p6_genomic.fna.gz",
+         "mm10.fa.gz"),
+         (
+         "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.26_GRCm38.p6/GCF_000001635.26_GRCm38.p6_genomic.gtf.gz",
+         "mm10.gtf.gz"))
 
 # Key by genome name
 _DEFAULT_GENOMES = {"hg38": _HG38, "sc64": _SC64, "mm10": _MM10}
@@ -74,19 +79,31 @@ def file_path_abs(file_path):
     return os.path.abspath(os.path.expanduser(file_path))
 
 
-def test_requirements_exist(test_package=_TEST_REQUIREMENTS, test_htseq=True):
-
-    ret_code = {}
-    for req, (pref, cmd) in test_package.items():
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        ret_code[req] = proc.returncode
-        stdout = pref + " ".join([l for l in proc.stdout.decode().strip().split("\n") if l.strip() != ""])
-        print(stdout)
+def test_requirements_exist(test_targets=_TEST_REQUIREMENTS.keys(), test_package=_TEST_REQUIREMENTS, test_htseq=True,
+                            test_chroma=True):
+    """
+    Test that the requirements to run this package exist. Print versions of what can be found and raise a ValueError if
+    any required software is missing.
+    :param test_targets: list(str)
+        A list of packages to test
+    :param test_package: dict
+        A dict, keyed by package names, of the commands to run to test the package versions
+    :param test_htseq: bool
+        Test for the python HTSeq package
+    :param test_chroma: bool
+        Test for the python ChromA package
+    :return:
+    """
 
     failed = False
-    for req, code in ret_code.items():
-        if code != 0:
-            print("{req} not found [{args}]".format(req=req, args=" ".join(test_package[req])))
+
+    for req, (pref, cmd) in {k: test_package[k] for k in test_targets}.items():
+        try:
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout = pref + " ".join([l for l in proc.stdout.decode().strip().split("\n") if l.strip() != ""])
+            print(stdout)
+        except subprocess.CalledProcessError:
+            print("{req} : {req} not found (CalledProcessError)".format(req=req))
             failed = True
 
     if test_htseq:
@@ -95,13 +112,24 @@ def test_requirements_exist(test_package=_TEST_REQUIREMENTS, test_htseq=True):
             print("HTSeq : " + str(HTSeq.__version__))
         except ImportError:
             print("HTSeq : HTSeq not found (ImportError)")
-            failed=True
+            failed = True
+
+    if test_chroma:
+        try:
+            import ChromA
+            print("ChromA : " + str(ChromA.__version__))
+        except ImportError:
+            print("ChromA : ChromA not found (ImportError)")
+            failed = True
 
     if failed:
         raise FileNotFoundError
 
+    return True
+
 
 # ArgumentParser that tests requirements if it fails to parse arguments
+# I just want to run a script with no arguments and have it test dependencies
 class ArgParseTestRequirements(argparse.ArgumentParser):
 
     def error(self, message):
