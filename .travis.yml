@@ -12,9 +12,10 @@ install:
   - python setup.py install
 script:
   - git clone https://github.com/marianogabitto/ChromA.git
-  - python ChromA/setup.py install --user
+  - python ChromA/setup.py install
+  - rm -r ChromA
   - python -c "import os; print(repr(os.name))"
-  - coverage run --source=inferelator setup.py test
+  - coverage run --source=srrTomat0 setup.py test
 after_success:
   - codecov
 after_failure:
