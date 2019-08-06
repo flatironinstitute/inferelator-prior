@@ -80,7 +80,71 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
     :param annotation_file: str
         Path to the genome annotation (GTF) file
     :return normalized_matrix: pd.DataFrame [Genes x Samples]
-        Normalized dataframe
+        Normalized dataframe (FPKM)
+    """
+
+    gene_lengths = load_gene_lengths(annotation_file)
+
+    diff = matrix_data.index.difference(gene_lengths.index)
+    if len(diff) > 0:
+        print("Dropping genes with unknown lengths: {genes}".format(genes=" ".join(diff.tolist())))
+
+    normalized_matrix = matrix_data.drop(diff, axis=0)
+
+    # Normalize the libraries by read depth to counts per million reads
+    normalized_matrix = normalized_matrix.divide(matrix_data.sum()) * 10e6
+
+    # Normalize the libraries by gene length to counts per kilobase per million reads
+    normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
+
+    return normalized_matrix
+
+
+# Turn a raw read count into a normalized TPM per gene
+def normalize_matrix_to_tpm(matrix_data, annotation_file):
+    """
+    Convert a raw count dataframe to a library and gene size normalized dataframe (TPM)
+
+    :param matrix_data: pd.DataFrame [Genes x Samples]
+        Dataframe of raw counts per gene
+    :param annotation_file: str
+        Path to the genome annotation (GTF) file
+    :return normalized_matrix: pd.DataFrame [Genes x Samples]
+        Normalized dataframe (TPM)
+    """
+
+    gene_lengths = load_gene_lengths(annotation_file)
+
+    diff = matrix_data.index.difference(gene_lengths.index)
+    if len(diff) > 0:
+        print("Dropping genes with unknown lengths: {genes}".format(genes=" ".join(diff.tolist())))
+
+    # Align data
+    normalized_matrix = matrix_data.drop(diff, axis=0)
+    gene_lengths = gene_lengths.reindex(normalized_matrix.index)
+
+    # Normalize the libraries by gene length to counts per kilobase
+    normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
+
+    # Normalize the libraries by scaling to the library size
+    normalized_matrix = normalized_matrix.divide(matrix_data.sum()) * 10e6
+
+    return normalized_matrix
+
+
+def load_gene_lengths(annotation_file):
+    """
+    Load gene lengths from an annotation file
+
+    :param annotation_file: str
+        Path to the genome annotation (GTF) file
+    :return gene_lengths: pd.DataFrame[G x 1]
+        Dataframe indexed by gene name
+
+        ==========  ======= ==============================================================
+        length      int     sum of exon length in kilobases
+        ==========  ======= ==============================================================
+
     """
 
     # Load a GFF reader from HTSeq
@@ -95,27 +159,11 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
             except KeyError:
                 gene_lengths[gf.name] = [_gene_length(gf)]
 
-    # Sum exon lengths and pack into a dataframe
-    gene_lengths = pd.DataFrame.from_dict({gn: sum(exons) for gn, exons in gene_lengths.items()},
+    # Sum exon lengths and pack into a dataframe in kilobases
+    gene_lengths = pd.DataFrame.from_dict({gn: sum(exons) / 10e3 for gn, exons in gene_lengths.items()},
                                           orient='index', columns=['length'])
 
-    diff = matrix_data.index.difference(gene_lengths.index)
-    if len(diff) > 0:
-        print("Dropping genes with unknown lengths: {genes}".format(genes=" ".join(diff.tolist())))
-
-    normalized_matrix = matrix_data.drop(diff, axis=0)
-
-    # Convert gene lengths from bases to kilobases
-    gene_lengths = gene_lengths.reindex(normalized_matrix.index) / 10e3
-
-    # Normalize the libraries by read depth to counts per million reads
-    normalized_matrix = normalized_matrix.divide(matrix_data.sum()) * 10e6
-
-    # Normalize the libraries by gene length to counts per kilobase per million reads
-    normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
-
-    return normalized_matrix
-
+    return gene_lengths
 
 def _gene_length(htseq_genomic_feature):
     """

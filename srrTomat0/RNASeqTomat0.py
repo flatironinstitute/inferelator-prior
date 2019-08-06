@@ -6,7 +6,7 @@ import pandas as pd
 
 from srrTomat0 import SRR_SUBPATH, FASTQ_SUBPATH, STAR_ALIGNMENT_SUBPATH, HTSEQ_ALIGNMENT_SUBPATH
 from srrTomat0.processor.htseq_count import htseq_count_aligned
-from srrTomat0.processor.matrix import pileup_raw_counts, normalize_matrix_to_fpkm
+from srrTomat0.processor.matrix import pileup_raw_counts, normalize_matrix_to_fpkm, normalize_matrix_to_tpm
 from srrTomat0.processor.srr import get_srr_files, unpack_srr_files
 from srrTomat0.processor.star import star_align_fastqs
 from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
@@ -14,6 +14,7 @@ from srrTomat0.processor.utils import file_path_abs, test_requirements_exist, Ar
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
 OUTPUT_COUNT_METADATA_NAME = "srr_alignment_metadata.tsv"
 OUTPUT_FPKM_FILE_NAME = "srr_fpkm.tsv"
+OUTPUT_TPM_FILE_NAME = "srr_tpm.tsv"
 
 
 def main():
@@ -94,19 +95,30 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzi
     else:
         count_matrix.to_csv(count_matrix_file_name, sep="\t")
 
+    # Save the count metadata file
+    count_metadata.to_csv(os.path.join(output_path, OUTPUT_COUNT_METADATA_NAME), sep="\t")
+
     # Normalize to FPKM
     print("Normalizing result matrix to FPKM")
-    normalized_count_matrix = normalize_matrix_to_fpkm(count_matrix, annotation_file)
-    normalized_count_matrix_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME)
+    normalized_count_matrix_fpkm = normalize_matrix_to_fpkm(count_matrix, annotation_file)
+    fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME)
 
     # Save the normalized counts file
     if gzip_output:
-        normalized_count_matrix.to_csv(normalized_count_matrix_file_name + ".gz", compression='gzip', sep="\t")
+        normalized_count_matrix_fpkm.to_csv(fpkm_file_name + ".gz", compression='gzip', sep="\t")
     else:
-        normalized_count_matrix.to_csv(normalized_count_matrix_file_name, sep="\t")
+        normalized_count_matrix_fpkm.to_csv(fpkm_file_name, sep="\t")
 
-    # Save the count metadata file
-    count_metadata.to_csv(os.path.join(output_path, OUTPUT_COUNT_METADATA_NAME), sep="\t")
+    # Normalize to TPM
+    print("Normalizing result matrix to TPM")
+    normalized_count_matrix_tpm = normalize_matrix_to_tpm(count_matrix, annotation_file)
+    tpmx_file_name = os.path.join(output_path, OUTPUT_TPM_FILE_NAME)
+
+    # Save the normalized counts file
+    if gzip_output:
+        normalized_count_matrix_tpm.to_csv(tpmx_file_name + ".gz", compression='gzip', sep="\t")
+    else:
+        normalized_count_matrix_tpm.to_csv(tpmx_file_name, sep="\t")
 
     print("Count file {sh} generated from {srlen} SRA files".format(sh=count_matrix.shape, srlen=len(srr_ids)))
     failed_counts = list(map(lambda x: x is None, count_file_names))
