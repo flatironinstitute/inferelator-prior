@@ -80,7 +80,7 @@ def file_path_abs(file_path):
 
 
 def test_requirements_exist(test_targets=_TEST_REQUIREMENTS.keys(), test_package=_TEST_REQUIREMENTS, test_htseq=True,
-                            test_chroma=True):
+                            test_chroma=False):
     """
     Test that the requirements to run this package exist. Print versions of what can be found and raise a ValueError if
     any required software is missing.
