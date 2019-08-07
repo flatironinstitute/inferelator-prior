@@ -92,7 +92,7 @@ def normalize_matrix_to_fpkm(matrix_data, annotation_file):
     normalized_matrix = matrix_data.drop(diff, axis=0)
 
     # Normalize the libraries by read depth to counts per million reads
-    normalized_matrix = normalized_matrix.divide(normalized_matrix.sum()) * 10e6
+    normalized_matrix = normalized_matrix.divide(normalized_matrix.sum()) * 1e6
 
     # Normalize the libraries by gene length to counts per kilobase per million reads
     normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
@@ -127,7 +127,7 @@ def normalize_matrix_to_tpm(matrix_data, annotation_file):
     normalized_matrix = normalized_matrix.divide(gene_lengths['length'], axis=0)
 
     # Normalize the libraries by scaling to the library size
-    normalized_matrix = normalized_matrix.divide(normalized_matrix.sum()) * 10e6
+    normalized_matrix = normalized_matrix.divide(normalized_matrix.sum()) * 1e6
 
     return normalized_matrix
 
