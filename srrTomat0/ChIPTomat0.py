@@ -31,10 +31,14 @@ def chip_tomat0(chip_peaks_file, output_path, annotation_file):
     annotations['gene_name'] = attributes
     genes = fix_genes(annotations[['seqname', 'start', 'end', 'gene_name']])
 
-    def _find_overlap(x):
-        return sum((x['start'] <= chip_peaks['end']) & (x['end'] >= chip_peaks['start']))
+    genes = {val: df for val, df in genes.groupby('seqname')}
+    chip_peaks = {val: df for val, df in chip_peaks.groupby('chrom')}
 
-    overlap_gene_count = genes.apply(_find_overlap)
+    gene_counts = {}
+    for chromosome in set(chip_peaks.keys()).union(set(genes.keys())):
+        def _find_overlap(x):
+            return sum((x['start'] <= chip_peaks[chromosome]['end']) & (x['end'] >= chip_peaks[chromosome]['start']))
+        gene_counts[chromosome] = genes[chromosome].apply(_find_overlap, axis=0)
 
 
 def open_window(annotation_dataframe, window_size):
@@ -53,4 +57,6 @@ def fix_genes(gene_dataframe):
     """
 
     assert (gene_dataframe['start'] <= gene_dataframe['end']).all()
-    return gene_dataframe.groupby("gene_name").aggregate({'start': min, 'end': max})
+    return gene_dataframe.groupby("gene_name").aggregate({'start': min,
+                                                          'end': max,
+                                                          'seqname': lambda x:x.value_counts().index[0]}).reset_index()
