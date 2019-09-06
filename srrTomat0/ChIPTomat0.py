@@ -5,6 +5,8 @@ import pandas as pd
 import pybedtools
 import numpy as np
 
+from srrTomat0.processor.utils import file_path_abs
+
 
 def main():
     ap = argparse.ArgumentParser(description="Load peaks and genes.")
@@ -15,14 +17,36 @@ def main():
     args = ap.parse_known_args()
 
 
-
-def chip_tomat0(chip_peaks, output_path, annotation_file):
+def chip_tomat0(chip_peaks_file, output_path, annotation_file):
     output_path = file_path_abs(output_path)
-    chip_peaks = pybedtools.BedTool('/Users/cskokgibbs/Dropbox (Simons Foundation)/Skok_Lab_mESC/CHIP/ctcf.peaks_C.ID.bed')
+    chip_peaks_file = file_path_abs(chip_peaks_file)
+    annotation_file = file_path_abs(annotation_file)
+
+    chip_peaks = pybedtools.BedTool(chip_peaks_file)
     chip_peaks = chip_peaks.to_dataframe()
 
-    annotation_file = pybedtools.BedTool('/Users/cskokgibbs/Dropbox (Simons Foundation)/Skok_Lab_mESC/CHIP/mm10.gtf')
-    annotation_file = annotation_file.to_dataframe()
-    attributes = annotation_file['attributes'].str.extract('gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;', expand=False)
-    annotation_file['gene_name'] = attributes
-    genes = annotation_file[['seqname', 'start', 'end', 'gene_name']]
+    annotations = pybedtools.BedTool(annotation_file)
+    annotations = annotations.to_dataframe()
+    attributes = annotations['attributes'].str.extract('gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;', expand=False)
+    annotations['gene_name'] = attributes
+    genes = fix_genes(annotations[['seqname', 'start', 'end', 'gene_name']])
+
+
+def open_window(annotation_dataframe, window_size):
+    """
+    This needs to adjust the start and stop in the annotation dataframe with window sizes
+    :param annotation_dataframe:
+    :param window_size:
+    """
+    pass
+
+
+def fix_genes(gene_dataframe):
+    """
+    Find minimum start and maximum stop
+    :return:
+    """
+
+    assert (gene_dataframe['start'] <= gene_dataframe['end']).all()
+    return gene_dataframe.group_by("gene_name").aggregate({'start': min, 'end': max})
+
