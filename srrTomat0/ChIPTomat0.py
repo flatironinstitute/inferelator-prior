@@ -25,18 +25,26 @@ def main():
     ap.add_argument("-f", "--file", dest="file", help="bed file containing ChIP peaks", metavar="FILE", default=None)
     ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output TSV PATH", metavar="PATH", required=True)
+    ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0)
 
     args = ap.parse_args()
-    chip_tomat0(args.file, args.out, args.anno)
+    chip_tomat0(args.file, args.out, args.anno, window_size=args.window_size)
 
 
-def chip_tomat0(chip_peaks_file, output_path, annotation_file, window_size=0):
+def chip_tomat0(chip_peaks_file, annotation_file, output_path=None, window_size=0):
     """
-
+    Process a BED file of peaks into a integer peak-count matrix
     :param chip_peaks_file: str
+        Path to a BED file
     :param output_path: str
+        Path to the output TSV file
     :param annotation_file: str
-    :return:
+        Path to the GTF annotation file
+    :param window_size: int
+        Window on each side of a gene to include a peak in the count
+        100 means 100bp up from start and 100bp down from end
+    :return gene_counts: pd.DataFrame
+        Integer count matrix of peaks per gene
     """
 
     # Convert paths to absolutes
@@ -84,7 +92,9 @@ def chip_tomat0(chip_peaks_file, output_path, annotation_file, window_size=0):
 
     # Combine all
     gene_counts = pd.concat(gene_counts).reset_index().loc[:, [GTF_GENENAME, SEQ_COUNTS]]
-    gene_counts.to_csv(output_path, sep="\t", index=False)
+
+    if output_path is not None:
+        gene_counts.to_csv(output_path, sep="\t", index=False)
 
     return gene_counts
 
@@ -96,7 +106,10 @@ def open_window(annotation_dataframe, window_size):
     :param window_size: int
     :return windowed_dataframe: pd.DataFrame
     """
-    windowed_dataframe = annotation_dataframe
+    windowed_dataframe = annotation_dataframe.copy()
+    windowed_dataframe[SEQ_START] = windowed_dataframe[SEQ_START] - window_size
+    windowed_dataframe[SEQ_STOP] = windowed_dataframe[SEQ_STOP] + window_size
+    windowed_dataframe.loc[windowed_dataframe[SEQ_START] < 0, SEQ_START] = 0
     return windowed_dataframe
 
 
