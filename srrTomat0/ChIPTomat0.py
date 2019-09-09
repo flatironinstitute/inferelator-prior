@@ -7,55 +7,97 @@ import numpy as np
 
 from srrTomat0.processor.utils import file_path_abs
 
+GENE_ID_REGEX = 'gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;'
+
+# Column names
+GTF_ATTRIBUTES = 'attributes'
+GTF_CHROMOSOME = 'seqname'
+GTF_GENENAME = 'gene_name'
+BED_CHROMOSOME = 'chrom'
+
+SEQ_START = 'start'
+SEQ_STOP = 'end'
+SEQ_COUNTS = 'count'
+
 
 def main():
     ap = argparse.ArgumentParser(description="Load peaks and genes.")
     ap.add_argument("-f", "--file", dest="file", help="bed file containing ChIP peaks", metavar="FILE", default=None)
     ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", required=True)
-    ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
+    ap.add_argument("-o", "--out", dest="out", help="Output TSV PATH", metavar="PATH", required=True)
 
-    args = ap.parse_known_args()
+    args = ap.parse_args()
+    chip_tomat0(args.file, args.out, args.anno)
 
 
-def chip_tomat0(chip_peaks_file, output_path, annotation_file):
+def chip_tomat0(chip_peaks_file, output_path, annotation_file, window_size=0):
+    """
+
+    :param chip_peaks_file: str
+    :param output_path: str
+    :param annotation_file: str
+    :return:
+    """
+
+    # Convert paths to absolutes
     output_path = file_path_abs(output_path)
     chip_peaks_file = file_path_abs(chip_peaks_file)
     annotation_file = file_path_abs(annotation_file)
 
-    chip_peaks = pybedtools.BedTool(chip_peaks_file)
-    chip_peaks = chip_peaks.to_dataframe()
+    # Load BED file into a dataframe with pybedtools
+    chip_peaks = pybedtools.BedTool(chip_peaks_file).to_dataframe()
 
-    annotations = pybedtools.BedTool(annotation_file)
-    annotations = annotations.to_dataframe()
-    attributes = annotations['attributes'].str.extract('gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;', expand=False)
-    annotations['gene_name'] = attributes
-    genes = fix_genes(annotations[['seqname', 'start', 'end', 'gene_name']])
+    # Load annotations into a dataframe with pybedtools
+    annotations = pybedtools.BedTool(annotation_file).to_dataframe()
 
-    genes = {val: df for val, df in genes.groupby('seqname')}
-    chip_peaks = {val: df for val, df in chip_peaks.groupby('chrom')}
+    # Regex extract the gene_id from the annotations column
+    annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(GENE_ID_REGEX, expand=False)
+    genes = fix_genes(annotations[[GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_GENENAME]])
 
-    gene_counts = {}
+    # Adjust the start and stop positions to account for a flanking window
+    genes = open_window(genes, window_size)
+
+    # Add counts (and set to 0)
+    genes[SEQ_COUNTS] = 0
+
+    # Group genes and peaks by chromosome
+    genes = {val: df for val, df in genes.groupby(GTF_CHROMOSOME)}
+    chip_peaks = {val: df for val, df in chip_peaks.groupby(BED_CHROMOSOME)}
+
+    # Count overlaps on a per-chromosome basis
+    gene_counts = []
     for chromosome in set(chip_peaks.keys()).union(set(genes.keys())):
 
-        try:
-            chip_peaks[chromosome]
-            genes[chromosome]
-        except KeyError:
-            continue
+        if (chromosome not in chip_peaks) or (chromosome not in genes):
+            continue  # Someone's using a weird chromosome name
 
         def _find_overlap(x):
-            return sum((x['start'] <= chip_peaks[chromosome]['end']) & (x['end'] >= chip_peaks[chromosome]['start']))
+            # Function to return the number of overlaps with peaks in `chip_peaks`
+            # Iterates over genes from GTF data frame (using apply)
+            start_bool = x[SEQ_START] <= chip_peaks[chromosome][SEQ_STOP]
+            stop_bool = x[SEQ_STOP] >= chip_peaks[chromosome][SEQ_START]
+            return sum(start_bool & stop_bool)
 
-        gene_counts[chromosome] = genes[chromosome].apply(_find_overlap, axis=1)
+        genes[chromosome][GTF_CHROMOSOME] = chromosome
+        genes[chromosome][SEQ_COUNTS] = genes[chromosome].apply(_find_overlap, axis=1)
+        gene_counts.append(genes[chromosome])
+
+    # Combine all
+    gene_counts = pd.concat(gene_counts).reset_index().loc[:, [GTF_GENENAME, SEQ_COUNTS]]
+    gene_counts.to_csv(output_path, sep="\t", index=False)
+
+    return gene_counts
 
 
 def open_window(annotation_dataframe, window_size):
     """
     This needs to adjust the start and stop in the annotation dataframe with window sizes
-    :param annotation_dataframe:
-    :param window_size:
+    :param annotation_dataframe: pd.DataFrame
+    :param window_size: int
+    :return windowed_dataframe: pd.DataFrame
     """
-    pass
+    windowed_dataframe = annotation_dataframe
+    return windowed_dataframe
 
 
 def fix_genes(gene_dataframe):
@@ -68,3 +110,7 @@ def fix_genes(gene_dataframe):
     return gene_dataframe.groupby("gene_name").aggregate({'start': min,
                                                           'end': max,
                                                           'seqname': lambda x:x.value_counts().index[0]}).reset_index()
+
+
+if __name__ == '__main__':
+    main()
