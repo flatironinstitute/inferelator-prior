@@ -55,7 +55,8 @@ def main():
     elif args.gene is not None and args.tss is not None:
         print("Only one of --genebody or --tss may be set (not both)")
         exit(1)
-
+    else:
+        raise ValueError("There is something wrong with this switch")
 
     chip_bed_tomat0(id_names, chip_bed_files, args.anno, output_path=args.out, window_size=args.window_size,
                     gene=args.gene, tss=args.tss)
