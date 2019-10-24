@@ -23,8 +23,10 @@ def main():
                     default=None)
     ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output TSV PATH", metavar="PATH", required=True)
-    ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0)
-
+    ap.add_argument("-w", "--window", dest="window_size", help="Window size", type=int, default=0)
+    ap.add_argument("-g", "--genebody", dest="gene", help="Gene body", action="store_const", const=True, default=False)
+    ap.add_argument("-t", "--tss", dest="tss", help="Transcription start site", action="store_const", const=True,
+                    default=False)
     args = ap.parse_args()
 
     if args.bed is None and args.file is None:
@@ -47,10 +49,20 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    chip_bed_tomat0(id_names, chip_bed_files, args.anno, output_path=args.out, window_size=args.window_size)
+    if args.gene is None and args.tss is None:
+        print("One of --genebody or --tss must be set")
+        exit(1)
+    elif args.gene is not None and args.tss is not None:
+        print("Only one of --genebody or --tss may be set (not both)")
+        exit(1)
 
 
-def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None, window_size=0):
+    chip_bed_tomat0(id_names, chip_bed_files, args.anno, output_path=args.out, window_size=args.window_size,
+                    gene=args.gene, tss=args.tss)
+
+
+def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None, window_size=0, gene = False,
+                    tss = False):
     """
     Process a BED file of peaks into a integer peak-count matrix
     :param chip_peaks_file: list(str)
@@ -72,9 +84,10 @@ def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None
 
     # Load annotations into a dataframe with pybedtools
     genes = load_gtf_to_dataframe(annotation_file)
-
+    tss = load_gtf_to_dataframe(annotation_file)
     # Adjust the start and stop positions to account for a flanking window
     genes = open_window(genes, window_size)
+    tss = open_tss(tss, window_size)
 
     prior_data = pd.DataFrame(index=genes[GTF_GENENAME])
     for id_name, peak_file in zip(id_names, chip_peaks_file):
@@ -113,6 +126,18 @@ def open_window(annotation_dataframe, window_size):
     windowed_dataframe.loc[windowed_dataframe[SEQ_START] < 0, SEQ_START] = 0
     return windowed_dataframe
 
+def open_tss(annotation_file, window_size):
+    """
+    This needs to adjust the start and stop in the annotation dataframe with window sizes
+    :param annotation_dataframe: pd.DataFrame
+    :param window_size: int
+    :return windowed_dataframe: pd.DataFrame
+    """
+    tss_dataframe = annotation_file.copy()
+    tss_dataframe[SEQ_START] = tss_dataframe[SEQ_TSS] - window_size
+    tss_dataframe[SEQ_STOP] = tss_dataframe[SEQ_TSS] + window_size
+    tss_dataframe.loc[tss_dataframe[SEQ_START] < 0, SEQ_START] = 0
+    return tss_dataframe
 
 if __name__ == '__main__':
     main()
