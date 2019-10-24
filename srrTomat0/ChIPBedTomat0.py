@@ -49,10 +49,10 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    if args.gene is None and args.tss is None:
+    if args.gene is False and args.tss is False:
         print("One of --genebody or --tss must be set")
         exit(1)
-    elif args.gene is not None and args.tss is not None:
+    elif args.gene is not False and args.tss is not False:
         print("Only one of --genebody or --tss may be set (not both)")
         exit(1)
     else:
