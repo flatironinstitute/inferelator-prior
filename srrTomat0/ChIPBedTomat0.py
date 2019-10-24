@@ -60,8 +60,8 @@ def main():
                     gene=args.gene, tss=args.tss)
 
 
-def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None, window_size=0, gene = False,
-                    tss = False):
+def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None, window_size=0, gene_body_flag = False,
+                    tss_flag = False):
     """
     Process a BED file of peaks into a integer peak-count matrix
     :param chip_peaks_file: list(str)
@@ -82,11 +82,14 @@ def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None
     annotation_file = file_path_abs(annotation_file)
 
     # Load annotations into a dataframe with pybedtools
-    genes = load_gtf_to_dataframe(annotation_file)
-    tss = load_gtf_to_dataframe(annotation_file)
     # Adjust the start and stop positions to account for a flanking window
-    genes = open_window(genes, window_size)
-    tss = open_tss(tss, window_size)
+    genes = load_gtf_to_dataframe(annotation_file)
+
+    if gene_body_flag:
+        genes = open_window(genes, window_size)
+    if tss_flag:
+        genes = open_tss(genes, window_size)
+
 
     prior_data = pd.DataFrame(index=genes[GTF_GENENAME])
     for id_name, peak_file in zip(id_names, chip_peaks_file):
