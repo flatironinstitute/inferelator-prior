@@ -57,7 +57,7 @@ def main():
         exit(1)
 
     chip_bed_tomat0(id_names, chip_bed_files, args.anno, output_path=args.out, window_size=args.window_size,
-                    gene=args.gene, tss=args.tss)
+                    gene_body_flag=args.gene, tss_flag=args.tss)
 
 
 def chip_bed_tomat0(id_names, chip_peaks_file, annotation_file, output_path=None, window_size=0, gene_body_flag = False,
