@@ -3,7 +3,7 @@ import pandas as pd
 
 import pybedtools
 
-from srrTomat0.processor.gtf import load_gtf_to_dataframe, SEQ_START, SEQ_STOP, GTF_GENENAME
+from srrTomat0.processor.gtf import load_gtf_to_dataframe, SEQ_START, SEQ_STOP, GTF_GENENAME, SEQ_TSS
 from srrTomat0.processor.utils import file_path_abs
 from srrTomat0.processor.bedtools import get_peaks_in_features
 
