@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import sys
+import numpy as np
 
 if sys.version_info[0] < 3:
     print("The srrTomat0 package requires python3")

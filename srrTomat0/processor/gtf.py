@@ -35,6 +35,28 @@ def load_gtf_to_dataframe(gtf_path):
     return _add_TSS(annotations)
 
 
+def open_window(annotation_dataframe, window_size, use_tss=False):
+    """
+    This needs to adjust the start and stop in the annotation dataframe with window sizes
+    :param annotation_dataframe: pd.DataFrame
+    :param window_size: int
+    :param use_tss: bool
+    :return windowed_dataframe: pd.DataFrame
+    """
+    windowed_dataframe = annotation_dataframe.copy()
+
+    if use_tss:
+        windowed_dataframe[SEQ_START] = windowed_dataframe[SEQ_TSS] - window_size
+        windowed_dataframe[SEQ_STOP] = windowed_dataframe[SEQ_TSS] + window_size
+    else:
+        windowed_dataframe[SEQ_START] = windowed_dataframe[SEQ_START] - window_size
+        windowed_dataframe[SEQ_STOP] = windowed_dataframe[SEQ_STOP] + window_size
+
+    windowed_dataframe.loc[windowed_dataframe[SEQ_START] < 0, SEQ_START] = 0
+
+    return windowed_dataframe
+
+
 def _fix_genes(gene_dataframe):
     """
     Find minimum start and maximum stop
