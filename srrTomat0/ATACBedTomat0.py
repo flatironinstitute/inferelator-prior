@@ -42,7 +42,7 @@ def build_atac_motif_prior(motif_bed_file, atac_bed_file, annotation_file, windo
     open_chromatin = merge_overlapping_peaks(open_chromatin, strand_column=None, max_distance=1)
     print("\t{n} peaks remain after merge".format(n=open_chromatin.shape[0]))
 
-    return build_prior_from_atac_motifs(genes, motif_peaks, open_chromatin, num_cores=num_cores, fdr_alpha=fdr_alpha)
+    return build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=num_cores, fdr_alpha=fdr_alpha)
 
 
 if __name__ == '__main__':

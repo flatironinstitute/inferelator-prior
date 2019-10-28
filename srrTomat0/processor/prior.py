@@ -41,9 +41,12 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1
 
     prior_data = []
 
-    with multiprocessing.Pool(num_cores, maxtasksperchild=1000) as mp:
-        for priors in mp.imap_unordered(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)):
-            prior_data.append(priors)
+    if num_cores != 1:
+        with multiprocessing.Pool(num_cores, maxtasksperchild=1000) as mp:
+            for priors in mp.imap_unordered(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)):
+                prior_data.append(priors)
+    else:
+         prior_data = list(map(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)))
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data)
