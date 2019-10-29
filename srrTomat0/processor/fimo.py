@@ -10,7 +10,7 @@ from srrTomat0.processor.meme_parser import parse_meme_file_for_record_block
 BEDTOOLS_EXTRACT_SUFFIX = ".extract.fasta"
 FIMO_DATA_SUFFIX = ".fimo.tsv"
 
-FIMO_MOTIF_ = 'motif_id'
+FIMO_MOTIF = 'motif_id'
 FIMO_MOTIF_COMMON = 'motif_alt_id'
 FIMO_CHROMOSOME = 'sequence_name'
 FIMO_STRAND = 'strand'
