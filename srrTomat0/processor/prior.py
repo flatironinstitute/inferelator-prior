@@ -38,6 +38,7 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1
     """
 
     motif_names = MotifLM.get_motif_names()
+    print("Building prior from {g} genes and {k} TFs".format(g=genes.shape[0], k=len(motif_names)))
 
     prior_data = []
 
