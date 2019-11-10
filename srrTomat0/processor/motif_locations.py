@@ -61,7 +61,7 @@ class MotifLocationManager(object):
             raise ValueError("motif_type value {v} not supported".format(v=motif_file_type))
 
     @classmethod
-    def get_tf_scores(cls, tf):
+    def tf_score(cls, tf):
         if cls.motif_scores is not None:
             return cls.motif_scores[tf]
         elif cls.motif_data is not None:

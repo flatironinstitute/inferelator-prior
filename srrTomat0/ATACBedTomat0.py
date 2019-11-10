@@ -24,7 +24,7 @@ def main():
 
 
 def build_atac_motif_prior(motif_bed_file, atac_bed_file, annotation_file, window_size=0, use_tss=True,
-                           motif_type='fimo', num_cores=1, fdr_alpha=0.05):
+                           motif_type='fimo', num_cores=1, alpha=0.05):
 
     MotifLM.set_motif_file_type(motif_type)
     motif_peaks = MotifLM.get_motifs(motif_bed_file)
@@ -42,7 +42,8 @@ def build_atac_motif_prior(motif_bed_file, atac_bed_file, annotation_file, windo
     open_chromatin = merge_overlapping_peaks(open_chromatin, strand_column=None, max_distance=1)
     print("\t{n} peaks remain after merge".format(n=open_chromatin.shape[0]))
 
-    return build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=num_cores, fdr_alpha=fdr_alpha)
+    return build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size, num_cores=num_cores,
+                                        alpha=alpha)
 
 
 if __name__ == '__main__':

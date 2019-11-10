@@ -6,6 +6,7 @@ from scipy.stats import poisson
 from statsmodels.sandbox.stats.multicomp import multipletests
 
 import pandas as pd
+import math
 from pandas.errors import EmptyDataError
 import numpy as np
 import multiprocessing
@@ -19,9 +20,11 @@ PRIOR_PVAL = 'pvalue'
 PRIOR_COLS = [PRIOR_TF, PRIOR_GENE, PRIOR_COUNT, PRIOR_SCORE, PRIOR_PVAL]
 
 PRIOR_FDR = 'qvalue'
+PRIOR_SIG = 'significance'
 
 
-def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1, fdr_alpha=0.05):
+def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size, num_cores=1, alpha=0.05,
+                                 enforced_sparsity_ratio=0.05, multiple_test_correction=False):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
@@ -31,8 +34,8 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1
         Motif search data loaded from FIMO or HOMER
     :param num_cores: int
         Number of local cores to use
-    :param fdr_alpha: float
-        FDR alpha value for correction to q-values
+    :param alpha: float
+        alpha value for significance
     :return prior_data, prior_matrix: pd.DataFrame [G*K x 6], pd.DataFrame [G x K]
         A long-form edge table data frame and a wide-form interaction matrix data frame
     """
@@ -44,28 +47,45 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1
 
     if num_cores != 1:
         with multiprocessing.Pool(num_cores, maxtasksperchild=1000) as mp:
-            for priors in mp.imap_unordered(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)):
+            for priors in mp.imap_unordered(_build_prior_for_gene, _gene_generator(genes,
+                                                                                   open_chromatin,
+                                                                                   motif_peaks,
+                                                                                   window_size)):
                 prior_data.append(priors)
     else:
-         prior_data = list(map(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)))
+         prior_data = list(map(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks, window_size)))
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data)
 
-    # Recalculate a qvalue by FDR (BH)
-    prior_data[PRIOR_FDR] = multipletests(prior_data[PRIOR_PVAL], alpha=fdr_alpha, method='fdr_bh')[1]
-
-    # Pivot to a matrix, extend to all TFs, and fill with 0s
-    prior_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_FDR)
+    # Pivot to a matrix, extend to all TFs, and fill with 1s
+    prior_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_PVAL)
     prior_matrix = prior_matrix.reindex(motif_names, axis=1)
     prior_matrix = prior_matrix.reindex(genes[GTF_GENENAME], axis=0)
+    prior_matrix[pd.isnull(prior_matrix)] = 1
 
-    prior_matrix[pd.isnull(prior_matrix)] = 0
+    print("Processing p-values [alpha = {a}] by TF".format(a=alpha))
+    # Recalculate a qvalue by FDR (BH)
+    for tf in prior_matrix.columns:
+        # FDR Correction
+        if multiple_test_correction:
+            qvals = multipletests(prior_matrix[tf], alpha=alpha, method='fdr_bh')[1]
+        else:
+            qvals = prior_matrix[tf]
+
+        # Enforce sparsity
+        if enforced_sparsity_ratio is not None and enforced_sparsity_ratio < 1:
+            max_kept = math.ceil(enforced_sparsity_ratio * len(qvals))
+            qvals[np.argsort(qvals)[max_kept:]] = 1
+
+        prior_matrix[tf] = qvals
+
+    prior_matrix = prior_matrix < alpha
 
     return prior_data, prior_matrix
 
 
-def _gene_generator(genes, open_chromatin, motif_data):
+def _gene_generator(genes, open_chromatin, motif_data, window_size):
     """
 
     :param genes:
@@ -87,7 +107,7 @@ def _gene_generator(genes, open_chromatin, motif_data):
         motif_mask &= motif_data[MotifLM.stop_col] >= gene_start
         motif_mask &= motif_data[MotifLM.start_col] <= gene_stop
 
-        yield (gene_name, open_chromatin.loc[chromatin_mask, :], motif_data.loc[motif_mask, :], i)
+        yield (gene_name, open_chromatin.loc[chromatin_mask, :], motif_data.loc[motif_mask, :], i, window_size)
 
 
 def _build_prior_for_gene(gene_data):
@@ -108,7 +128,7 @@ def _build_prior_for_gene(gene_data):
         'pvalue': p-value calculated using poisson survival function
     """
 
-    gene_name, chromatin_data, motif_data, num_iteration = gene_data
+    gene_name, chromatin_data, motif_data, num_iteration, window_size = gene_data
 
     if num_iteration % 100 == 0:
         print("Processing gene {i} [{gn}]".format(i=num_iteration, gn=gene_name))
@@ -127,21 +147,29 @@ def _build_prior_for_gene(gene_data):
     open_regulator_peaks.columns = motif_data.columns
 
     open_chromatin_size = (chromatin_data[SEQ_STOP] - chromatin_data[SEQ_START]).sum()
-    regulator_peak_size = (open_regulator_peaks[MotifLM.stop_col] - open_regulator_peaks[MotifLM.start_col]).sum()
 
     score_columns = [MotifLM.name_col, MotifLM.score_col]
 
     prior_edges = []
     for tf, tf_peaks in open_regulator_peaks.loc[:, score_columns].groupby(MotifLM.name_col):
-        mean_tf_score = tf_peaks[MotifLM.score_col].mean()
         tf_counts = tf_peaks.shape[0]
 
-        # Calculate rates for poisson
-        rate = max(1, sum(MotifLM.get_tf_scores(tf) >= mean_tf_score)) / open_chromatin_size
-        poisson_rate = regulator_peak_size * rate
+        if tf_counts > 1:
+            min_tf_score = tf_peaks[MotifLM.score_col].min()
 
-        # Calculate survival function p-value
-        pvalue = poisson.sf(tf_counts, poisson_rate)
+            # Calculate rates for poisson
+            # The rate parameter is the number of higher confidence TF bindings elsewhere in the genome
+            # Multiplied by the open chromatin size divided by the window size
+            rate = max(1, sum(MotifLM.tf_score(tf) < min_tf_score))
+            rate *= min(1, open_chromatin_size / window_size)
+
+            # Calculate survival function p-value
+            pvalue = poisson.sf(tf_counts, rate)
+
+            # Multiply survival function p-value by the minimum tf score    
+            pvalue *= tf_peaks[MotifLM.score_col].min()
+        else:
+            pvalue = tf_peaks[MotifLM.score_col].min()
 
         # Add this edge to the table
         prior_edges.append((tf, gene_name, tf_counts, -np.log10(pvalue), pvalue))
