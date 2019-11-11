@@ -24,7 +24,7 @@ def main():
                                              num_cores=args.cores, use_tss=args.tss,
                                              enforced_sparsity_ratio=args.enforced_sparsity_ratio)
     
-    prior_matrix.to_csv(args.out, sep="\t")
+    prior_matrix.astype(int).to_csv(args.out, sep="\t")
 
 
 def build_atac_motif_prior(motif_bed_file, atac_bed_file, annotation_file, window_size=0, use_tss=True,
