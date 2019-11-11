@@ -76,7 +76,8 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size
         # Enforce sparsity
         if enforced_sparsity_ratio is not None and enforced_sparsity_ratio < 1:
             max_kept = math.ceil(enforced_sparsity_ratio * len(qvals))
-            qvals[np.argsort(qvals)[max_kept:]] = 1
+            max_kept_value = qvals[np.argsort(qvals)[max_kept]]
+            qvals[qvals > max_kept_value] = 1
 
         prior_matrix[tf] = qvals
 
@@ -146,32 +147,16 @@ def _build_prior_for_gene(gene_data):
 
     open_regulator_peaks.columns = motif_data.columns
 
-    open_chromatin_size = (chromatin_data[SEQ_STOP] - chromatin_data[SEQ_START]).sum()
-
-    score_columns = [MotifLM.name_col, MotifLM.score_col]
-
     prior_edges = []
-    for tf, tf_peaks in open_regulator_peaks.loc[:, score_columns].groupby(MotifLM.name_col):
+    for tf, tf_peaks in open_regulator_peaks.groupby(MotifLM.name_col):
         tf_counts = tf_peaks.shape[0]
 
-        if tf_counts > 1:
-            min_tf_score = tf_peaks[MotifLM.score_col].min()
+        pvals = tf_peaks[MotifLM.score_col]
 
-            # Calculate rates for poisson
-            # The rate parameter is the number of higher confidence TF bindings elsewhere in the genome
-            # Multiplied by the open chromatin size divided by the window size
-            rate = max(1, sum(MotifLM.tf_score(tf) < min_tf_score))
-            rate *= min(1, open_chromatin_size / window_size)
-
-            # Calculate survival function p-value
-            pvalue = poisson.sf(tf_counts, rate)
-
-            # Multiply survival function p-value by the minimum tf score    
-            pvalue *= tf_peaks[MotifLM.score_col].min()
-        else:
-            pvalue = tf_peaks[MotifLM.score_col].min()
+        # Calculate a score from pvalues
+        score = -np.log10(pvals).sort_values(ascending=False).divide([1 / (2 ** n) for n in range(len(pvals))]).sum()
 
         # Add this edge to the table
-        prior_edges.append((tf, gene_name, tf_counts, -np.log10(pvalue), pvalue))
+        prior_edges.append((tf, gene_name, tf_counts, score, 10 ** (-1 * score)))
 
     return pd.DataFrame(prior_edges, columns=PRIOR_COLS)
