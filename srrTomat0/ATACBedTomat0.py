@@ -15,16 +15,20 @@ def main():
     ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0)
     ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=1)
     ap.add_argument("--tss", dest="tss", help="Use TSS for window", action='store_const', const=True, default=False)
+    ap.add_argument("--enforced_sparsity", dest="enforced_sparsity_ratio", help="Enforce sparsity RATIO",
+                    metavar="RATIO", type=float, default=0.05)
 
     args = ap.parse_args()
 
     _, prior_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, window_size=args.window_size,
-                                             num_cores=args.cores, use_tss=args.tss)
+                                             num_cores=args.cores, use_tss=args.tss,
+                                             enforced_sparsity_ratio=args.enforced_sparsity_ratio)
+    
     prior_matrix.to_csv(args.out, sep="\t")
 
 
 def build_atac_motif_prior(motif_bed_file, atac_bed_file, annotation_file, window_size=0, use_tss=True,
-                           motif_type='fimo', num_cores=1, alpha=0.05):
+                           motif_type='fimo', num_cores=1, alpha=0.05, enforced_sparsity_ratio=0.05):
 
     MotifLM.set_motif_file_type(motif_type)
     motif_peaks = MotifLM.get_motifs(motif_bed_file)
@@ -42,8 +46,8 @@ def build_atac_motif_prior(motif_bed_file, atac_bed_file, annotation_file, windo
     open_chromatin = merge_overlapping_peaks(open_chromatin, strand_column=None, max_distance=1)
     print("\t{n} peaks remain after merge".format(n=open_chromatin.shape[0]))
 
-    return build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size, num_cores=num_cores,
-                                        alpha=alpha)
+    return build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=num_cores, alpha=alpha,
+                                        enforced_sparsity_ratio=enforced_sparsity_ratio)
 
 
 if __name__ == '__main__':

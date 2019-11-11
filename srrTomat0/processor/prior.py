@@ -23,7 +23,7 @@ PRIOR_FDR = 'qvalue'
 PRIOR_SIG = 'significance'
 
 
-def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size, num_cores=1, alpha=0.05,
+def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1, alpha=0.05,
                                  enforced_sparsity_ratio=0.05, multiple_test_correction=False):
     """
     Construct a prior [G x K] interaction matrix
@@ -49,11 +49,10 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size
         with multiprocessing.Pool(num_cores, maxtasksperchild=1000) as mp:
             for priors in mp.imap_unordered(_build_prior_for_gene, _gene_generator(genes,
                                                                                    open_chromatin,
-                                                                                   motif_peaks,
-                                                                                   window_size)):
+                                                                                   motif_peaks)):
                 prior_data.append(priors)
     else:
-         prior_data = list(map(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks, window_size)))
+         prior_data = list(map(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)))
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data)
@@ -86,7 +85,7 @@ def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, window_size
     return prior_data, prior_matrix
 
 
-def _gene_generator(genes, open_chromatin, motif_data, window_size):
+def _gene_generator(genes, open_chromatin, motif_data):
     """
 
     :param genes:
@@ -108,7 +107,7 @@ def _gene_generator(genes, open_chromatin, motif_data, window_size):
         motif_mask &= motif_data[MotifLM.stop_col] >= gene_start
         motif_mask &= motif_data[MotifLM.start_col] <= gene_stop
 
-        yield (gene_name, open_chromatin.loc[chromatin_mask, :], motif_data.loc[motif_mask, :], i, window_size)
+        yield (gene_name, open_chromatin.loc[chromatin_mask, :], motif_data.loc[motif_mask, :], i)
 
 
 def _build_prior_for_gene(gene_data):
@@ -129,7 +128,7 @@ def _build_prior_for_gene(gene_data):
         'pvalue': p-value calculated using poisson survival function
     """
 
-    gene_name, chromatin_data, motif_data, num_iteration, window_size = gene_data
+    gene_name, chromatin_data, motif_data, num_iteration = gene_data
 
     if num_iteration % 100 == 0:
         print("Processing gene {i} [{gn}]".format(i=num_iteration, gn=gene_name))
