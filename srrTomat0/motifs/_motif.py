@@ -79,9 +79,9 @@ class Motif:
 
         # Background correct probabilities
         occ_rate = np.divide(self.probability_matrix, self.background)
-
         occ_rate = np.max(occ_rate, axis=1)
-        return int(1 / np.prod(occ_rate))
+
+        return int(np.prod(occ_rate))
 
     def __len__(self):
         return self.probability_matrix.shape[0]
@@ -106,11 +106,11 @@ class Motif:
 def motifs_to_dataframe(motifs):
 
     entropy = list(map(lambda x: x.shannon_entropy, motifs))
-    occurance = list(map(lambda x: x.expected_occurrence_rate, motifs))
+    occurrence = list(map(lambda x: x.expected_occurrence_rate, motifs))
     info = list(map(lambda x: x.information_content, motifs))
 
     df = pd.DataFrame(
-        [list(map(lambda x: x.motif_id, motifs)), info, entropy, occurance, list(map(lambda x: len(x), motifs))],
+        [list(map(lambda x: x.motif_id, motifs)), info, entropy, occurrence, list(map(lambda x: len(x), motifs))],
         columns=list(map(lambda x: x.motif_name, motifs)),
         index=[MOTIF_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL]).T
 

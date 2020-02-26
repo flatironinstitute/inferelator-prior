@@ -1,18 +1,30 @@
-from srrTomat0.motifs import Motif, MOTIF_COL, MOTIF_NAME_COL
+from srrTomat0.motifs import Motif, MOTIF_COL
 
 import pandas as pd
 import os
 
+TF_NAME_COL = "TF_Name"
+TF_STATUS_COL = "TF_Status"
 
-def read(pwm_file_list, info_file, background=None):
 
-    info_data = pd.read_csv(info_file, sep="\t")
+def read(pwm_file_list, info_file, background=None, direct_only=False):
+
+    info_df = pd.read_csv(info_file, sep="\t")
     motifs = []
 
     for pwm_file in pwm_file_list:
         pwm_id = os.path.splitext(os.path.basename(pwm_file))[0]
 
-        pwm_name = "/".join(info_data.loc[info_data[MOTIF_COL] == pwm_id, MOTIF_NAME_COL])
+        if direct_only:
+            direct = info_df.loc[info_df[MOTIF_COL] == pwm_id, TF_STATUS_COL].str.contains("D")
+            if not direct.any():
+                continue
+            else:
+                pwm_names = info_df.loc[(info_df[MOTIF_COL] == pwm_id) & (info_df[TF_STATUS_COL] == "D"), TF_NAME_COL]
+        else:
+            pwm_names = info_df.loc[info_df[MOTIF_COL] == pwm_id, TF_NAME_COL]
+
+        pwm_name = "/".join(pwm_names)
 
         pwm = pd.read_csv(pwm_file, sep="\t", index_col=0)
         pwm_alphabet = pwm.columns.tolist()
