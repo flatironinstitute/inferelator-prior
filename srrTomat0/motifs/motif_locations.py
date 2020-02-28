@@ -1,4 +1,4 @@
-from srrTomat0.processor.fimo import parse_fimo_output, FIMO_MOTIF, FIMO_SCORE, FIMO_START, FIMO_STOP, FIMO_CHROMOSOME
+from srrTomat0.motifs.fimo import parse_fimo_output, FIMO_MOTIF, FIMO_SCORE, FIMO_START, FIMO_STOP, FIMO_CHROMOSOME
 from srrTomat0.processor.bedtools import merge_overlapping_peaks
 
 

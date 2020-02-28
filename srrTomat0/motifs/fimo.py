@@ -22,19 +22,32 @@ FIMO_STOP = 'stop'
 FIMO_SCORE = 'p-value'
 
 
-def fimo_scan(atac_bed_file, meme_file, genome_fasta_file, target_path=None, num_workers=4, min_ic=None):
+def fimo_scan(atac_bed_file, genome_fasta_file, meme_file=None, motifs=None, target_path=None, num_workers=4,
+              min_ic=None):
     """
     """
+
+    if (meme_file is None and motifs is None) or (meme_file is not None and motifs is not None):
+        raise ValueError("One of meme_file or motifs must be passed")
 
     fasta_output = tempfile.gettempdir() if target_path is None else os.path.abspath(os.path.expanduser(target_path))
+
+    # Extract interesting sequences to a temp fasta file
     extracted_fasta_file = _extract_bed_sequence(atac_bed_file, genome_fasta_file, fasta_output)
 
-    try:
-        if num_workers == 1:
-            return _get_motifs(extracted_fasta_file, meme_file, output_path=target_path)
-        else:
-            meme_files = _chunk_motifs(meme_file, num_workers=num_workers, min_ic=min_ic)
+    # Preprocess motifs into a list of temp chunk files
+    meme_files = _chunk_motifs(meme_file=meme_file, motifs=motifs, num_workers=num_workers, min_ic=min_ic)
 
+    try:
+
+        # If the number of workers is 1, run fimo directly
+        if num_workers == 1:
+            assert len(meme_files) == 1
+            return _get_motifs(extracted_fasta_file, meme_files[0], output_path=target_path)
+
+        # Otherwise parallelize with a process pool (pathos because dill will do local functions)
+        else:
+            # Convenience local function
             def _get_chunk_motifs(chunk_file):
                 return _get_motifs(extracted_fasta_file, chunk_file)
 
@@ -42,15 +55,17 @@ def fimo_scan(atac_bed_file, meme_file, genome_fasta_file, target_path=None, num
                 motif_data = [data for data in pool.imap(_get_chunk_motifs, meme_files)]
                 motif_data = pd.concat(motif_data)
 
-            for file in meme_files:
-                try:
-                    os.remove(file)
-                except FileNotFoundError:
-                    pass
+        return motif_data
 
-            return motif_data
+    # Clean up the temporary files
     finally:
         os.remove(extracted_fasta_file)
+
+        for file in meme_files:
+            try:
+                os.remove(file)
+            except FileNotFoundError:
+                pass
 
 
 def _extract_bed_sequence(bed_file, genome_fasta, output_path):
@@ -64,7 +79,7 @@ def _extract_bed_sequence(bed_file, genome_fasta, output_path):
     proc = subprocess.run(bedtools_command)
 
     if int(proc.returncode) != 0:
-        print("bedtools getfasta failed for {file} (cmd)".format(file=bed_file, cmd=" ".join(bedtools_command)))
+        print("bedtools getfasta failed for {file} ({cmd})".format(file=bed_file, cmd=" ".join(bedtools_command)))
         try:
             os.remove(output_file)
         except FileNotFoundError:
@@ -74,13 +89,34 @@ def _extract_bed_sequence(bed_file, genome_fasta, output_path):
     return output_file
 
 
-def _chunk_motifs(meme_file, num_workers=4, min_ic=None):
+def _chunk_motifs(meme_file=None, motifs=None, num_workers=4, min_ic=None):
+    """
+    Break a motif file up into chunks
+    :param meme_file: MEME file name; pass either meme_file or motifs
+    :type meme_file: str, None
+    :param motifs: Motif object list; pass either meme_file or motifs
+    :type motifs: list(Motif), None
+    :param num_workers: number of chunks to make
+    :type num_workers: int
+    :param min_ic: set an information content minimum on motifs to include if this is not None
+    :type min_ic: float
+    :return:
+    """
+
     temp_dir = tempfile.gettempdir()
 
-    motifs = meme.read(meme_file)
+    if (meme_file is None and motifs is None) or (meme_file is not None and motifs is not None):
+        raise ValueError("One of meme_file or motifs must be passed")
+    if meme_file is not None:
+        motifs = meme.read(meme_file)
 
     if min_ic is not None:
         motifs = list(itertools.compress(motifs, [m.information_content >= min_ic for m in motifs]))
+
+    if num_workers == 1:
+        file_name = os.path.join(temp_dir, "chunk1.meme")
+        meme.write(file_name, motifs)
+        return [file_name]
 
     chunk_size = math.ceil(len(motifs) / num_workers)
 

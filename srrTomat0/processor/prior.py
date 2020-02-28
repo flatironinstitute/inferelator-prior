@@ -1,15 +1,9 @@
 from srrTomat0.processor.gtf import GTF_GENENAME, GTF_CHROMOSOME, SEQ_START, SEQ_STOP
-from srrTomat0.processor.motif_locations import MotifLocationManager as MotifLM
-
-import pybedtools as pbt
-from scipy.stats import poisson
-from statsmodels.sandbox.stats.multicomp import multipletests
+from srrTomat0.motifs.motif_locations import MotifLocationManager as MotifLM
+from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL
 
 import pandas as pd
-import math
-from pandas.errors import EmptyDataError
 import numpy as np
-import multiprocessing
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -22,100 +16,145 @@ PRIOR_COLS = [PRIOR_TF, PRIOR_GENE, PRIOR_COUNT, PRIOR_SCORE, PRIOR_PVAL]
 PRIOR_FDR = 'qvalue'
 PRIOR_SIG = 'significance'
 
+MINIMUM_IC_BITS = 8
+MINIMUM_TANDEM_ARRAY = 4
+TANDEM_STEP_BITS = 4
+MAXIMUM_TANDEM_DISTANCE = 200
 
-def build_prior_from_atac_motifs(genes, open_chromatin, motif_peaks, num_cores=1, alpha=0.05,
-                                 enforced_sparsity_ratio=0.05, multiple_test_correction=False):
+
+class MotifScorer:
+    min_ic = MINIMUM_IC_BITS
+    min_tandem = MINIMUM_TANDEM_ARRAY
+
+    min_single_ic = MINIMUM_IC_BITS + (MINIMUM_TANDEM_ARRAY - 1) * TANDEM_STEP_BITS
+    step_ic = TANDEM_STEP_BITS
+
+    max_dist = MAXIMUM_TANDEM_DISTANCE
+
+    @classmethod
+    def score_tf(cls, gene_motif_data, motif_ic, motif_len=None):
+        """
+        Score a single TF
+        :param gene_motif_data: Motif binding sites from FIMO/HOMER
+        :type gene_motif_data: pd.DataFrame
+        :param motif_ic: Information content (bits)
+        :type motif_ic: float
+        :param motif_len: Length of the motif recognition site
+        :type motif_len: int
+        :return: Score if the TF should be kept, None otherwise
+        """
+
+        assert isinstance(motif_ic, float)
+        assert isinstance(gene_motif_data, pd.DataFrame)
+        assert motif_len is None or isinstance(motif_len, int)
+
+        n_sites = gene_motif_data.shape[0]
+
+        # If there's no data return None
+        if n_sites == 0:
+            return None
+
+        # Discard weak motifs
+        if motif_ic < cls.min_ic or min(0, cls.step_ic * (cls.min_tandem - n_sites)) + cls.min_ic > motif_ic:
+            return None
+
+        # Return a score if the motif is strong enough to not need tandem array
+        if motif_ic > cls.min_single_ic:
+            return cls._score(n_sites, motif_ic)
+
+        # Calculate the required number of tandems for this motif
+        req_tandem = int((cls.min_single_ic - motif_ic) / cls.step_ic)
+
+        # Skip if there's too few sites to possibly pass
+        if req_tandem > n_sites:
+            return None
+
+        starts = gene_motif_data[MotifLM.start_col].sort_values()
+        consider_tandem = (starts - starts.shift(1)) <= cls.max_dist if motif_len is None else cls.max_dist + motif_len
+
+        if n_sites == 2 and consider_tandem < cls.max_dist if motif_len is None else cls.max_dist + motif_len:
+            return cls._score(1, (motif_ic + cls.step_ic * req_tandem))
+        elif n_sites == 2:
+            return None
+
+        # Calculate the actual number of tandems in this
+        ct_cumsum = consider_tandem.cumsum()
+        ct_cumsum = ct_cumsum.sub(ct_cumsum.mask(consider_tandem).ffill().fillna(0)).astype(int)
+        passed_tandems = (ct_cumsum >= req_tandem).sum()
+
+        if passed_tandems > 0:
+            return cls._score(passed_tandems, (motif_ic + cls.step_ic * req_tandem))
+        else:
+            return None
+
+    @classmethod
+    def preprocess_motifs(cls, gene_motif_data, motif_information):
+        motif_information = motif_information.loc[motif_information[INFO_COL] < cls.min_ic, :]
+        keeper_motifs = motif_information[MOTIF_COL].unique()
+        gene_motif_data = gene_motif_data.loc[gene_motif_data[MotifLM.name_col].str.contains(keeper_motifs), :]
+        return gene_motif_data, motif_information
+
+    @staticmethod
+    def _score(n_sites, motif_ic):
+        score = 1 / (2 ** (n_sites * motif_ic))
+        if score < np.finfo(float).eps:
+            return 17
+        else:
+            return -1 * np.log10(score)
+
+
+def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
-    :param open_chromatin: pd.DataFrame
-        ATAC peaks loaded from a BED file
     :param motif_peaks: pd.DataFrame
         Motif search data loaded from FIMO or HOMER
-    :param num_cores: int
-        Number of local cores to use
-    :param alpha: float
-        alpha value for significance
+    :param motif_information: pd.DataFrame [n x 5]
+        Motif characteristics loaded from a MEME file
     :return prior_data, prior_matrix: pd.DataFrame [G*K x 6], pd.DataFrame [G x K]
         A long-form edge table data frame and a wide-form interaction matrix data frame
     """
 
-    motif_names = MotifLM.get_motif_names()
+    motif_names = motif_information[MOTIF_COL].unique()
     print("Building prior from {g} genes and {k} TFs".format(g=genes.shape[0], k=len(motif_names)))
 
-    prior_data = []
+    # Trim down the motif dataframe and put it into a dict by chromosome
+    motif_peaks = motif_peaks.reindex([MotifLM.name_col, MotifLM.chromosome_col, MotifLM.start_col, MotifLM.stop_col],
+                                      axis=1)
+    motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifLM.chromosome_col)}
 
-    if num_cores != 1:
-        with multiprocessing.Pool(num_cores, maxtasksperchild=1000) as mp:
-            for priors in mp.imap_unordered(_build_prior_for_gene, _gene_generator(genes,
-                                                                                   open_chromatin,
-                                                                                   motif_peaks)):
-                prior_data.append(priors)
-    else:
-         prior_data = list(map(_build_prior_for_gene, _gene_generator(genes, open_chromatin, motif_peaks)))
+    def _prior_mapper(data):
+        i, gene_data, motifs = data
+        return _build_prior_for_gene(gene_data, motifs, motif_information, i)
+
+    prior_data = list(map(_prior_mapper, _gene_gen(genes, motif_peaks)))
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data)
 
     # Pivot to a matrix, extend to all TFs, and fill with 1s
-    prior_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_PVAL)
+    prior_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
     prior_matrix = prior_matrix.reindex(motif_names, axis=1)
     prior_matrix = prior_matrix.reindex(genes[GTF_GENENAME], axis=0)
-    prior_matrix[pd.isnull(prior_matrix)] = 1
-
-    print("Processing p-values [alpha = {a}] by TF".format(a=alpha))
-    # Recalculate a qvalue by FDR (BH)
-    for tf in prior_matrix.columns:
-        # FDR Correction
-        if multiple_test_correction:
-            qvals = multipletests(prior_matrix[tf], alpha=alpha, method='fdr_bh')[1]
-        else:
-            qvals = prior_matrix[tf]
-
-        # Enforce sparsity
-        if enforced_sparsity_ratio is not None and enforced_sparsity_ratio < 1:
-            max_kept = math.ceil(enforced_sparsity_ratio * len(qvals))
-            max_kept_value = qvals[np.argsort(qvals)[max_kept]]
-            qvals[qvals > max_kept_value] = 1
-
-        prior_matrix[tf] = qvals
-
-    prior_matrix = prior_matrix < alpha
+    prior_matrix[pd.isnull(prior_matrix)] = 0
 
     return prior_data, prior_matrix
 
 
-def _gene_generator(genes, open_chromatin, motif_data):
-    """
-
-    :param genes:
-    :param open_chromatin:
-    :param motif_data:
-    :yield: str, pd.DataFrame, pd.DataFrame
-    """
-
+def _gene_gen(genes, motif_peaks):
     for i, (idx, gene_data) in enumerate(genes.iterrows()):
-
-        gene_name = gene_data[GTF_GENENAME]
-        gene_chr, gene_start, gene_stop = gene_data[GTF_CHROMOSOME], gene_data[SEQ_START], gene_data[SEQ_STOP]
-
-        chromatin_mask = open_chromatin[GTF_CHROMOSOME] == gene_chr
-        chromatin_mask &= open_chromatin[SEQ_STOP] >= gene_start
-        chromatin_mask &= open_chromatin[SEQ_START] <= gene_stop
-
-        motif_mask = motif_data[MotifLM.chromosome_col] == gene_chr
-        motif_mask &= motif_data[MotifLM.stop_col] >= gene_start
-        motif_mask &= motif_data[MotifLM.start_col] <= gene_stop
-
-        yield (gene_name, open_chromatin.loc[chromatin_mask, :], motif_data.loc[motif_mask, :], i)
+        try:
+            yield i, gene_data, motif_peaks[gene_data[GTF_CHROMOSOME]]
+        except KeyError:
+            continue
 
 
-def _build_prior_for_gene(gene_data):
+def _build_prior_for_gene(gene_info, motif_peaks, motif_information, num_iteration):
     """
     Takes ATAC peaks and Motif locations near a single gene and turns them into TF-gene scores
 
-    :param gene_data: (str, pd.DataFrame, pd.DataFrame, int)
-        Unpacks to gene_name, chromatin_data, motif_data
+    :param gene_data: (str, pd.DataFrame, int, pd.DataFrame)
+        Unpacks to gene_name, motif_data, num_iteration, motif_data
         gene_name: str identifier for the gene
         chromatin_data: pd.DataFrame which has the ATAC (open chromatin) peaks near the gene
         motif_data: pd.DataFrame which has the Motif locations near the gene
@@ -128,32 +167,32 @@ def _build_prior_for_gene(gene_data):
         'pvalue': p-value calculated using poisson survival function
     """
 
-    gene_name, chromatin_data, motif_data, num_iteration = gene_data
+    gene_name = gene_info[GTF_GENENAME]
+    gene_chr, gene_start, gene_stop = gene_info[GTF_CHROMOSOME], gene_info[SEQ_START], gene_info[SEQ_STOP]
+
+    motif_mask = motif_peaks[MotifLM.chromosome_col] == gene_chr
+    motif_mask &= motif_peaks[MotifLM.stop_col] >= gene_start
+    motif_mask &= motif_peaks[MotifLM.start_col] <= gene_stop
+    motif_data = motif_peaks.loc[motif_mask, :]
 
     if num_iteration % 100 == 0:
         print("Processing gene {i} [{gn}]".format(i=num_iteration, gn=gene_name))
 
-    if min(chromatin_data.shape) == 0 or min(motif_data.shape) == 0:
+    if min(motif_data.shape) == 0:
         return pd.DataFrame(columns=PRIOR_COLS)
-
-    open_chromatin_peaks = pbt.BedTool.from_dataframe(chromatin_data)
-
-    try:
-        open_regulator_peaks = pbt.BedTool.from_dataframe(motif_data)
-        open_regulator_peaks = open_regulator_peaks.intersect(open_chromatin_peaks, u=True).to_dataframe()
-    except EmptyDataError:
-        return pd.DataFrame(columns=PRIOR_COLS)
-
-    open_regulator_peaks.columns = motif_data.columns
 
     prior_edges = []
-    for tf, tf_peaks in open_regulator_peaks.groupby(MotifLM.name_col):
+    for tf, tf_peaks in motif_data.groupby(MotifLM.name_col):
+        tf_info = motif_information.loc[motif_information[MOTIF_COL] == tf, :]
+        try:
+            score = MotifScorer.score_tf(tf_peaks, tf_info[INFO_COL][0], tf_info[LEN_COL][0])
+        except KeyError:
+            continue
+
+        if score is None:
+            continue
+
         tf_counts = tf_peaks.shape[0]
-
-        pvals = tf_peaks[MotifLM.score_col]
-
-        # Calculate a score from pvalues
-        score = -np.log10(pvals).sort_values(ascending=False).divide([1 / (2 ** n) for n in range(len(pvals))]).sum()
 
         # Add this edge to the table
         prior_edges.append((tf, gene_name, tf_counts, score, 10 ** (-1 * score)))
