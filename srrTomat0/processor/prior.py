@@ -96,11 +96,7 @@ class MotifScorer:
 
     @staticmethod
     def _score(n_sites, motif_ic):
-        score = 1 / (2 ** (n_sites * motif_ic))
-        if score < np.finfo(float).eps:
-            return 17
-        else:
-            return -1 * np.log10(score)
+        return n_sites * motif_ic * np.log10(2)
 
 
 def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
