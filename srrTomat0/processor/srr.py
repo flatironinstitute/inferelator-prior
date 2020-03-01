@@ -30,7 +30,10 @@ def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETC
     srr_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), x + SRA_EXTENSION), srr_list))
     tasks = [_get_srr(sid, sfn, sem, prefetch_options=prefetch_options) for sid, sfn in zip(srr_list, srr_file_names)]
 
-    return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
+    try:
+        return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
+    except RuntimeError:
+        return asyncio.new_event_loop().run_until_complete(asyncio.gather(*tasks))
 
 
 # TODO: test this
@@ -53,6 +56,7 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
         # If the file is already downloaded, don't do anything
         if os.path.exists(srr_file_name):
             print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
+            return srr_file_name
 
         prefetch_call = [PREFETCH_EXECUTABLE_PATH, srr_id, "-o", srr_file_name, *prefetch_options]
         print(" ".join(prefetch_call))
