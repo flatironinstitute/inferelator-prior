@@ -1,6 +1,11 @@
 from srrTomat0.processor.gtf import GTF_CHROMOSOME, GTF_GENENAME, SEQ_START, SEQ_STOP, GTF_STRAND
 import pandas as pd
 import pybedtools
+import os
+import subprocess
+import tempfile
+
+BEDTOOLS_EXTRACT_SUFFIX = ".extract.fasta"
 
 # Column names
 BED_CHROMOSOME = 'chrom'
@@ -12,7 +17,6 @@ SEQ_SCORE = 'p-value'
 
 def get_peaks_in_features(feature_dataframe, peak_dataframe, feature_group_column=GTF_CHROMOSOME,
                           peak_group_column=BED_CHROMOSOME):
-
     genes = feature_dataframe.copy()
 
     # Add counts (and set to 0)
@@ -94,7 +98,7 @@ def merge_overlapping_peaks(peak_dataframe, feature_group_column=None, chromosom
                 all_merge_functions.append(funstr)
 
     # Make a list of the column names to handle with bedtools merge
-    all_merge_columns = list(map(lambda x: x+4, range(len(all_merge_functions))))
+    all_merge_columns = list(map(lambda x: x + 4, range(len(all_merge_functions))))
 
     if feature_group_column is None:
         # Reindex to remove any other columns
@@ -113,7 +117,6 @@ def merge_overlapping_peaks(peak_dataframe, feature_group_column=None, chromosom
         merged_dataframe = list()
 
         for group, group_data in peak_dataframe.groupby(feature_group_column):
-
             # Merge peaks
             merged_peaks = _merge_peaks_with_bedtools(group_data.drop(feature_group_column, axis=1), all_merge_columns,
                                                       all_merge_functions, max_distance=max_distance)
@@ -125,6 +128,28 @@ def merge_overlapping_peaks(peak_dataframe, feature_group_column=None, chromosom
         merged_dataframe = pd.concat(merged_dataframe)
 
         return merged_dataframe
+
+
+def extract_bed_sequence(bed_file, genome_fasta, output_path=None):
+    output_path = tempfile.gettempdir() if output_path is None else output_path
+
+    output_file = os.path.join(output_path, genome_fasta + BEDTOOLS_EXTRACT_SUFFIX)
+
+    if os.path.exists(output_file):
+        return output_file
+
+    bedtools_command = ["bedtools", "getfasta", "-fi", genome_fasta, "-bed", bed_file, "-fo", output_file]
+    proc = subprocess.run(bedtools_command)
+
+    if int(proc.returncode) != 0:
+        print("bedtools getfasta failed for {file} ({cmd})".format(file=bed_file, cmd=" ".join(bedtools_command)))
+        try:
+            os.remove(output_file)
+        except FileNotFoundError:
+            pass
+        return None
+
+    return output_file
 
 
 def _merge_peaks_with_bedtools(merge_data, merge_columns, merge_function_names, max_distance=0):
