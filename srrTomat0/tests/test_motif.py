@@ -3,6 +3,7 @@ import os
 import io
 import pandas as pd
 import numpy.testing as npt
+import copy
 
 from srrTomat0.motifs import meme, homer_motif
 
@@ -11,6 +12,7 @@ artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(
 MEME_FILE_NAME = "test.meme"
 MOTIF_FILE_NAME = "test.motif"
 PWM_FILE_NAME = "M00799_2.00.txt"
+ECORI_FILE_NAME = "test_ecori.meme"
 
 TEST_MOTIF_MATRIX = """\
 0.248650039776609	0.26139859992769	0.241301320519092	0.248650039776609
@@ -77,3 +79,33 @@ class TestMotifParsers(unittest.TestCase):
         self.assertEqual(motifs[0].alphabet_len, 4)
         self.assertAlmostEqual(motifs[0].information_content, 6.082, 3)
 
+
+class TestMotifProps(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+
+        meme_file_name = os.path.join(artifact_path, ECORI_FILE_NAME)
+        cls.master_motif = meme.read(meme_file_name)[0]
+
+    def setUp(self):
+
+        self.motif = copy.deepcopy(self.master_motif)
+
+    def test_information_content(self):
+
+        self.assertEqual(self.motif.information_content, 24.0)
+
+    def test_consensus(self):
+
+        self.assertEqual(self.motif.consensus, "GAATTCGAATTC")
+
+    def test_length(self):
+
+        self.assertEqual(len(self.motif), 12)
+
+    def test_score(self):
+
+        self.assertEqual(self.motif.score_match("GAATTCGAATTC"), 24.0)
+        self.assertEqual(self.motif.score_match("GAATTCCTTAAG"), 12.0)
+        self.assertEqual(self.motif.score_match("CTTAAGCTTAAG"), 0.0)

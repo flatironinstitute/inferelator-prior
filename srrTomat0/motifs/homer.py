@@ -1,13 +1,8 @@
-import os
-import pandas as pd
-import tempfile
-import pathos
 import subprocess
 import io
 import pandas as pd
 
-from srrTomat0.motifs import MotifScanner, chunk_motifs, homer_motif
-from srrTomat0.processor.bedtools import extract_bed_sequence
+from srrTomat0.motifs import MotifScanner, chunk_motifs, homer_motif, SCAN_SCORE_COL
 from srrTomat0 import HOMER_EXECUTABLE_PATH
 
 
@@ -29,8 +24,10 @@ HOMER2_FIND_COLS = [HOMER_SEQ_ID, HOMER_OFFSET, HOMER_MATCH, HOMER_MOTIF, HOMER_
 class HOMERScanner(MotifScanner):
 
     def _preprocess(self, min_ic=None):
-        return chunk_motifs(homer_motif, motif_file=self.motif_file, motifs=self.motifs, num_workers=self.num_workers,
-                            min_ic=min_ic)
+        if self.motif_file is not None:
+            self.motifs = homer_motif.read(self.motif_file)
+
+        return chunk_motifs(homer_motif, self.motifs, num_workers=self.num_workers, min_ic=min_ic)
 
     def _get_motifs(self, fasta_file, motif_file):
         homer_command = [HOMER_EXECUTABLE_PATH, "find", "-i", fasta_file, "-m", motif_file, "-offset", str(0)]
@@ -58,4 +55,8 @@ class HOMERScanner(MotifScanner):
 
         motifs[[HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]] = loc_data
         motifs.drop([HOMER_SEQ_ID, HOMER_OFFSET], inplace=True, axis=1)
+
+        motifs[SCAN_SCORE_COL] = [self.motifs[x].score_match(y) for x, y in
+                                  zip(motifs[HOMER_MOTIF], motifs[HOMER_MATCH])]
+
         return motifs

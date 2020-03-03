@@ -2,8 +2,10 @@ import unittest
 import os
 import io
 import pandas as pd
+import numpy as np
+import numpy.testing as npt
 
-from srrTomat0.motifs import Motif, MotifScanner, fimo, homer
+from srrTomat0.motifs import Motif, MotifScanner, fimo, homer, SCAN_SCORE_COL
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 
@@ -55,6 +57,7 @@ class TestScan(unittest.TestCase):
     def test_fimo(self):
         scanner = fimo.FIMOScanner(motifs=[MOTIF_OBJ], num_workers=1)
         motif_locs = scanner.scan(BED_FILE_NAME, FASTA_FILE_NAME, min_ic=8)
+
         self.assertEqual(motif_locs.shape[0], 10)
         self.assertEqual(motif_locs.loc[motif_locs[fimo.FIMO_STRAND] == "+", :].shape[0], 5)
         self.assertEqual(motif_locs.loc[motif_locs[fimo.FIMO_STRAND] == "-", :].shape[0], 5)
@@ -64,10 +67,12 @@ class TestScan(unittest.TestCase):
         self.assertListEqual(motif_locs.loc[motif_locs[fimo.FIMO_STRAND] == "-", fimo.FIMO_START].tolist(),
                              MOTIF_STARTS)
 
+        npt.assert_array_almost_equal(np.array([24.0] * 10), motif_locs[SCAN_SCORE_COL].values)
+
     def test_homer(self):
         scanner = homer.HOMERScanner(motifs=[MOTIF_OBJ], num_workers=1)
         motif_locs = scanner.scan(BED_FILE_NAME, FASTA_FILE_NAME, min_ic=8)
-        print(motif_locs[homer.HOMER_START])
+
         self.assertEqual(motif_locs.shape[0], 10)
         self.assertEqual(motif_locs.loc[motif_locs[homer.HOMER_STRAND] == "+", :].shape[0], 5)
         self.assertEqual(motif_locs.loc[motif_locs[homer.HOMER_STRAND] == "-", :].shape[0], 5)
@@ -78,3 +83,5 @@ class TestScan(unittest.TestCase):
         self.assertListEqual(motif_locs.loc[motif_locs[homer.HOMER_STRAND] == "-", homer.HOMER_START].sort_values()
                              .tolist(),
                              MOTIF_STARTS)
+
+        npt.assert_array_almost_equal(np.array([24.0] * 10), motif_locs[SCAN_SCORE_COL].values)

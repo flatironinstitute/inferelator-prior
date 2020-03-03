@@ -16,6 +16,8 @@ LEN_COL = "Length"
 MOTIF_COL = "Motif_ID"
 MOTIF_NAME_COL = "Motif_Name"
 
+SCAN_SCORE_COL = "Tomat0_Score"
+
 
 class Motif:
     motif_id = None
@@ -26,6 +28,8 @@ class Motif:
     _motif_prob_array = None
     _motif_alphabet = None
     _motif_background = None
+    _alphabet_map = None
+    _consensus_seq = None
 
     @property
     def alphabet(self):
@@ -83,27 +87,14 @@ class Motif:
 
     @property
     def expected_occurrence_rate(self):
-
-        # Background correct probabilities
-        occ_rate = np.divide(self.probability_matrix, self.background)
-        occ_rate = np.max(occ_rate, axis=1)
-
-        return int(np.prod(occ_rate))
-
-    def __len__(self):
-        return self.probability_matrix.shape[0] if self.probability_matrix is not None else 0
-
-    def __str__(self):
-        return "{mid} {mname}: Width {el} IC {ic:.2f} bits".format(mid=self.motif_id,
-                                                                   mname=self.motif_name,
-                                                                   el=len(self),
-                                                                   ic=self.information_content)
+        return int(2 ** self.information_content)
 
     @property
     def consensus(self):
-        con_seq = np.apply_along_axis(lambda x: self.alphabet[x.argmax()], axis=1,
-                                      arr=self.probability_matrix)
-        return "".join(con_seq)
+        if self._consensus_seq is None:
+            self._consensus_seq = "".join(np.apply_along_axis(lambda x: self.alphabet[x.argmax()], axis=1,
+                                                              arr=self.probability_matrix))
+        return self._consensus_seq
 
     @property
     def max_ln_odds(self):
@@ -115,15 +106,32 @@ class Motif:
         second_prob = np.sort(self.probability_matrix, axis=1)[:, 2]
         return self.max_ln_odds - max((np.sum(np.log(second_prob[second_prob > 0.25] / 0.25)), 0.1 * self.max_ln_odds))
 
+    def __len__(self):
+        return self.probability_matrix.shape[0] if self.probability_matrix is not None else 0
+
+    def __str__(self):
+        return "{mid} {mname}: Width {el} IC {ic:.2f} bits".format(mid=self.motif_id,
+                                                                   mname=self.motif_name,
+                                                                   el=len(self),
+                                                                   ic=self.information_content)
+
     def __init__(self, motif_id, motif_name, motif_alphabet, motif_background=None):
         self.motif_id = motif_id
         self.motif_name = motif_name
         self._motif_alphabet = motif_alphabet
+        self._alphabet_map = {ch: i for i, ch in enumerate(self._motif_alphabet)}
         self._motif_background = motif_background
         self._motif_probs = []
 
     def add_prob_line(self, line):
         self._motif_probs.append(line)
+
+    def score_match(self, match):
+        return (self.__prob_match(match) / self.__prob_match(self.consensus)) * self.information_content
+
+    def __prob_match(self, match):
+        prob = [self.probability_matrix[i, self._alphabet_map[ch]] for i, ch in enumerate(match)]
+        return np.sum(prob)
 
 
 class MotifScanner:
@@ -143,9 +151,10 @@ class MotifScanner:
 
         # Extract interesting sequences to a temp fasta file
         extracted_fasta_file = extract_bed_sequence(atac_bed_file, genome_fasta_file)
-        print(extracted_fasta_file)
         # Preprocess motifs into a list of temp chunk files
         meme_files = self._preprocess(min_ic=min_ic)
+        # Unpack list to a dict for convenience
+        self.motifs = {mot.motif_id: mot for mot in self.motifs}
 
         try:
 
@@ -164,8 +173,6 @@ class MotifScanner:
                     motif_data = [data for data in pool.imap(_get_chunk_motifs, meme_files)]
                     motif_data = pd.concat(motif_data)
 
-            return motif_data
-
         # Clean up the temporary files
         finally:
             os.remove(extracted_fasta_file)
@@ -175,6 +182,8 @@ class MotifScanner:
                     os.remove(file)
                 except FileNotFoundError:
                     pass
+
+        return motif_data
 
     def _preprocess(self, min_ic=None):
         raise NotImplementedError
@@ -187,7 +196,6 @@ class MotifScanner:
 
 
 def motifs_to_dataframe(motifs):
-
     entropy = list(map(lambda x: x.shannon_entropy, motifs))
     occurrence = list(map(lambda x: x.expected_occurrence_rate, motifs))
     info = list(map(lambda x: x.information_content, motifs))
@@ -200,13 +208,11 @@ def motifs_to_dataframe(motifs):
     return df
 
 
-def chunk_motifs(file_type, motif_file=None, motifs=None, num_workers=4, min_ic=None):
+def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
     """
     Break a motif file up into chunks
     :param file_type: The meme or homer namespaces with a .read() and .write() function
     :type file_type: srrTomat0.motifs parser
-    :param motif_file: File name; pass either meme_file or motifs
-    :type motif_file: str, None
     :param motifs: Motif object list; pass either meme_file or motifs
     :type motifs: list(Motif), None
     :param num_workers: number of chunks to make
@@ -218,11 +224,6 @@ def chunk_motifs(file_type, motif_file=None, motifs=None, num_workers=4, min_ic=
     """
 
     temp_dir = tempfile.gettempdir()
-
-    if (motif_file is None and motifs is None) or (motif_file is not None and motifs is not None):
-        raise ValueError("One of motif_file or motifs must be passed")
-    if motif_file is not None:
-        motifs = file_type.read(motif_file)
 
     if min_ic is not None:
         motifs = list(itertools.compress(motifs, [m.information_content >= min_ic for m in motifs]))
@@ -238,8 +239,7 @@ def chunk_motifs(file_type, motif_file=None, motifs=None, num_workers=4, min_ic=
 
     for i in range(num_workers):
         file_name = os.path.join(temp_dir, "chunk" + str(i) + ".mchunk")
-        file_type.write(file_name, motifs[i * chunk_size:min((i+1) * chunk_size, len(motifs))])
+        file_type.write(file_name, motifs[i * chunk_size:min((i + 1) * chunk_size, len(motifs))])
         files.append(file_name)
 
     return files
-
