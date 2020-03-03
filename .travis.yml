@@ -10,7 +10,7 @@ install:
   - sudo apt-get -y install rna-star
   - pip install nose
   - pip install codecov
-  - pip install cython
+  - pip install pysam<=0.15.3
   - python setup.py install
 script:
   - git clone https://github.com/marianogabitto/ChromA.git
