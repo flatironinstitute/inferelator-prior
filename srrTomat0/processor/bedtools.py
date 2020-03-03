@@ -132,8 +132,7 @@ def merge_overlapping_peaks(peak_dataframe, feature_group_column=None, chromosom
 
 def extract_bed_sequence(bed_file, genome_fasta, output_path=None):
     output_path = tempfile.gettempdir() if output_path is None else output_path
-
-    output_file = os.path.join(output_path, genome_fasta + BEDTOOLS_EXTRACT_SUFFIX)
+    output_file = os.path.join(output_path, os.path.split(genome_fasta)[1] + BEDTOOLS_EXTRACT_SUFFIX)
 
     if os.path.exists(output_file):
         return output_file
