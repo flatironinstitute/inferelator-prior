@@ -1,6 +1,6 @@
 from srrTomat0.processor.gtf import GTF_GENENAME, GTF_CHROMOSOME, SEQ_START, SEQ_STOP
 from srrTomat0.motifs.motif_locations import MotifLocationManager as MotifLM
-from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL
+from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL
 import pybedtools
 
 import pandas as pd
@@ -82,6 +82,9 @@ class MotifScorer:
         assert isinstance(motif_ic, float)
         assert isinstance(gene_motif_data, pd.DataFrame)
         assert motif_len is None or isinstance(motif_len, int)
+
+        # Drop sites that don't meet threshold
+        gene_motif_data = gene_motif_data.loc[gene_motif_data[SCAN_SCORE_COL] < cls.min_ic, :]
 
         n_sites = gene_motif_data.shape[0]
 
