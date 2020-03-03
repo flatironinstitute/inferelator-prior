@@ -142,8 +142,8 @@ class MotifScanner:
         """
 
         # Extract interesting sequences to a temp fasta file
-        extracted_fasta_file = extract_bed_sequence(atac_bed_file, genome_fasta_file, tempfile.gettempdir())
-
+        extracted_fasta_file = extract_bed_sequence(atac_bed_file, genome_fasta_file)
+        print(extracted_fasta_file)
         # Preprocess motifs into a list of temp chunk files
         meme_files = self._preprocess(min_ic=min_ic)
 
@@ -228,7 +228,7 @@ def chunk_motifs(file_type, motif_file=None, motifs=None, num_workers=4, min_ic=
         motifs = list(itertools.compress(motifs, [m.information_content >= min_ic for m in motifs]))
 
     if num_workers == 1:
-        file_name = os.path.join(temp_dir, "chunk1.mchink")
+        file_name = os.path.join(temp_dir, "chunk1.mchunk")
         file_type.write(file_name, motifs)
         return [file_name]
 
