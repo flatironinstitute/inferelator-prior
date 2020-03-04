@@ -17,7 +17,9 @@ script:
   - sudo ./setup-apt.sh
   - source /etc/profile.d/sra-tools.sh
   - git clone https://github.com/marianogabitto/ChromA.git
-  - python ChromA/setup.py install
+  - cd ChromA
+  - python setup.py install
+  - cd ..
   - python -c "import os; print(repr(os.name))"
   - coverage run --source=srrTomat0 setup.py test
 after_success:
