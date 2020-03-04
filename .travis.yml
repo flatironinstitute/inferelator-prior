@@ -5,6 +5,7 @@ python:
 install:
   - sudo apt-get -y update
   - sudo apt-get -y install build-essential
+  - sudo apt-get -y install bedtools
   - sudo apt-get -y install samtools
   - sudo apt-get -y install rna-star
   - pip install nose

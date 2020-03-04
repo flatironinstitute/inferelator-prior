@@ -1,7 +1,8 @@
 from srrTomat0.processor.gtf import load_gtf_to_dataframe, open_window, GTF_CHROMOSOME, SEQ_START, SEQ_STOP
 from srrTomat0.processor.bedtools import load_bed_to_dataframe, merge_overlapping_peaks
 from srrTomat0.processor.prior import build_prior_from_atac_motifs
-from srrTomat0.motifs.fimo import fimo_scan
+from srrTomat0.motifs.fimo import FIMOScanner
+from srrTomat0.motifs.homer import HOMERScanner
 from srrTomat0.motifs import motifs_to_dataframe, meme
 
 import argparse
@@ -22,16 +23,17 @@ def main():
 
     args = ap.parse_args()
 
-    _, prior_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
-                                             window_size=args.window_size, num_cores=args.cores, use_tss=args.tss,
-                                             min_ic=args.min_ic)
-    
+    prior_edges, prior_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
+                                                       window_size=args.window_size, num_cores=args.cores,
+                                                       use_tss=args.tss,
+                                                       min_ic=args.min_ic)
+
     prior_matrix.astype(int).to_csv(args.out, sep="\t")
+    prior_edges.to_csv(args.out + ".edges.tsv.gz", sep="\t")
 
 
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
                            use_tss=True, motif_type='fimo', num_cores=1, min_ic=8):
-
     print("Loading genes from file ({f})".format(f=annotation_file))
     # Load genes and open a window
     genes = load_gtf_to_dataframe(annotation_file)
@@ -43,8 +45,10 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
 
     # Load and scan target chromatin peaks
     print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=atac_bed_file, f_m=motif_meme_file))
-    motif_peaks = fimo_scan(atac_bed_file, genomic_fasta_file, meme_file=motif_meme_file, num_workers=num_cores,
-                            min_ic=min_ic)
+    motif_peaks = FIMOScanner(motif_file=motif_meme_file,
+                              num_workers=num_cores).scan(atac_bed_file,
+                                                          genomic_fasta_file,
+                                                          min_ic=min_ic)
 
     # Processing into prior
     print("Processing TF binding sites into prior")

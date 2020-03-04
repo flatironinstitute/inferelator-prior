@@ -134,8 +134,10 @@ class MotifScorer:
     def preprocess_motifs(cls, gene_motif_data, motif_information):
         motif_information = motif_information.loc[motif_information[INFO_COL] < cls.min_ic, :]
         keeper_motifs = motif_information[MOTIF_COL].unique().tolist()
-        gene_motif_data = gene_motif_data.loc[gene_motif_data[MotifLM.name_col].isin(keeper_motifs), :]
-        return gene_motif_data, motif_information
+        keeper_idx = (gene_motif_data[MotifLM.name_col].isin(keeper_motifs))
+        keeper_idx &= (gene_motif_data[SCAN_SCORE_COL] < cls.min_ic)
+
+        return gene_motif_data.loc[keeper_idx, :], motif_information
 
     @staticmethod
     def _score(n_sites, motif_ic):
