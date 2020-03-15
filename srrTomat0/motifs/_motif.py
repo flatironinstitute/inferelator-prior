@@ -30,6 +30,7 @@ class Motif:
     _motif_background = None
     _alphabet_map = None
     _consensus_seq = None
+    _info_matrix = None
 
     @property
     def alphabet(self):
@@ -75,15 +76,23 @@ class Motif:
         if self.probability_matrix is None:
             return 0
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
+        return np.sum(self.ic_matrix)
 
-            # Calculate p log (p/background)
-            info = np.divide(self.probability_matrix, self.background[:, np.newaxis])
-            info = np.multiply(self.probability_matrix, np.log2(info))
-            info[~np.isfinite(info)] = 0
+    @property
+    def ic_matrix(self):
+        if self.probability_matrix is None:
+            return None
 
-        return np.sum(info)
+        if self._info_matrix is None or self._info_matrix.shape != self.probability_matrix.shape:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+                # Calculate p log (p/background)
+                self._info_matrix = np.divide(self.probability_matrix, self.background.reshape(1, -1))
+                self._info_matrix = np.multiply(self.probability_matrix, np.log2(self._info_matrix))
+                self._info_matrix[~np.isfinite(self._info_matrix)] = 0
+
+        return self._info_matrix
 
     @property
     def expected_occurrence_rate(self):
@@ -119,19 +128,38 @@ class Motif:
         self.motif_id = motif_id
         self.motif_name = motif_name
         self._motif_alphabet = motif_alphabet
-        self._alphabet_map = {ch: i for i, ch in enumerate(self._motif_alphabet)}
+        self._alphabet_map = {ch.lower(): i for i, ch in enumerate(self._motif_alphabet)}
         self._motif_background = motif_background
         self._motif_probs = []
 
     def add_prob_line(self, line):
         self._motif_probs.append(line)
 
-    def score_match(self, match):
-        return (self.__prob_match(match) / self.__prob_match(self.consensus)) * self.information_content
+    def score_match(self, match, disallow_homopolymer=True, score_zero_as_zero=0):
+
+        # Score anything that's a homopolymer or one base from a homopolymer to 0 if the flag is set
+        if disallow_homopolymer:
+            polymer_check = sum(m == match[0] for m in match)
+            if len(match) - polymer_check <= 1 or (len(set(match)) == 2 and polymer_check == 0):
+                return 0
+
+        if score_zero_as_zero is not None and sum(p < 0.001 for p in self.__prob_match(match)) > score_zero_as_zero:
+            return 0
+
+        mse_ic = np.sum(np.square(np.subtract(self.__info_match(self.consensus), self.__info_match(match))))
+        return max((self.information_content - mse_ic, 0))
+
+    def truncate(self, threshold=0.35):
+        threshold = np.max(self.probability_matrix, axis=1) > threshold
+        keepers = (threshold.cumsum() > 0) & (threshold[::-1].cumsum()[::-1] > 0)
+        self.probability_matrix = self.probability_matrix[keepers, :]
+        self._motif_probs = list(itertools.compress(self._motif_probs, keepers))
 
     def __prob_match(self, match):
-        prob = [self.probability_matrix[i, self._alphabet_map[ch]] for i, ch in enumerate(match)]
-        return np.sum(prob)
+        return [self.probability_matrix[i, self._alphabet_map[ch.lower()]] for i, ch in enumerate(match)]
+
+    def __info_match(self, match):
+        return [self.ic_matrix[i, self._alphabet_map[ch.lower()]] for i, ch in enumerate(match)]
 
 
 class MotifScanner:
@@ -183,7 +211,7 @@ class MotifScanner:
                 except FileNotFoundError:
                     pass
 
-        return motif_data
+        return motif_data.reset_index(drop=True)
 
     def _preprocess(self, min_ic=None):
         raise NotImplementedError
@@ -199,11 +227,13 @@ def motifs_to_dataframe(motifs):
     entropy = list(map(lambda x: x.shannon_entropy, motifs))
     occurrence = list(map(lambda x: x.expected_occurrence_rate, motifs))
     info = list(map(lambda x: x.information_content, motifs))
+    ids = list(map(lambda x: x.motif_id, motifs))
+    names = list(map(lambda x: x.motif_name, motifs))
 
     df = pd.DataFrame(
-        [list(map(lambda x: x.motif_id, motifs)), info, entropy, occurrence, list(map(lambda x: len(x), motifs))],
+        [ids, names, info, entropy, occurrence, list(map(lambda x: len(x), motifs))],
         columns=list(map(lambda x: x.motif_name, motifs)),
-        index=[MOTIF_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL]).T
+        index=[MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL]).T
 
     return df
 
