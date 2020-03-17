@@ -48,7 +48,7 @@ class HOMERScanner(__MotifScanner):
         motifs = pd.read_csv(output_handle, sep="\t", index_col=None, names=HOMER2_FIND_COLS)
 
         loc_data = motifs[HOMER_SEQ_ID].str.split(r"[\:\-]", expand=True)
-        loc_data.columns = [HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]
+        loc_data.columns = [HOMER_CHROMOSOME, HOMER_START, HOMER_STOP, "UNK"]
         loc_data[HOMER_START] = loc_data[HOMER_START].astype(int) + motifs[HOMER_OFFSET]
 
         match_width = motifs[HOMER_MATCH].str.len()
@@ -57,7 +57,7 @@ class HOMERScanner(__MotifScanner):
 
         loc_data[HOMER_STOP] = loc_data[HOMER_START] + motifs[HOMER_MATCH].str.len()
 
-        motifs[[HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]] = loc_data
+        motifs[[HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]] = loc_data[[HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]]
         motifs.drop([HOMER_SEQ_ID, HOMER_OFFSET], inplace=True, axis=1)
 
         motifs[SCAN_SCORE_COL] = [self.motifs[x].score_match(y) for x, y in
