@@ -175,7 +175,13 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
 def _gene_gen(genes, motif_peaks):
     for i, (idx, gene_data) in enumerate(genes.iterrows()):
         try:
-            yield i, gene_data, motif_peaks[gene_data[GTF_CHROMOSOME]]
+            gene_chr, gene_start, gene_stop = genes[GTF_CHROMOSOME], genes[SEQ_START], genes[SEQ_STOP]
+
+            motif_data = motif_peaks[gene_data[GTF_CHROMOSOME]]
+            motif_mask = motif_data[MotifScan.stop_col] >= gene_start
+            motif_mask &= motif_data[MotifScan.start_col] <= gene_stop
+            motif_data = motif_data.loc[motif_mask, :].copy()
+            yield i, gene_data, motif_data
         except KeyError:
             continue
 

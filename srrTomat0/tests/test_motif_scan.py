@@ -5,7 +5,8 @@ import pandas as pd
 import numpy as np
 import numpy.testing as npt
 
-from srrTomat0.motifs import Motif, MotifScanner, fimo, homer, SCAN_SCORE_COL
+from srrTomat0.motifs._motif import __MotifScanner as MotifScanner
+from srrTomat0.motifs import Motif, fimo, homer, SCAN_SCORE_COL
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 
