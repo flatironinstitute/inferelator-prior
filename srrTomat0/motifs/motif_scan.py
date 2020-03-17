@@ -6,7 +6,7 @@ from srrTomat0.motifs import homer_motif
 
 class MotifScan(object):
     """
-    This class handles parsing of motif peak files
+    This class handles keeping track of the info needed for each type of motif scanner
     """
 
     _motif_file_type = 'fimo'
@@ -16,10 +16,7 @@ class MotifScan(object):
     chromosome_col = FIMO_CHROMOSOME
     start_col = FIMO_START
     stop_col = FIMO_STOP
-
-    motif_data = None
-    motif_names = None
-    motif_scores = None
+    scanner = FIMOScanner
 
     @classmethod
     def set_type_fimo(cls):

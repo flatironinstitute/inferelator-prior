@@ -2,7 +2,8 @@ import subprocess
 import io
 import pandas as pd
 
-from srrTomat0.motifs import MotifScanner, chunk_motifs, homer_motif, SCAN_SCORE_COL
+from srrTomat0.motifs import chunk_motifs, homer_motif, SCAN_SCORE_COL
+from srrTomat0.motifs._motif import __MotifScanner
 from srrTomat0 import HOMER_EXECUTABLE_PATH
 
 HOMER_DATA_SUFFIX = ".homer.tsv"
@@ -20,7 +21,7 @@ HOMER_STOP = 'stop'
 HOMER2_FIND_COLS = [HOMER_SEQ_ID, HOMER_OFFSET, HOMER_MATCH, HOMER_MOTIF, HOMER_STRAND, HOMER_SCORE]
 
 
-class HOMERScanner(MotifScanner):
+class HOMERScanner(__MotifScanner):
 
     def _preprocess(self, min_ic=None):
         if self.motif_file is not None:

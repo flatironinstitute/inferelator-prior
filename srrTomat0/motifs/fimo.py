@@ -4,7 +4,8 @@ import pandas as pd
 import pandas.errors as pde
 
 from srrTomat0 import FIMO_EXECUTABLE_PATH
-from srrTomat0.motifs import MotifScanner, meme, chunk_motifs, SCAN_SCORE_COL
+from srrTomat0.motifs import meme, chunk_motifs, SCAN_SCORE_COL
+from srrTomat0.motifs._motif import __MotifScanner
 
 FIMO_DATA_SUFFIX = ".fimo.tsv"
 
@@ -20,7 +21,7 @@ FIMO_SEQUENCE = 'matched_sequence'
 FIMO_COMMAND = [FIMO_EXECUTABLE_PATH, "--text", "--parse-genomic-coord"]
 
 
-class FIMOScanner(MotifScanner):
+class FIMOScanner(__MotifScanner):
 
     def _preprocess(self, min_ic=None):
         if self.motif_file is not None:

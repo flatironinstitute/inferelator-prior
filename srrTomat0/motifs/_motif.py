@@ -136,14 +136,19 @@ class Motif:
     def add_prob_line(self, line):
         self._motif_probs.append(line)
 
-    def score_match(self, match, disallow_homopolymer=True, score_zero_as_zero=1):
+    def score_match(self, match, disallow_homopolymer=True, homopolymer_one_off_len=8, score_zero_as_zero=1):
 
         if len(match) != len(self):
             msg = "Sequence length {l} not compatible with motif length {m}".format(l=len(match), m=len(self))
             raise ValueError(msg)
 
-        # Score anything that's a homopolymer or one base from a homopolymer to 0 if the flag is set
-        if disallow_homopolymer and sum([min((c, 2)) for c in Counter(match).values()]) < 4:
+        # Score anything that's a homopolymer to 0 if the flag is set
+        if disallow_homopolymer and sum([m == match[0] for m in match]) == len(match):
+            return 0
+
+        # Score anything that's one base from a homopolymer to 0 if the flag is set
+        if disallow_homopolymer and (len(match) > homopolymer_one_off_len and
+                                     sum([min((c, 2)) for c in Counter(match).values()]) < 4):
             return 0
 
         # Score anything with excessive nucleotides that have a p ~ 0.0 as 0
@@ -166,7 +171,7 @@ class Motif:
         return [self.ic_matrix[i, self._alphabet_map[ch.lower()]] for i, ch in enumerate(match)]
 
 
-class MotifScanner:
+class __MotifScanner:
 
     def __init__(self, motif_file=None, motifs=None, num_workers=4):
 
