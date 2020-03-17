@@ -167,6 +167,8 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data).reset_index(drop=True)
+    prior_data[PRIOR_START] = prior_data[PRIOR_START].astype(int)
+    prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
 
     # Pivot to a matrix, extend to all TFs, and fill with 1s
     prior_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
