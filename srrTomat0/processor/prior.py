@@ -4,6 +4,7 @@ from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF
 
 import pandas as pd
 import numpy as np
+import pathos.multiprocessing as multiprocessing
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -121,7 +122,7 @@ class MotifScorer:
         return n_sites * motif_ic * np.log10(2)
 
 
-def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
+def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
@@ -158,7 +159,11 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
         i, gene_data, motifs = data
         return _build_prior_for_gene(gene_data, motifs, motif_information, i)
 
-    prior_data = list(map(_prior_mapper, _gene_gen(genes, motif_peaks)))
+    if num_workers == 1:
+        prior_data = list(map(_prior_mapper, _gene_gen(genes, motif_peaks)))
+    else:
+        with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
+            prior_data = pool.map(_prior_mapper, _gene_gen(genes, motif_peaks), chunksize=20)
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data).reset_index(drop=True)
@@ -175,7 +180,7 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
 def _gene_gen(genes, motif_peaks):
     for i, (idx, gene_data) in enumerate(genes.iterrows()):
         try:
-            gene_chr, gene_start, gene_stop = genes[GTF_CHROMOSOME], genes[SEQ_START], genes[SEQ_STOP]
+            gene_chr, gene_start, gene_stop = gene_data[GTF_CHROMOSOME], gene_data[SEQ_START], gene_data[SEQ_STOP]
 
             motif_data = motif_peaks[gene_data[GTF_CHROMOSOME]]
             motif_mask = motif_data[MotifScan.stop_col] >= gene_start
@@ -186,7 +191,7 @@ def _gene_gen(genes, motif_peaks):
             continue
 
 
-def _build_prior_for_gene(gene_info, motif_peaks, motif_information, num_iteration):
+def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
     """
     Takes ATAC peaks and Motif locations near a single gene and turns them into TF-gene scores
 
@@ -207,10 +212,6 @@ def _build_prior_for_gene(gene_info, motif_peaks, motif_information, num_iterati
     gene_name = gene_info[GTF_GENENAME]
     gene_chr, gene_start, gene_stop = gene_info[GTF_CHROMOSOME], gene_info[SEQ_START], gene_info[SEQ_STOP]
 
-    motif_mask = motif_peaks[MotifScan.stop_col] >= gene_start
-    motif_mask &= motif_peaks[MotifScan.start_col] <= gene_stop
-    motif_data = motif_peaks.loc[motif_mask, :]
-
     if num_iteration % 100 == 0:
         print("Processing gene {i} [{gn}]".format(i=num_iteration, gn=gene_name))
 
@@ -229,6 +230,6 @@ def _build_prior_for_gene(gene_info, motif_peaks, motif_information, num_iterati
             score, tf_counts, start, stop = res
 
         # Add this edge to the table
-        prior_edges.append((tf, gene_name, tf_counts, score, tf_info[INFO_COL].iloc[0], start, stop, gene_chr))
+        prior_edges.append((tf, gene_name, tf_counts, score, tf_info[INFO_COL].mean(), start, stop, gene_chr))
 
     return pd.DataFrame(prior_edges, columns=PRIOR_COLS)

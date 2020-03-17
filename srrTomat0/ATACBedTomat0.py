@@ -87,7 +87,8 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     # Processing into prior
     print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, min_hit_ic=hit_ic, max_dist=tandem)
-    prior_edges, prior_matrix = build_prior_from_atac_motifs(genes, motif_peaks, motif_information)
+    prior_edges, prior_matrix = build_prior_from_atac_motifs(genes, motif_peaks, motif_information,
+                                                             num_workers=num_cores)
     print("Prior matrix with {n} edges constructed".format(n=prior_edges.shape[0]))
     return prior_edges, prior_matrix
 
