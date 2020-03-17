@@ -28,6 +28,10 @@ class FIMOScanner(MotifScanner):
 
         return chunk_motifs(meme, self.motifs, num_workers=self.num_workers, min_ic=min_ic)
 
+    def _postprocess(self, motif_peaks):
+        motif_peaks = motif_peaks.drop_duplicates(subset=[FIMO_MOTIF, FIMO_START, FIMO_STOP, FIMO_CHROMOSOME])
+        return motif_peaks
+
     def _get_motifs(self, fasta_file, motif_file):
         fimo_command = FIMO_COMMAND + [motif_file, fasta_file]
         proc = subprocess.run(fimo_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)

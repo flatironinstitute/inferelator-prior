@@ -5,7 +5,6 @@ import pandas as pd
 from srrTomat0.motifs import MotifScanner, chunk_motifs, homer_motif, SCAN_SCORE_COL
 from srrTomat0 import HOMER_EXECUTABLE_PATH
 
-
 HOMER_DATA_SUFFIX = ".homer.tsv"
 
 HOMER_SEQ_ID = 'seqid'
@@ -29,14 +28,18 @@ class HOMERScanner(MotifScanner):
 
         return chunk_motifs(homer_motif, self.motifs, num_workers=self.num_workers, min_ic=min_ic)
 
+    def _postprocess(self, motif_peaks):
+        motif_peaks = motif_peaks.drop_duplicates(subset=[HOMER_MOTIF, HOMER_START, HOMER_STOP, HOMER_CHROMOSOME])
+        return motif_peaks
+
     def _get_motifs(self, fasta_file, motif_file):
         homer_command = [HOMER_EXECUTABLE_PATH, "find", "-i", fasta_file, "-m", motif_file, "-offset", str(0)]
         proc = subprocess.run(homer_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
         if int(proc.returncode) != 0:
             print("HOMER motif scan failed for {meme}, {fa} (cmd)".format(meme=motif_file,
-                                                                         fa=fasta_file,
-                                                                         cmd=" ".join(homer_command)))
+                                                                          fa=fasta_file,
+                                                                          cmd=" ".join(homer_command)))
 
         return self._parse_output(io.StringIO(proc.stdout.decode("utf-8")))
 

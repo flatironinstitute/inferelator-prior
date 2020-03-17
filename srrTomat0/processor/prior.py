@@ -1,5 +1,5 @@
 from srrTomat0.processor.gtf import GTF_GENENAME, GTF_CHROMOSOME, SEQ_START, SEQ_STOP
-from srrTomat0.motifs.motif_locations import MotifLocationManager as MotifLM
+from srrTomat0.motifs.motif_scan import MotifScan
 from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF_NAME_COL
 
 import pandas as pd
@@ -21,36 +21,28 @@ PRIOR_COLS = [PRIOR_TF, PRIOR_GENE, PRIOR_COUNT, PRIOR_SCORE, PRIOR_MOTIF_IC, PR
 PRIOR_FDR = 'qvalue'
 PRIOR_SIG = 'significance'
 
-MINIMUM_IC_BITS = 6
-MINIMUM_TANDEM_ARRAY = 3
-TANDEM_STEP_BITS = 6
-MAXIMUM_TANDEM_DISTANCE = 50
+MINIMUM_MOTIF_IC_BITS = 6
+MINIMUM_HIT_BITS = 24
+MAXIMUM_TANDEM_DISTANCE = 100
 
 
 class MotifScorer:
-    min_ic = MINIMUM_IC_BITS
-    min_tandem = MINIMUM_TANDEM_ARRAY
-
-    min_single_ic = MINIMUM_IC_BITS + (MINIMUM_TANDEM_ARRAY - 1) * TANDEM_STEP_BITS
-    step_ic = TANDEM_STEP_BITS
-
+    min_binding_ic = MINIMUM_MOTIF_IC_BITS
+    min_hit = MINIMUM_HIT_BITS
     max_dist = MAXIMUM_TANDEM_DISTANCE
 
     @classmethod
-    def set_information_criteria(cls, min_ic=None, min_tandem=None, step_ic=None, max_dist=None):
+    def set_information_criteria(cls, min_binding_ic=None, min_hit_ic=None, max_dist=None):
         """
         Set parameters for
-        :param min_ic:
-        :param min_tandem:
-        :param step_ic:
+        :param min_binding_ic:
+        :param min_hit_ic:
         :param max_dist:
         :return:
         """
-        cls.min_ic = cls.min_ic if min_ic is None else min_ic
-        cls.min_tandem = cls.min_tandem if min_tandem is None else min_tandem
-        cls.step_ic = cls.step_ic if step_ic is None else step_ic
+        cls.min_binding_ic = cls.min_binding_ic if min_binding_ic is None else min_binding_ic
         cls.max_dist = cls.max_dist if max_dist is None else max_dist
-        cls.min_single_ic = cls.min_ic + (cls.min_tandem - 1) * cls.step_ic
+        cls.min_hit = cls.min_hit if min_hit_ic is None else min_hit_ic
 
     @classmethod
     def score_tf(cls, gene_motif_data, motif_len=None):
@@ -67,62 +59,66 @@ class MotifScorer:
         assert motif_len is None or isinstance(motif_len, int)
 
         # Drop sites that don't meet threshold
-        gene_motif_data = gene_motif_data.loc[gene_motif_data[SCAN_SCORE_COL] >= cls.min_ic, :]
+        gene_motif_data = gene_motif_data.loc[gene_motif_data[SCAN_SCORE_COL] >= cls.min_binding_ic, :]
         n_sites = gene_motif_data.shape[0]
 
         # If there's no data return None
         if n_sites == 0:
             return None
+
+        # If there's only one site check it and then return
         elif n_sites == 1:
             score = gene_motif_data[SCAN_SCORE_COL].iloc[0]
-            if score >= cls.min_single_ic:
-                return score, cls._peak_region(gene_motif_data)
+            if score >= cls.min_hit:
+                start, stop = gene_motif_data[MotifScan.start_col].iloc[0], gene_motif_data[MotifScan.stop_col].iloc[0]
+                return score, n_sites, start, stop
             else:
                 return None
 
-        m_dist = cls.max_dist if motif_len is None else cls.max_dist + motif_len
-
-        gene_motif_data = gene_motif_data.sort_values(by=MotifLM.start_col)
-
-        # Add stepwise boost to information from tandems
-        consider_tandem = (gene_motif_data[MotifLM.start_col] - gene_motif_data[MotifLM.start_col].shift(1)) <= m_dist
-        ct_cumsum = consider_tandem.cumsum()
-        ct_cumsum = ct_cumsum.sub(ct_cumsum.mask(consider_tandem).ffill().fillna(0)).astype(int)
-
-        gene_motif_data[SCAN_SCORE_COL] = gene_motif_data[SCAN_SCORE_COL] + ct_cumsum * cls.step_ic
-        max_score = gene_motif_data[SCAN_SCORE_COL].max()
-
-        if max_score < cls.min_single_ic:
-            return None
-
-        stop_line = gene_motif_data[SCAN_SCORE_COL].argmax()
-        start_line = stop_line - ct_cumsum.iloc[stop_line]
-
-        if start_line != stop_line:
-            return max_score, cls._peak_region(gene_motif_data.iloc[start_line:stop_line, :])
+        # If there's more than one site do the tandem checking stuff
         else:
-            return max_score, cls._peak_region(gene_motif_data.iloc[start_line, :])
+            m_dist = cls.max_dist if motif_len is None else cls.max_dist + motif_len
+
+            gene_motif_data = gene_motif_data.sort_values(by=MotifScan.start_col)
+
+            # Find things that are in tandems
+            consider_tandem = (gene_motif_data[MotifScan.start_col] - gene_motif_data[MotifScan.start_col].shift(1))
+            consider_tandem = consider_tandem <= m_dist
+
+            # Ffill the tandem group to have the same start
+            tandem_starts = gene_motif_data[MotifScan.start_col].copy()
+            tandem_starts.loc[consider_tandem] = pd.NA
+            tandem_starts = tandem_starts.ffill()
+
+            # Backfill the tandem group to have the same stop
+            tandem_stops = gene_motif_data[MotifScan.stop_col].copy()
+            tandem_stops.loc[consider_tandem.shift(-1, fill_value=False)] = pd.NA
+            tandem_stops = tandem_stops.bfill()
+
+            # Concat, group by start/stop, and then sum IC scores
+            tandem_peaks = pd.concat([tandem_starts, tandem_stops, gene_motif_data[SCAN_SCORE_COL]], axis=1)
+            tandem_peaks.columns = [PRIOR_START, PRIOR_STOP, PRIOR_SCORE]
+            tandem_peaks = tandem_peaks.groupby(by=[PRIOR_START, PRIOR_STOP]).agg('sum').reset_index()
+
+            # If the sum is greater than the IC threshold for a hit then return the tandem range
+            if tandem_peaks[PRIOR_SCORE].max() >= cls.min_hit:
+                peak = tandem_peaks.loc[tandem_peaks[PRIOR_SCORE].argmax(), :]
+                return peak[PRIOR_SCORE], peak.shape[0], peak[PRIOR_START], peak[PRIOR_STOP]
+            else:
+                return None
 
     @classmethod
     def preprocess_motifs(cls, gene_motif_data, motif_information):
-        motif_information = motif_information.loc[motif_information[INFO_COL] >= cls.min_ic, :]
+        motif_information = motif_information.loc[motif_information[INFO_COL] >= cls.min_binding_ic, :]
         keeper_motifs = motif_information[MOTIF_COL].unique().tolist()
-        keeper_idx = (gene_motif_data[MotifLM.name_col].isin(keeper_motifs))
-        keeper_idx &= (gene_motif_data[SCAN_SCORE_COL] >= cls.min_ic)
+        keeper_idx = (gene_motif_data[MotifScan.name_col].isin(keeper_motifs))
+        keeper_idx &= (gene_motif_data[SCAN_SCORE_COL] >= cls.min_binding_ic)
 
         return gene_motif_data.loc[keeper_idx, :], motif_information
 
     @staticmethod
     def _score(n_sites, motif_ic):
         return n_sites * motif_ic * np.log10(2)
-
-    @staticmethod
-    def _peak_region(peaks):
-        start = peaks[MotifLM.start_col].min()
-        stop = peaks[MotifLM.stop_col].max()
-        chromosome = peaks[MotifLM.chromosome_col]
-        chromosome = chromosome.iloc[0] if isinstance(chromosome, pd.Series) else chromosome
-        return start, stop, chromosome
 
 
 def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
@@ -144,8 +140,8 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
     print("Preliminary search identified {n} binding sites".format(n=motif_peaks.shape[0]))
 
     # Trim down the motif dataframe and put it into a dict by chromosome
-    motif_peaks = motif_peaks.reindex([MotifLM.name_col, MotifLM.chromosome_col, MotifLM.start_col, MotifLM.stop_col,
-                                       SCAN_SCORE_COL], axis=1)
+    motif_peaks = motif_peaks.reindex([MotifScan.name_col, MotifScan.chromosome_col, MotifScan.start_col,
+                                       MotifScan.stop_col, SCAN_SCORE_COL], axis=1)
 
     motif_id_to_name = motif_information.reindex([MOTIF_COL, MOTIF_NAME_COL], axis=1)
     invalid_names = (pd.isnull(motif_id_to_name[MOTIF_NAME_COL]) |
@@ -153,10 +149,10 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information):
                      (motif_id_to_name is None))
 
     motif_id_to_name.loc[invalid_names, MOTIF_NAME_COL] = motif_id_to_name.loc[invalid_names, MOTIF_COL]
-    motif_peaks = motif_peaks.join(motif_id_to_name.set_index(MOTIF_COL, verify_integrity=True), on=MotifLM.name_col)
+    motif_peaks = motif_peaks.join(motif_id_to_name.set_index(MOTIF_COL, verify_integrity=True), on=MotifScan.name_col)
     motif_names = motif_information[MOTIF_NAME_COL].unique()
 
-    motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifLM.chromosome_col)}
+    motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifScan.chromosome_col)}
 
     def _prior_mapper(data):
         i, gene_data, motifs = data
@@ -205,8 +201,8 @@ def _build_prior_for_gene(gene_info, motif_peaks, motif_information, num_iterati
     gene_name = gene_info[GTF_GENENAME]
     gene_chr, gene_start, gene_stop = gene_info[GTF_CHROMOSOME], gene_info[SEQ_START], gene_info[SEQ_STOP]
 
-    motif_mask = motif_peaks[MotifLM.stop_col] >= gene_start
-    motif_mask &= motif_peaks[MotifLM.start_col] <= gene_stop
+    motif_mask = motif_peaks[MotifScan.stop_col] >= gene_start
+    motif_mask &= motif_peaks[MotifScan.start_col] <= gene_stop
     motif_data = motif_peaks.loc[motif_mask, :]
 
     if num_iteration % 100 == 0:
@@ -224,11 +220,9 @@ def _build_prior_for_gene(gene_info, motif_peaks, motif_information, num_iterati
         if res is None:
             continue
         else:
-            score, (start, stop, chromosome) = res
-
-        tf_counts = tf_peaks.shape[0]
+            score, tf_counts, start, stop = res
 
         # Add this edge to the table
-        prior_edges.append((tf, gene_name, tf_counts, score, tf_info[INFO_COL].iloc[0], start, stop, chromosome))
+        prior_edges.append((tf, gene_name, tf_counts, score, tf_info[INFO_COL].iloc[0], start, stop, gene_chr))
 
     return pd.DataFrame(prior_edges, columns=PRIOR_COLS)

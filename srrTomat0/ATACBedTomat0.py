@@ -34,7 +34,14 @@ def main():
 
 
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
-                           use_tss=True, motif_type='fimo', num_cores=1, min_ic=8, truncate_motifs=0.5):
+                           use_tss=True, motif_type='fimo', num_cores=1, min_ic=8, truncate_motifs=0.35):
+    if motif_type.lower() == 'fimo':
+        scanner = FIMOScanner
+    elif motif_type.lower() == 'homer':
+        scanner = HOMERScanner
+    else:
+        raise ValueError("motif_type must be fimo or homer")
+
     print("Loading genes from file ({f})".format(f=annotation_file))
     # Load genes and open a window
     genes = load_gtf_to_dataframe(annotation_file)
@@ -64,14 +71,12 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
         atac_tmp = atac_bed_file
 
     try:
-        motif_peaks = FIMOScanner(motifs=motifs,
-                                  num_workers=num_cores).scan(atac_tmp,
-                                                              genomic_fasta_file,
-                                                              min_ic=min_ic)
+        motif_peaks = scanner(motifs=motifs, num_workers=num_cores).scan(atac_tmp, genomic_fasta_file, min_ic=min_ic)
     finally:
         if atac_bed_file is None:
-            #os.remove(atac_tmp)
-            pass
+            os.remove(atac_tmp)
+
+    motif_peaks.to_csv("All_peaks.tsv", sep="\t", index=False)
 
     # Processing into prior
     print("Processing TF binding sites into prior")

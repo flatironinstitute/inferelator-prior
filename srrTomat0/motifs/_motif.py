@@ -6,6 +6,7 @@ import tempfile
 import math
 import itertools
 import pathos
+from collections import Counter
 
 from srrTomat0.processor.bedtools import extract_bed_sequence
 
@@ -135,14 +136,17 @@ class Motif:
     def add_prob_line(self, line):
         self._motif_probs.append(line)
 
-    def score_match(self, match, disallow_homopolymer=True, score_zero_as_zero=0):
+    def score_match(self, match, disallow_homopolymer=True, score_zero_as_zero=1):
+
+        if len(match) != len(self):
+            msg = "Sequence length {l} not compatible with motif length {m}".format(l=len(match), m=len(self))
+            raise ValueError(msg)
 
         # Score anything that's a homopolymer or one base from a homopolymer to 0 if the flag is set
-        if disallow_homopolymer:
-            polymer_check = sum(m == match[0] for m in match)
-            if len(match) - polymer_check <= 1 or (len(set(match)) == 2 and polymer_check == 0):
-                return 0
+        if disallow_homopolymer and sum([min((c, 2)) for c in Counter(match).values()]) < 4:
+            return 0
 
+        # Score anything with excessive nucleotides that have a p ~ 0.0 as 0
         if score_zero_as_zero is not None and sum(p < 0.001 for p in self.__prob_match(match)) > score_zero_as_zero:
             return 0
 
@@ -211,9 +215,12 @@ class MotifScanner:
                 except FileNotFoundError:
                     pass
 
-        return motif_data.reset_index(drop=True)
+        return self._postprocess(motif_data).reset_index(drop=True)
 
     def _preprocess(self, min_ic=None):
+        raise NotImplementedError
+
+    def _postprocess(self, motif_peaks):
         raise NotImplementedError
 
     def _get_motifs(self, fasta_file, motif_file):
