@@ -8,7 +8,7 @@ import itertools
 import pathos
 from collections import Counter
 
-from srrTomat0.processor.bedtools import extract_bed_sequence
+from srrTomat0.processor.bedtools import extract_bed_sequence, intersect_bed, load_bed_to_bedtools
 
 INFO_COL = "Information Content"
 ENTROPY_COL = "Shannon Entropy"
@@ -182,45 +182,58 @@ class __MotifScanner:
         self.motifs = motifs
         self.num_workers = num_workers
 
-    def scan(self, atac_bed_file, genome_fasta_file, min_ic=None):
+    def scan(self, genome_fasta_file, atac_bed_file=None, promoter_bed=None, min_ic=None):
         """
         """
 
-        # Extract interesting sequences to a temp fasta file
-        extracted_fasta_file = extract_bed_sequence(atac_bed_file, genome_fasta_file)
         # Preprocess motifs into a list of temp chunk files
-        meme_files = self._preprocess(min_ic=min_ic)
+        motif_files = self._preprocess(min_ic=min_ic)
         # Unpack list to a dict for convenience
         self.motifs = {mot.motif_id: mot for mot in self.motifs}
 
         try:
-
-            # If the number of workers is 1, run fimo directly
-            if self.num_workers == 1:
-                assert len(meme_files) == 1
-                return self._get_motifs(extracted_fasta_file, meme_files[0])
-
-            # Otherwise parallelize with a process pool (pathos because dill will do local functions)
+            if atac_bed_file is None and promoter_bed is None:
+                motif_data = self._scan_extract(motif_files, genome_fasta_file)
+                return self._postprocess(motif_data)
+            elif atac_bed_file is not None and promoter_bed is None:
+                bed_file = load_bed_to_bedtools(atac_bed_file)
+            elif atac_bed_file is None and promoter_bed is not None:
+                bed_file = load_bed_to_bedtools(promoter_bed)
             else:
-                # Convenience local function
-                def _get_chunk_motifs(chunk_file):
-                    return self._get_motifs(extracted_fasta_file, chunk_file)
+                bed_file = intersect_bed(load_bed_to_bedtools(atac_bed_file), load_bed_to_bedtools(promoter_bed))
 
-                with pathos.multiprocessing.Pool(self.num_workers) as pool:
-                    motif_data = [data for data in pool.imap(_get_chunk_motifs, meme_files)]
-                    motif_data = pd.concat(motif_data)
+            extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
 
-        # Clean up the temporary files
+            try:
+                motif_data = self._scan_extract(motif_files, extracted_fasta_file)
+                return self._postprocess(motif_data)
+            finally:
+                os.remove(extracted_fasta_file)
+
         finally:
-            os.remove(extracted_fasta_file)
-
-            for file in meme_files:
+            for file in motif_files:
                 try:
                     os.remove(file)
                 except FileNotFoundError:
                     pass
 
-        return self._postprocess(motif_data).reset_index(drop=True)
+    def _scan_extract(self, motif_files, extracted_fasta_file):
+        # If the number of workers is 1, run fimo directly
+        if self.num_workers == 1:
+            assert len(motif_files) == 1
+            return self._get_motifs(extracted_fasta_file, motif_files[0])
+
+        # Otherwise parallelize with a process pool (pathos because dill will do local functions)
+        else:
+            # Convenience local function
+            def _get_chunk_motifs(chunk_file):
+                return self._get_motifs(extracted_fasta_file, chunk_file)
+
+            with pathos.multiprocessing.Pool(self.num_workers) as pool:
+                motif_data = [data for data in pool.imap(_get_chunk_motifs, motif_files)]
+                motif_data = pd.concat(motif_data)
+
+        return motif_data
 
     def _preprocess(self, min_ic=None):
         raise NotImplementedError

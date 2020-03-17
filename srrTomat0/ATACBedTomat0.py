@@ -38,7 +38,6 @@ def main():
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
                            use_tss=True, motif_type='fimo', num_cores=1, motif_ic=6, hit_ic=24, tandem=100,
                            truncate_motifs=0.35):
-
     # Set the scanner type
     if motif_type.lower() == 'fimo':
         MotifScan.set_type_fimo()
@@ -66,21 +65,13 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     # Load and scan target chromatin peaks
     print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=atac_bed_file, f_m=motif_meme_file))
 
-    if atac_bed_file is None:
-        atac_fd, atac_tmp = tempfile.mkstemp(".bed", prefix="Genes")
-        with os.fdopen(atac_fd, mode="w") as atac_fh:
-            gene_locs = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]]
-            gene_locs[[SEQ_START, SEQ_STOP]] = gene_locs[[SEQ_START, SEQ_STOP]].astype(int)
-            gene_locs.to_csv(atac_fh, sep="\t", index=False, header=False)
-    else:
-        atac_tmp = atac_bed_file
+    gene_locs = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]].copy()
+    gene_locs[[SEQ_START, SEQ_STOP]] = gene_locs[[SEQ_START, SEQ_STOP]].astype(int)
 
-    try:
-        motif_peaks = MotifScan.scanner(motifs=motifs, num_workers=num_cores).scan(atac_tmp, genomic_fasta_file,
-                                                                                   min_ic=motif_ic)
-    finally:
-        if atac_bed_file is None:
-            os.remove(atac_tmp)
+    motif_peaks = MotifScan.scanner(motifs=motifs, num_workers=num_cores).scan(genomic_fasta_file,
+                                                                               atac_bed_file=atac_bed_file,
+                                                                               promoter_bed=gene_locs,
+                                                                               min_ic=motif_ic)
 
     motif_peaks.to_csv("All_peaks.tsv", sep="\t", index=False)
 

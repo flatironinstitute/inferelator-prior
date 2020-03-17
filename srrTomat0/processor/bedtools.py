@@ -65,90 +65,37 @@ def load_bed_to_dataframe(bed_file_path, **kwargs):
     return pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs)
 
 
-def merge_overlapping_peaks(peak_dataframe, feature_group_column=None, chromosome_column=GTF_CHROMOSOME,
-                            start_column=SEQ_START, end_column=SEQ_STOP, strand_column=GTF_STRAND,
-                            score_columns=None, max_distance=-1):
-    """
-    :param peak_dataframe: pd.DataFrame
-    :param feature_group_column: str
-    :param chromosome_column: str
-    :param start_column: str
-    :param end_column: str
-    :param score_columns: [(str, str)]
-        A list of tuples (column_name, merge_function), where column_name is the bed file column and the merge_function
-        is the bedtools merge option (like `distinct` or `max`)
-    :return: pd.DataFrame
-    """
-
-    all_columns = [chromosome_column, start_column, end_column]
-    all_merge_functions = []
-
-    if strand_column is not None:
-        all_columns.append(strand_column)
-        all_merge_functions.append('distinct')
-
-    if score_columns is not None:
-        for (col, funstr) in score_columns:
-            if col not in peak_dataframe.columns:
-                raise ValueError("Unknown score column {col}".format(col=col))
-            else:
-                # Force the score column to be a string because pybedtools is :-(
-                peak_dataframe[col] = peak_dataframe[col].astype(str)
-                all_columns.append(col)
-                all_merge_functions.append(funstr)
-
-    # Make a list of the column names to handle with bedtools merge
-    all_merge_columns = list(map(lambda x: x + 4, range(len(all_merge_functions))))
-
-    if feature_group_column is None:
-        # Reindex to remove any other columns
-        peak_dataframe = peak_dataframe.reindex(all_columns, axis=1)
-        return _merge_peaks_with_bedtools(peak_dataframe, all_merge_columns, all_merge_functions,
-                                          max_distance=max_distance)
-
-    else:
-        # Add the grouping column to the list
-        all_columns.append(feature_group_column)
-
-        # Reindex to remove any other columns
-        peak_dataframe = peak_dataframe.reindex(all_columns, axis=1)
-
-        # Iterate through groups of feature_group_column
-        merged_dataframe = list()
-
-        for group, group_data in peak_dataframe.groupby(feature_group_column):
-            # Merge peaks
-            merged_peaks = _merge_peaks_with_bedtools(group_data.drop(feature_group_column, axis=1), all_merge_columns,
-                                                      all_merge_functions, max_distance=max_distance)
-
-            # Add the group name and store the dataframe in a list
-            merged_peaks[feature_group_column] = group
-            merged_dataframe.append(merged_peaks)
-
-        merged_dataframe = pd.concat(merged_dataframe)
-
-        return merged_dataframe
-
-
 def extract_bed_sequence(bed_file, genome_fasta, output_path=None):
     output_path = tempfile.gettempdir() if output_path is None else output_path
     output_file = os.path.join(output_path, os.path.split(genome_fasta)[1] + BEDTOOLS_EXTRACT_SUFFIX)
 
-    if os.path.exists(output_file):
-        return output_file
+    if not isinstance(bed_file, pybedtools.BedTool):
+        bed_file = pybedtools.BedTool(bed_file)
 
-    bedtools_command = ["bedtools", "getfasta", "-fi", genome_fasta, "-bed", bed_file, "-fo", output_file]
-    proc = subprocess.run(bedtools_command)
-
-    if int(proc.returncode) != 0:
-        print("bedtools getfasta failed for {file} ({cmd})".format(file=bed_file, cmd=" ".join(bedtools_command)))
-        try:
-            os.remove(output_file)
-        except FileNotFoundError:
-            pass
-        return None
+    try:
+        bed_file.sequence(fi=genome_fasta, fo=output_file)
+    except pybedtools.helpers.BEDToolsError as pbe:
+        print(pbe.msg)
 
     return output_file
+
+
+def load_bed_to_bedtools(bed):
+    if bed is None:
+        return None
+    elif isinstance(bed, pd.DataFrame):
+        return pybedtools.BedTool.from_dataframe(bed)
+    else:
+        return pybedtools.BedTool(bed)
+
+
+def intersect_bed(*beds):
+
+    if len(beds) == 1:
+        return beds[0]
+
+    beds = [b.sort() for b in beds]
+    return beds[0].intersect(beds[1:], sorted=True)
 
 
 def _merge_peaks_with_bedtools(merge_data, merge_columns, merge_function_names, max_distance=0):
@@ -173,3 +120,4 @@ def _merge_peaks_with_bedtools(merge_data, merge_columns, merge_function_names, 
 
     pbt_data.columns = merge_data.columns
     return pbt_data
+
