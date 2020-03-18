@@ -16,11 +16,9 @@ def main():
     ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0, nargs="+")
     ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=1)
     ap.add_argument("--tss", dest="tss", help="Use TSS for window", action='store_const', const=True, default=False)
-    ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default=1)
+    ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='fimo')
     ap.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
                     metavar="BITS", type=int, default=6)
-    ap.add_argument("--hit_postprocessing_ic", dest="hit_ic", help="Minimum information content",
-                    metavar="BITS", type=int, default=24)
     ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
                     metavar="BASES", type=int, default=100)
 
@@ -28,7 +26,7 @@ def main():
 
     prior_edges, prior_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
                                                        window_size=args.window_size, num_cores=args.cores,
-                                                       use_tss=args.tss, motif_ic=args.min_ic, hit_ic=args.hit_ic,
+                                                       use_tss=args.tss, motif_ic=args.min_ic,
                                                        scaner_type=args.scanner)
 
     prior_matrix.astype(int).to_csv(args.out, sep="\t")
@@ -36,7 +34,7 @@ def main():
 
 
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
-                           use_tss=True, scaner_type='fimo', num_cores=1, motif_ic=6, hit_ic=24, tandem=100,
+                           use_tss=True, scaner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                            truncate_motifs=0.35):
     # Set the scanner type
     if scaner_type.lower() == 'fimo':
@@ -77,7 +75,7 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
 
     # Processing into prior
     print("Processing TF binding sites into prior")
-    MotifScorer.set_information_criteria(min_binding_ic=motif_ic, min_hit_ic=hit_ic, max_dist=tandem)
+    MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
     prior_edges, prior_matrix = build_prior_from_atac_motifs(genes, motif_peaks, motif_information,
                                                              num_workers=num_cores)
     print("Prior matrix with {n} edges constructed".format(n=prior_edges.shape[0]))

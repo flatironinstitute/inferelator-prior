@@ -5,6 +5,9 @@ from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF
 import pandas as pd
 import numpy as np
 import pathos.multiprocessing as multiprocessing
+from sklearn.cluster import DBSCAN
+from collections import Counter
+
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -46,67 +49,71 @@ class MotifScorer:
         cls.min_hit = cls.min_hit if min_hit_ic is None else min_hit_ic
 
     @classmethod
-    def score_tf(cls, gene_motif_data, motif_len=None):
+    def score_tf(cls, tf_motifs):
         """
         Score a single TF
-        :param gene_motif_data: Motif binding sites from FIMO/HOMER
-        :type gene_motif_data: pd.DataFrame
+        :param tf_motifs: Motif binding sites from FIMO/HOMER
+        :type tf_motifs: pd.DataFrame
         :param motif_len: Length of the motif recognition site
         :type motif_len: int
         :return: Score if the TF should be kept, None otherwise
         """
 
-        assert isinstance(gene_motif_data, pd.DataFrame)
-        assert motif_len is None or isinstance(motif_len, int)
+        assert isinstance(tf_motifs, pd.DataFrame)
 
         # Drop sites that don't meet threshold
-        gene_motif_data = gene_motif_data.loc[gene_motif_data[SCAN_SCORE_COL] >= cls.min_binding_ic, :]
-        n_sites = gene_motif_data.shape[0]
+        tf_motifs = tf_motifs.loc[tf_motifs[SCAN_SCORE_COL] >= cls.min_binding_ic, :]
+        n_sites = tf_motifs.shape[0]
 
         # If there's no data return None
         if n_sites == 0:
             return None
 
         # If there's only one site check it and then return
-        elif n_sites == 1:
-            score = gene_motif_data[SCAN_SCORE_COL].iloc[0]
-            if score >= cls.min_hit:
-                start, stop = gene_motif_data[MotifScan.start_col].iloc[0], gene_motif_data[MotifScan.stop_col].iloc[0]
-                return score, n_sites, start, stop
+        if n_sites == 1:
+            return cls._top_hit(tf_motifs)
+
+        tf_motifs = tf_motifs.sort_values(by=MotifScan.start_col)
+
+        # If there's only two sites check it and then return
+        if n_sites == 2:
+            consider_tandem = tf_motifs.iloc[0, :][MotifScan.stop_col] - tf_motifs.iloc[1, :][MotifScan.start_col]
+            if consider_tandem > cls.max_dist:
+                return cls._top_hit(tf_motifs)
             else:
-                return None
+                start = tf_motifs.iloc[0, :][MotifScan.start_col]
+                stop = tf_motifs.iloc[1, :][MotifScan.stop_col]
+                score = tf_motifs[SCAN_SCORE_COL].sum()
+                return score, 2, start, stop
 
-        # If there's more than one site do the tandem checking stuff
+        # If there's more than two sites do the complicated tandem checking stuff
         else:
-            m_dist = cls.max_dist if motif_len is None else cls.max_dist + motif_len
-
-            gene_motif_data = gene_motif_data.sort_values(by=MotifScan.start_col)
-
             # Find things that are in tandems
-            consider_tandem = (gene_motif_data[MotifScan.start_col] - gene_motif_data[MotifScan.start_col].shift(1))
-            consider_tandem = consider_tandem <= m_dist
+            consider_tandem = (tf_motifs[MotifScan.stop_col] - tf_motifs[MotifScan.start_col].shift(1))
+            consider_tandem = consider_tandem <= cls.max_dist
+
+            # Skip the rest if nothing is close enough to matter
+            if not consider_tandem.any():
+                return cls._top_hit(tf_motifs)
 
             # Ffill the tandem group to have the same start
-            tandem_starts = gene_motif_data[MotifScan.start_col].copy()
+            tandem_starts = tf_motifs[MotifScan.start_col].copy()
             tandem_starts.loc[consider_tandem] = pd.NA
             tandem_starts = tandem_starts.ffill()
 
             # Backfill the tandem group to have the same stop
-            tandem_stops = gene_motif_data[MotifScan.stop_col].copy()
+            tandem_stops = tf_motifs[MotifScan.stop_col].copy()
             tandem_stops.loc[consider_tandem.shift(-1, fill_value=False)] = pd.NA
             tandem_stops = tandem_stops.bfill()
 
             # Concat, group by start/stop, and then sum IC scores
-            tandem_peaks = pd.concat([tandem_starts, tandem_stops, gene_motif_data[SCAN_SCORE_COL]], axis=1)
+            tandem_peaks = pd.concat([tandem_starts, tandem_stops, tf_motifs[SCAN_SCORE_COL]], axis=1)
             tandem_peaks.columns = [PRIOR_START, PRIOR_STOP, PRIOR_SCORE]
             tandem_peaks = tandem_peaks.groupby(by=[PRIOR_START, PRIOR_STOP]).agg('sum').reset_index()
 
-            # If the sum is greater than the IC threshold for a hit then return the tandem range
-            if tandem_peaks[PRIOR_SCORE].max() >= cls.min_hit:
-                peak = tandem_peaks.loc[tandem_peaks[PRIOR_SCORE].argmax(), :]
-                return peak[PRIOR_SCORE], peak.shape[0], peak[PRIOR_START], peak[PRIOR_STOP]
-            else:
-                return None
+            # Return the highest tandem array group
+            peak = tandem_peaks.loc[tandem_peaks[PRIOR_SCORE].argmax(), :]
+            return peak[PRIOR_SCORE], peak.shape[0], peak[PRIOR_START], peak[PRIOR_STOP]
 
     @classmethod
     def preprocess_motifs(cls, gene_motif_data, motif_information):
@@ -118,11 +125,28 @@ class MotifScorer:
         return gene_motif_data.loc[keeper_idx, :], motif_information
 
     @staticmethod
-    def _score(n_sites, motif_ic):
-        return n_sites * motif_ic * np.log10(2)
+    def _top_hit(tf_motifs):
+        if tf_motifs.shape[0] == 0:
+            return None
+        elif tf_motifs.shape[0] == 1:
+            top_hit = tf_motifs.iloc[0, :]
+        else:
+            top_hit = tf_motifs.iloc[tf_motifs[SCAN_SCORE_COL].values.argmax(), :]
+
+        start = MotifScorer._first_value(top_hit[MotifScan.start_col])
+        stop = MotifScorer._first_value(top_hit[MotifScan.stop_col])
+        score = MotifScorer._first_value(top_hit[SCAN_SCORE_COL])
+        return score, 1, start, stop
+
+    @staticmethod
+    def _first_value(series):
+        try:
+            return series.iloc[0]
+        except AttributeError:
+            return series
 
 
-def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1):
+def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
@@ -170,13 +194,21 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
     prior_data[PRIOR_START] = prior_data[PRIOR_START].astype(int)
     prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
 
-    # Pivot to a matrix, extend to all TFs, and fill with 1s
-    prior_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
-    prior_matrix = prior_matrix.reindex(motif_names, axis=1)
-    prior_matrix = prior_matrix.reindex(genes[GTF_GENENAME], axis=0)
-    prior_matrix[pd.isnull(prior_matrix)] = 0
+    np.random.seed(seed)
 
-    return prior_data, prior_matrix
+    thresholded_data = []
+    # Threshold using DBSCAN outlier detection
+    for reg in prior_data[PRIOR_TF].unique():
+        reg_edge = prior_data.loc[prior_data[PRIOR_TF] == reg, :].copy()
+        thresholded_data.append(_find_outliers_dbscan(reg_edge))
+
+    thresholded_data = pd.concat(thresholded_data).reset_index(drop=True)
+
+    # Pivot to a matrix, extend to all TFs, and fill with 1s
+    prior_matrix = thresholded_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
+    prior_matrix = prior_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+
+    return thresholded_data, prior_matrix
 
 
 def _gene_gen(genes, motif_peaks):
@@ -191,6 +223,24 @@ def _gene_gen(genes, motif_peaks):
             yield i, gene_data, motif_data
         except KeyError:
             continue
+
+
+def _find_outliers_dbscan(tf_data):
+    scores = tf_data[PRIOR_SCORE].values.reshape(-1, 1)
+    counts = tf_data.shape[0]
+
+    labels = DBSCAN(min_samples=np.sqrt(counts), eps=1).fit_predict(scores)
+    outlier_labels = labels == -1
+
+    mean_score = np.mean(scores)
+    keep_edge = pd.Series(outlier_labels & (tf_data[PRIOR_SCORE].values > mean_score), index=tf_data.index)
+
+    # Check the highest non-outlier cluster to see if it's worth including
+    lbl_idx = labels == (labels[scores[~keep_edge.values].argmax()])
+    if (np.min(scores[lbl_idx]) > mean_score) and (np.sum(lbl_idx) < (2 * np.sum(outlier_labels))):
+        keep_edge |= lbl_idx
+
+    return tf_data.loc[keep_edge, :].copy()
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
@@ -223,7 +273,7 @@ def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteratio
     prior_edges = []
     for tf, tf_peaks in motif_data.groupby(MOTIF_NAME_COL):
         tf_info = motif_information.loc[motif_information[MOTIF_NAME_COL] == tf, :]
-        res = MotifScorer.score_tf(tf_peaks, tf_info[LEN_COL].iloc[0])
+        res = MotifScorer.score_tf(tf_peaks)
 
         # Unpack results if there is a hit
         if res is None:
