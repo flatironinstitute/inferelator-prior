@@ -1,4 +1,5 @@
 import pybedtools
+import pandas as pd
 
 GENE_ID_REGEX = 'gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;'
 
@@ -27,6 +28,9 @@ def load_gtf_to_dataframe(gtf_path):
     # Load annotations into a dataframe with pybedtools
     annotations = pybedtools.BedTool(gtf_path).to_dataframe()
 
+    # Drop anything with NaNs which were probably comment lines
+    annotations = annotations.loc[~pd.isnull(annotations[SEQ_START]) & ~pd.isnull(annotations[SEQ_STOP]), :]
+
     # Regex extract the gene_id from the annotations column
     annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(GENE_ID_REGEX, expand=False)
 
@@ -41,20 +45,34 @@ def open_window(annotation_dataframe, window_size, use_tss=False):
     :param annotation_dataframe: pd.DataFrame
     :param window_size: int
     :param use_tss: bool
-    :return windowed_dataframe: pd.DataFrame
+    :return window_annotate: pd.DataFrame
     """
-    windowed_dataframe = annotation_dataframe.copy()
+    window_annotate = annotation_dataframe.copy()
+
+    try:
+        if len(window_size) == 1:
+            w_up, w_down = window_size[0], window_size[0]
+        elif len(window_size) == 2:
+            w_up, w_down = window_size[0], window_size[1]
+        else:
+            raise ValueError("window_size must have 1 or 2 values only")
+    except TypeError:
+        w_up, w_down = window_size, window_size
 
     if use_tss:
-        windowed_dataframe[SEQ_START] = windowed_dataframe[SEQ_TSS] - window_size
-        windowed_dataframe[SEQ_STOP] = windowed_dataframe[SEQ_TSS] + window_size
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_START] = window_annotate[SEQ_TSS] - w_up
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_STOP] = window_annotate[SEQ_TSS] + w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_START] = window_annotate[SEQ_TSS] - w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_STOP] = window_annotate[SEQ_TSS] + w_up
     else:
-        windowed_dataframe[SEQ_START] = windowed_dataframe[SEQ_START] - window_size
-        windowed_dataframe[SEQ_STOP] = windowed_dataframe[SEQ_STOP] + window_size
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_START] = window_annotate[SEQ_START] - w_up
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_STOP] = window_annotate[SEQ_STOP] + w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_START] = window_annotate[SEQ_START] - w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_STOP] = window_annotate[SEQ_STOP] + w_up
 
-    windowed_dataframe.loc[windowed_dataframe[SEQ_START] < 0, SEQ_START] = 0
+    window_annotate.loc[window_annotate[SEQ_START] < 0, SEQ_START] = 0
 
-    return windowed_dataframe
+    return window_annotate
 
 
 def _fix_genes(gene_dataframe):

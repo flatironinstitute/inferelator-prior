@@ -23,30 +23,48 @@ URL {url}
 """
 
 
-def read(file_name):
+def read(file_descript):
 
-    with open(file_name) as meme_fh:
-        alph = __parse_alphabet(meme_fh)
+    # Parse if it's a string
+    if isinstance(file_descript, str):
+        with open(file_descript) as motif_fh:
+            return [m for m in __parse_meme_file(motif_fh)]
 
-        neg_strand, pos_strand = __parse_strand(meme_fh, strict=False)
-
-        bkgd = __parse_background(meme_fh, strict=False)
-        bkgd = np.array([[1 / len(alph)] * len(alph)]) if bkgd is None else np.array([[bkgd[a] for a in alph]])
-
-        return [m for m in __parse_motif_gen(meme_fh, alph, bkgd)]
+    # Parse if it's a file handle
+    else:
+        return [m for m in __parse_meme_file(file_descript)]
 
 
-def write(file_name, motifs, alphabet=None, background=None, mode="w"):
+def write(file_descript, motifs, alphabet=None, background=None, mode="w"):
 
     motifs = [motifs] if not isinstance(motifs, list) else motifs
-    alphabet = alphabet if alphabet is not None else motifs[0]._motif_alphabet
+    alphabet = alphabet if alphabet is not None else motifs[0].alphabet
     background = np.array([[1 / len(alphabet)] * len(alphabet)]) if background is None else background
 
-    with open(file_name, mode=mode) as meme_fh:
-        __write_header(meme_fh, alphabet, background)
-
+    def _write_file(fh):
+        __write_header(fh, alphabet, background)
         for motif in motifs:
-            __write_motif(meme_fh, motif)
+            __write_motif(fh, motif)
+
+    # Write if it's a string
+    if isinstance(file_descript, str):
+        with open(file_descript, mode=mode) as motif_fh:
+            _write_file(motif_fh)
+
+    # Write if it's a file handle
+    else:
+        _write_file(file_descript)
+
+
+def __parse_meme_file(meme_fh):
+    alph = __parse_alphabet(meme_fh)
+
+    neg_strand, pos_strand = __parse_strand(meme_fh, strict=False)
+
+    bkgd = __parse_background(meme_fh, strict=False)
+    bkgd = np.array([[1 / len(alph)] * len(alph)]) if bkgd is None else np.array([[bkgd[a] for a in alph]])
+
+    return [m for m in __parse_motif_gen(meme_fh, alph, bkgd)]
 
 
 def __parse_alphabet(handle, strict=True):

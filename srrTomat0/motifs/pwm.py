@@ -1,6 +1,7 @@
 from srrTomat0.motifs import Motif, MOTIF_COL
 
 import pandas as pd
+import pandas.errors as pde
 import os
 
 TF_NAME_COL = "TF_Name"
@@ -26,7 +27,12 @@ def read(pwm_file_list, info_file, background=None, direct_only=False):
 
         pwm_name = "/".join(pwm_names)
 
-        pwm = pd.read_csv(pwm_file, sep="\t", index_col=0)
+        try:
+            pwm = pd.read_csv(pwm_file, sep="\t", index_col=0)
+        except pde.ParserError:
+            print("Parser error on file {f}".format(f=pwm_name))
+            continue
+
         pwm_alphabet = pwm.columns.tolist()
 
         motif = Motif(pwm_id, pwm_name, pwm_alphabet, motif_background=background)
