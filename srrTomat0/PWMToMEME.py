@@ -23,19 +23,11 @@ def main():
 
 def pwm_to_meme(pwm_file_list, tf_info_file, output_file):
 
-    motifs = read(pwm_file_list, tf_info_file)
+    print("Parsing {x} PWM files".format(x=len(pwm_file_list)))
+    motifs = read(pwm_file_list, tf_info_file, direct_only=True)
 
-    motifs_name = {}
-
-    for m in motifs:
-        if m.motif_name in motifs_name and m.information_content > motifs_name[m.motif_name].information_content:
-            motifs_name[m.motif_name] = m
-        elif m.motif_name not in motifs_name:
-            motifs_name[m.motif_name] = m
-        else:
-            pass
-
-    write(output_file, list(motifs_name.values()))
+    print("Parsed {m} motifs, writing to file {f}".format(m=len(motifs), f=output_file))
+    write(output_file, list(motifs))
 
 
 if __name__ == '__main__':
