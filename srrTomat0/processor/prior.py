@@ -284,6 +284,6 @@ def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteratio
         info = tf_info[INFO_COL].mean() if tf_info.shape[0] > 0 else np.nan
 
         # Add this edge to the table
-        prior_edges.append((tf, gene_name, tf_counts, score, tf_info[INFO_COL].mean(), start, stop, gene_chr))
+        prior_edges.append((tf, gene_name, tf_counts, score, info, start, stop, gene_chr))
 
     return pd.DataFrame(prior_edges, columns=PRIOR_COLS)
