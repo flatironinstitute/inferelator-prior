@@ -208,7 +208,11 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
     prior_matrix = thresholded_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
     prior_matrix = prior_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
 
-    return thresholded_data, prior_matrix
+    # Pivot to a matrix, extend to all TFs, and fill with 1s
+    raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
+    raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+
+    return thresholded_data, prior_matrix, raw_matrix
 
 
 def _gene_gen(genes, motif_peaks):

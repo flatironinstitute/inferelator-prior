@@ -24,13 +24,14 @@ def main():
 
     args = ap.parse_args()
 
-    prior_edges, prior_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
-                                                       window_size=args.window_size, num_cores=args.cores,
-                                                       use_tss=args.tss, motif_ic=args.min_ic,
-                                                       scaner_type=args.scanner)
+    prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
+                                                                   window_size=args.window_size, num_cores=args.cores,
+                                                                   use_tss=args.tss, motif_ic=args.min_ic,
+                                                                   scaner_type=args.scanner)
 
     prior_matrix.astype(int).to_csv(args.out, sep="\t")
     prior_edges.to_csv(args.out + ".edges.tsv.gz", sep="\t")
+    raw_matrix.to_csv(args.out + ".raw.tsv", sep="\t")
 
 
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
@@ -44,6 +45,8 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     else:
         raise ValueError("motif_type must be fimo or homer")
 
+    # PROCESS GENE ANNOTATIONS #
+
     print("Loading genes from file ({f})".format(f=annotation_file))
     # Load genes and open a window
     genes = load_gtf_to_dataframe(annotation_file)
@@ -52,6 +55,8 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     genes = open_window(genes, window_size=window_size, use_tss=use_tss)
     print("\tPromoter regions defined with window {w}".format(w=window_size))
 
+    # PROCESS MOTIF PWMS #
+
     print("Loading motifs from file ({f})".format(f=motif_meme_file))
     motifs = MotifScan.load_motif_file(motif_meme_file)
     motif_information = motifs_to_dataframe(motifs)
@@ -59,6 +64,8 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
 
     if truncate_motifs is not None:
         [x.truncate(threshold=truncate_motifs) for x in motifs]
+
+    # SCAN CHROMATIN FOR MOTIFS #
 
     # Load and scan target chromatin peaks
     print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=atac_bed_file, f_m=motif_meme_file))
@@ -73,13 +80,15 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
 
     motif_peaks.to_csv("All_peaks.tsv", sep="\t", index=False)
 
+    # PROCESS CHROMATIN PEAKS INTO NETWORK MATRIX #
+
     # Processing into prior
     print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-    prior_edges, prior_matrix = build_prior_from_atac_motifs(genes, motif_peaks, motif_information,
-                                                             num_workers=num_cores)
+    prior_edges, prior_matrix, raw_matrix = build_prior_from_atac_motifs(genes, motif_peaks, motif_information,
+                                                                         num_workers=num_cores)
     print("Prior matrix with {n} edges constructed".format(n=prior_edges.shape[0]))
-    return prior_edges, prior_matrix
+    return prior_edges, prior_matrix, raw_matrix
 
 
 if __name__ == '__main__':
