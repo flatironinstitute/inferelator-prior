@@ -45,7 +45,9 @@ def __parse_motif_gen(handle):
         if len(line) > 0 and line.lower().startswith(">"):
             if active_motif is not None:
                 yield active_motif
-            active_motif = Motif(line.split()[1], None, list(HOMER_ALPHABET))
+            line = line.split()
+            active_motif = Motif(line[1], None, list(HOMER_ALPHABET))
+            active_motif.homer_odds = line[2]
         elif len(line) > 0:
             probs = line.split()
             if active_motif is not None and len(probs) == len(HOMER_ALPHABET):
@@ -64,6 +66,6 @@ def __write_motif(motif_fh, motif):
 
     record = HOMER_MOTIF_RECORD.format(consensus=motif.consensus,
                                        mname=motif.motif_id,
-                                       odds_score=motif.threshold_ln_odds,
+                                       odds_score=motif.homer_odds,
                                        pmatrix=p_mat)
     print(record, file=motif_fh)

@@ -33,8 +33,12 @@ class FIMOScanner(__MotifScanner):
         motif_peaks = motif_peaks.drop_duplicates(subset=[FIMO_MOTIF, FIMO_START, FIMO_STOP, FIMO_CHROMOSOME])
         return motif_peaks
 
-    def _get_motifs(self, fasta_file, motif_file):
-        fimo_command = FIMO_COMMAND + [motif_file, fasta_file]
+    def _get_motifs(self, fasta_file, motif_file, threshold=None):
+        if threshold is None:
+            fimo_command = FIMO_COMMAND + [motif_file, fasta_file]
+        else:
+            fimo_command = FIMO_COMMAND + ["--thresh", str(threshold)] + [motif_file, fasta_file]
+
         proc = subprocess.run(fimo_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
         if int(proc.returncode) != 0:

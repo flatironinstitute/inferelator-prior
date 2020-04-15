@@ -32,6 +32,7 @@ class Motif:
     _alphabet_map = None
     _consensus_seq = None
     _info_matrix = None
+    _homer_odds = None
 
     @property
     def alphabet(self):
@@ -78,6 +79,14 @@ class Motif:
             return 0
 
         return np.sum(self.ic_matrix)
+
+    @property
+    def homer_odds(self):
+        return self.threshold_ln_odds if self._homer_odds is None else self._homer_odds
+
+    @homer_odds.setter
+    def homer_odds(self, val):
+        self._homer_odds = val
 
     @property
     def ic_matrix(self):
@@ -136,7 +145,7 @@ class Motif:
     def add_prob_line(self, line):
         self._motif_probs.append(line)
 
-    def score_match(self, match, disallow_homopolymer=True, homopolymer_one_off_len=8, score_zero_as_zero=1):
+    def score_match(self, match, disallow_homopolymer=True, homopolymer_one_off_len=6, score_zero_as_zero=1):
 
         if len(match) != len(self):
             msg = "Sequence length {l} not compatible with motif length {m}".format(l=len(match), m=len(self))
@@ -182,7 +191,7 @@ class __MotifScanner:
         self.motifs = motifs
         self.num_workers = num_workers
 
-    def scan(self, genome_fasta_file, atac_bed_file=None, promoter_bed=None, min_ic=None):
+    def scan(self, genome_fasta_file, atac_bed_file=None, promoter_bed=None, min_ic=None, threshold=None):
         """
         """
 
@@ -193,7 +202,7 @@ class __MotifScanner:
 
         try:
             if atac_bed_file is None and promoter_bed is None:
-                motif_data = self._scan_extract(motif_files, genome_fasta_file)
+                motif_data = self._scan_extract(motif_files, genome_fasta_file, threshold=threshold)
                 return self._postprocess(motif_data)
             elif atac_bed_file is not None and promoter_bed is None:
                 bed_file = load_bed_to_bedtools(atac_bed_file)
@@ -205,7 +214,7 @@ class __MotifScanner:
             extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
 
             try:
-                motif_data = self._scan_extract(motif_files, extracted_fasta_file)
+                motif_data = self._scan_extract(motif_files, extracted_fasta_file, threshold=threshold)
                 return self._postprocess(motif_data)
             finally:
                 os.remove(extracted_fasta_file)
@@ -217,17 +226,17 @@ class __MotifScanner:
                 except FileNotFoundError:
                     pass
 
-    def _scan_extract(self, motif_files, extracted_fasta_file):
+    def _scan_extract(self, motif_files, extracted_fasta_file, threshold=None):
         # If the number of workers is 1, run fimo directly
         if self.num_workers == 1:
             assert len(motif_files) == 1
-            return self._get_motifs(extracted_fasta_file, motif_files[0])
+            return self._get_motifs(extracted_fasta_file, motif_files[0], threshold=threshold)
 
         # Otherwise parallelize with a process pool (pathos because dill will do local functions)
         else:
             # Convenience local function
             def _get_chunk_motifs(chunk_file):
-                return self._get_motifs(extracted_fasta_file, chunk_file)
+                return self._get_motifs(extracted_fasta_file, chunk_file, threshold=threshold)
 
             with pathos.multiprocessing.Pool(self.num_workers) as pool:
                 motif_data = [data for data in pool.imap(_get_chunk_motifs, motif_files)]
@@ -241,7 +250,7 @@ class __MotifScanner:
     def _postprocess(self, motif_peaks):
         raise NotImplementedError
 
-    def _get_motifs(self, fasta_file, motif_file):
+    def _get_motifs(self, fasta_file, motif_file, threshold=None):
         raise NotImplementedError
 
     def _parse_output(self, output_handle):
@@ -288,13 +297,14 @@ def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
         file_type.write(file_name, motifs)
         return [file_name]
 
-    chunk_size = math.ceil(len(motifs) / num_workers)
+    num_workers = len(motifs) if num_workers > len(motifs) else num_workers
+    chunk_index = np.repeat(np.arange(num_workers), math.ceil(len(motifs) / num_workers))[0:len(motifs)]
 
     files = []
 
     for i in range(num_workers):
         file_name = os.path.join(temp_dir, "chunk" + str(i) + ".mchunk")
-        file_type.write(file_name, motifs[i * chunk_size:min((i + 1) * chunk_size, len(motifs))])
+        file_type.write(file_name, [m for m, b in zip(motifs, (chunk_index == i)) if b])
         files.append(file_name)
 
     return files

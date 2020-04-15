@@ -19,6 +19,7 @@ HOMER_START = 'start'
 HOMER_STOP = 'stop'
 
 HOMER2_FIND_COLS = [HOMER_SEQ_ID, HOMER_OFFSET, HOMER_MATCH, HOMER_MOTIF, HOMER_STRAND, HOMER_SCORE]
+HOMER2_EXPAND_STR_COLS = [HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]
 
 
 class HOMERScanner(__MotifScanner):
@@ -33,7 +34,7 @@ class HOMERScanner(__MotifScanner):
         motif_peaks = motif_peaks.drop_duplicates(subset=[HOMER_MOTIF, HOMER_START, HOMER_STOP, HOMER_CHROMOSOME])
         return motif_peaks
 
-    def _get_motifs(self, fasta_file, motif_file):
+    def _get_motifs(self, fasta_file, motif_file, threshold=None):
         homer_command = [HOMER_EXECUTABLE_PATH, "find", "-i", fasta_file, "-m", motif_file, "-offset", str(0)]
         proc = subprocess.run(homer_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
@@ -48,7 +49,7 @@ class HOMERScanner(__MotifScanner):
         motifs = pd.read_csv(output_handle, sep="\t", index_col=None, names=HOMER2_FIND_COLS)
 
         loc_data = motifs[HOMER_SEQ_ID].str.split(r"[\:\-]", expand=True)
-        loc_data.columns = [HOMER_CHROMOSOME, HOMER_START, HOMER_STOP, "UNK"]
+        loc_data.columns = HOMER2_EXPAND_STR_COLS if loc_data.shape[1] == 3 else HOMER2_EXPAND_STR_COLS + ["UNKNOWN"]
         loc_data[HOMER_START] = loc_data[HOMER_START].astype(int) + motifs[HOMER_OFFSET]
 
         match_width = motifs[HOMER_MATCH].str.len()
