@@ -298,7 +298,8 @@ def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
         return [file_name]
 
     num_workers = len(motifs) if num_workers > len(motifs) else num_workers
-    chunk_index = np.repeat(np.arange(num_workers), math.ceil(len(motifs) / num_workers))[0:len(motifs)]
+    chunk_index = np.repeat(np.arange(num_workers).reshape(1, -1), np.ceil(len(motifs) / num_workers), axis=0).flatten()
+    chunk_index = chunk_index[0:len(motifs)]
 
     files = []
 
