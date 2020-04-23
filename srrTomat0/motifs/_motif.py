@@ -217,7 +217,10 @@ class __MotifScanner:
                 motif_data = self._scan_extract(motif_files, extracted_fasta_file, threshold=threshold)
                 return self._postprocess(motif_data)
             finally:
-                os.remove(extracted_fasta_file)
+                try:
+                    os.remove(extracted_fasta_file)
+                except FileNotFoundError:
+                    pass
 
         finally:
             for file in motif_files:
