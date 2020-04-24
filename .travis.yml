@@ -11,6 +11,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
+  - conda config --append channels bioconda
   - conda install -c bioconda bedtools meme homer star samtools pysam sra-tools
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION bedtools meme homer star samtools pysam sra-tools
   - conda activate test-environment
