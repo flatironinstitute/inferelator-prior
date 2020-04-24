@@ -4,19 +4,21 @@ python:
   - 3.7
 install:
   - sudo apt-get -y update
-  - sudo apt-get -y install build-essential
-  - sudo apt-get -y install bedtools
-  - sudo apt-get -y install samtools
-  - sudo apt-get -y install rna-star
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - source "$HOME/miniconda/etc/profile.d/conda.sh"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  - conda info -a
+  - conda install -c bioconda bedtools fimo homer star samtools pysam sra-tools
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION bedtools fimo homer star samtools pysam sra-tools
+  - conda activate test-environment
+  - conda list
   - pip install nose
   - pip install codecov
-  - pip install pysam==0.15.3
   - python setup.py install
 script:
-  - wget https://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.10.4/setup-apt.sh
-  - chmod 755 setup-apt.sh
-  - sudo ./setup-apt.sh
-  - source /etc/profile.d/sra-tools.sh
   - git clone https://github.com/marianogabitto/ChromA.git
   - cd ChromA
   - python setup.py install
