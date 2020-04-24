@@ -1,9 +1,10 @@
 from srrTomat0.processor.gtf import load_gtf_to_dataframe, open_window, GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND
 from srrTomat0.processor.prior import build_prior_from_atac_motifs, MotifScorer
 from srrTomat0.motifs.motif_scan import MotifScan
-from srrTomat0.motifs import motifs_to_dataframe
+from srrTomat0.motifs import motifs_to_dataframe, INFO_COL, MOTIF_NAME_COL
 
 import argparse
+import pandas as pd
 
 
 def main():
@@ -18,25 +19,48 @@ def main():
     ap.add_argument("--tss", dest="tss", help="Use TSS for window", action='store_const', const=True, default=False)
     ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='fimo')
     ap.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
-                    metavar="BITS", type=int, default=6)
+                    metavar="BITS", type=int, default=None)
     ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
                     metavar="BASES", type=int, default=100)
+    ap.add_argument("--threshold", nargs="+", default=None, type=str)
 
     args = ap.parse_args()
 
-    prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
-                                                                   window_size=args.window_size, num_cores=args.cores,
-                                                                   use_tss=args.tss, motif_ic=args.min_ic,
-                                                                   scaner_type=args.scanner)
+    if args.threshold is None:
+        prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
+                                                                       window_size=args.window_size, num_cores=args.cores,
+                                                                       use_tss=args.tss, motif_ic=args.min_ic,
+                                                                       scaner_type=args.scanner)
 
-    prior_matrix.astype(int).to_csv(args.out, sep="\t")
-    prior_edges.to_csv(args.out + ".edges.tsv.gz", sep="\t")
-    raw_matrix.to_csv(args.out + ".raw.tsv", sep="\t")
+        prior_matrix.astype(int).to_csv(args.out, sep="\t")
+        prior_edges.to_csv(args.out + ".edges.tsv.gz", sep="\t")
+        raw_matrix.to_csv(args.out + ".raw.tsv", sep="\t")
+    else:
+        motifs = MotifScan.load_motif_file(args.motif)
+        motif_information = motifs_to_dataframe(motifs)
+        motif_information = motif_information[[MOTIF_NAME_COL, INFO_COL]].groupby(MOTIF_NAME_COL).agg("max")
+
+        edge_count = {}
+        for t in args.threshold:
+            prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation,
+                                                                           args.fasta,
+                                                                           window_size=args.window_size,
+                                                                           num_cores=args.cores,
+                                                                           use_tss=args.tss, motif_ic=args.min_ic,
+                                                                           scaner_type=args.scanner,
+                                                                           scanner_thresh=t)
+
+            edge_count[t] = (raw_matrix != 0).sum(axis=0)
+
+        edge_count = pd.concat(edge_count, axis=1)
+        edge_count = edge_count.join(motif_information[INFO_COL])
+
+        edge_count.to_csv(args.out, sep="\t")
 
 
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
                            use_tss=True, scaner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                           truncate_motifs=0.35):
+                           truncate_motifs=0.35, scanner_thresh="5e-4"):
     # Set the scanner type
     if scaner_type.lower() == 'fimo':
         MotifScan.set_type_fimo()
@@ -76,9 +100,8 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     motif_peaks = MotifScan.scanner(motifs=motifs, num_workers=num_cores).scan(genomic_fasta_file,
                                                                                atac_bed_file=atac_bed_file,
                                                                                promoter_bed=gene_locs,
-                                                                               min_ic=motif_ic)
-
-    motif_peaks.to_csv("All_peaks.tsv", sep="\t", index=False)
+                                                                               min_ic=motif_ic,
+                                                                               threshold=scanner_thresh)
 
     # PROCESS CHROMATIN PEAKS INTO NETWORK MATRIX #
 

@@ -25,28 +25,24 @@ PRIOR_COLS = [PRIOR_TF, PRIOR_GENE, PRIOR_COUNT, PRIOR_SCORE, PRIOR_MOTIF_IC, PR
 PRIOR_FDR = 'qvalue'
 PRIOR_SIG = 'significance'
 
-MINIMUM_MOTIF_IC_BITS = 6
-MINIMUM_HIT_BITS = 24
+MINIMUM_MOTIF_IC_BITS = None
 MAXIMUM_TANDEM_DISTANCE = 100
 
 
 class MotifScorer:
     min_binding_ic = MINIMUM_MOTIF_IC_BITS
-    min_hit = MINIMUM_HIT_BITS
     max_dist = MAXIMUM_TANDEM_DISTANCE
 
     @classmethod
-    def set_information_criteria(cls, min_binding_ic=None, min_hit_ic=None, max_dist=None):
+    def set_information_criteria(cls, min_binding_ic=None, max_dist=None):
         """
         Set parameters for
         :param min_binding_ic:
-        :param min_hit_ic:
         :param max_dist:
         :return:
         """
         cls.min_binding_ic = cls.min_binding_ic if min_binding_ic is None else min_binding_ic
         cls.max_dist = cls.max_dist if max_dist is None else max_dist
-        cls.min_hit = cls.min_hit if min_hit_ic is None else min_hit_ic
 
     @classmethod
     def score_tf(cls, tf_motifs):
@@ -62,7 +58,8 @@ class MotifScorer:
         assert isinstance(tf_motifs, pd.DataFrame)
 
         # Drop sites that don't meet threshold
-        tf_motifs = tf_motifs.loc[tf_motifs[SCAN_SCORE_COL] >= cls.min_binding_ic, :]
+        if cls.min_binding_ic is not None:
+            tf_motifs = tf_motifs.loc[tf_motifs[SCAN_SCORE_COL] >= cls.min_binding_ic, :]
         n_sites = tf_motifs.shape[0]
 
         # If there's no data return None
@@ -117,12 +114,15 @@ class MotifScorer:
 
     @classmethod
     def preprocess_motifs(cls, gene_motif_data, motif_information):
-        motif_information = motif_information.loc[motif_information[INFO_COL] >= cls.min_binding_ic, :]
-        keeper_motifs = motif_information[MOTIF_COL].unique().tolist()
-        keeper_idx = (gene_motif_data[MotifScan.name_col].isin(keeper_motifs))
-        keeper_idx &= (gene_motif_data[SCAN_SCORE_COL] >= cls.min_binding_ic)
+        if cls.min_binding_ic is not None:
+            motif_information = motif_information.loc[motif_information[INFO_COL] >= cls.min_binding_ic, :]
+            keeper_motifs = motif_information[MOTIF_COL].unique().tolist()
+            keeper_idx = (gene_motif_data[MotifScan.name_col].isin(keeper_motifs))
+            keeper_idx &= (gene_motif_data[SCAN_SCORE_COL] >= cls.min_binding_ic)
 
-        return gene_motif_data.loc[keeper_idx, :], motif_information
+            return gene_motif_data.loc[keeper_idx, :], motif_information
+        else:
+            return gene_motif_data, motif_information
 
     @staticmethod
     def _top_hit(tf_motifs):
@@ -196,11 +196,14 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
 
     np.random.seed(seed)
 
+    target_size = int(0.005 * genes.shape[0])
     thresholded_data = []
     # Threshold using DBSCAN outlier detection
     for reg in prior_data[PRIOR_TF].unique():
-        reg_edge = prior_data.loc[prior_data[PRIOR_TF] == reg, :].copy()
-        thresholded_data.append(_find_outliers_dbscan(reg_edge))
+        reg_edge = prior_data.loc[prior_data[PRIOR_TF] == reg, :]
+        if reg_edge.shape[0] > target_size:
+            reg_edge = reg_edge.loc[_find_outliers_dbscan(reg_edge), :]
+        thresholded_data.append(reg_edge.copy())
 
     thresholded_data = pd.concat(thresholded_data).reset_index(drop=True)
 
@@ -244,7 +247,7 @@ def _find_outliers_dbscan(tf_data):
     if (np.min(scores[lbl_idx]) > mean_score) and (np.sum(lbl_idx) < (2 * np.sum(outlier_labels))):
         keep_edge |= lbl_idx
 
-    return tf_data.loc[keep_edge, :].copy()
+    return keep_edge
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
