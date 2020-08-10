@@ -54,6 +54,9 @@ class FIMOScanner(__MotifScanner):
             motifs.dropna(subset=[FIMO_START, FIMO_STOP], inplace=True, how='any')
             motifs[FIMO_START], motifs[FIMO_STOP] = motifs[FIMO_START].astype(int), motifs[FIMO_STOP].astype(int)
 
+            if "#pattern name" in motifs.columns:
+                raise RuntimeError("FIMO version not supported; update to 5.0.5")
+
             motifs[SCAN_SCORE_COL] = [self.motifs[x].score_match(y) for x, y in
                                       zip(motifs[FIMO_MOTIF], motifs[FIMO_SEQUENCE])]
 
