@@ -4,6 +4,8 @@ from srrTomat0.motifs.motif_scan import MotifScan
 from srrTomat0.motifs import motifs_to_dataframe, INFO_COL, MOTIF_NAME_COL
 
 import argparse
+import os
+import pathlib
 import pandas as pd
 
 
@@ -13,7 +15,7 @@ def main():
     ap.add_argument("-a", "--atac", dest="atac", help="ATAC BED file", metavar="FILE", default=None)
     ap.add_argument("-f", "--fasta", dest="fasta", help="Genomic FASTA file", metavar="FILE", required=True)
     ap.add_argument("-g", "--gtf", dest="annotation", help="GTF Annotation File", metavar="PATH", required=True)
-    ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
+    ap.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", required=True)
     ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0, nargs="+")
     ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=1)
     ap.add_argument("--tss", dest="tss", help="Use TSS for window", action='store_const', const=True, default=False)
@@ -25,16 +27,22 @@ def main():
     ap.add_argument("--threshold", nargs="+", default=None, type=str)
 
     args = ap.parse_args()
+    out_prefix = os.path.abspath(os.path.expanduser(args.out))
+    out_path = os.path.join(*pathlib.PurePath(out_prefix).parts[:-1])
+    if not os.path.exists(out_path):
+        os.makedirs(out_prefix)
 
     if args.threshold is None:
-        prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation, args.fasta,
-                                                                       window_size=args.window_size, num_cores=args.cores,
+        prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation,
+                                                                       args.fasta,
+                                                                       window_size=args.window_size,
+                                                                       num_cores=args.cores,
                                                                        use_tss=args.tss, motif_ic=args.min_ic,
                                                                        scaner_type=args.scanner)
 
-        prior_matrix.astype(int).to_csv(args.out, sep="\t")
-        prior_edges.to_csv(args.out + ".edges.tsv.gz", sep="\t")
-        raw_matrix.to_csv(args.out + ".raw.tsv", sep="\t")
+        prior_matrix.astype(int).to_csv(out_prefix + "_edge_matrix.tsv.gz", sep="\t")
+        prior_edges.to_csv(out_prefix + "_edge_table.tsv.gz", sep="\t")
+        raw_matrix.to_csv(out_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
     else:
         motifs = MotifScan.load_motif_file(args.motif)
         motif_information = motifs_to_dataframe(motifs)
@@ -55,12 +63,12 @@ def main():
         edge_count = pd.concat(edge_count, axis=1)
         edge_count = edge_count.join(motif_information[INFO_COL])
 
-        edge_count.to_csv(args.out, sep="\t")
+        edge_count.to_csv(out_prefix + "_edge_count.tsv", sep="\t")
 
 
 def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
                            use_tss=True, scaner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                           truncate_motifs=0.35, scanner_thresh="5e-4"):
+                           truncate_motifs=0.35, scanner_thresh="1e-4"):
     # Set the scanner type
     if scaner_type.lower() == 'fimo':
         MotifScan.set_type_fimo()

@@ -3,10 +3,10 @@ from srrTomat0.motifs.motif_scan import MotifScan
 from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF_NAME_COL
 
 import pandas as pd
+import pandas.api.types as pat
 import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
-from collections import Counter
 
 
 PRIOR_TF = 'regulator'
@@ -66,11 +66,21 @@ class MotifScorer:
         if n_sites == 0:
             return None
 
+        # Sort and check for overlapping motifs
+        tf_motifs = tf_motifs.sort_values(by=MotifScan.start_col)
+        overlap = tf_motifs[MotifScan.start_col] < tf_motifs[MotifScan.stop_col].shift()
+
+        # Collapse together any overlapping motifs to the maximum score
+        if overlap.any():
+            tf_motifs["group_up"] = (~overlap).cumsum()
+            tf_motifs = tf_motifs.groupby("group_up").agg({MotifScan.start_col: "min",
+                                                           MotifScan.stop_col: "max",
+                                                           SCAN_SCORE_COL: "max"})
+            n_sites = tf_motifs.shape[0]
+
         # If there's only one site check it and then return
         if n_sites == 1:
             return cls._top_hit(tf_motifs)
-
-        tf_motifs = tf_motifs.sort_values(by=MotifScan.start_col)
 
         # If there's only two sites check it and then return
         if n_sites == 2:
@@ -146,7 +156,7 @@ class MotifScorer:
             return series
 
 
-def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42):
+def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42, min_filter=0.005):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
@@ -196,24 +206,22 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
 
     np.random.seed(seed)
 
-    target_size = int(0.005 * genes.shape[0])
     thresholded_data = []
     # Threshold using DBSCAN outlier detection
     for reg in prior_data[PRIOR_TF].unique():
         reg_edge = prior_data.loc[prior_data[PRIOR_TF] == reg, :]
-        if reg_edge.shape[0] > target_size:
-            reg_edge = reg_edge.loc[_find_outliers_dbscan(reg_edge), :]
+        reg_edge = reg_edge.loc[_find_outliers_dbscan(reg_edge), :]
         thresholded_data.append(reg_edge.copy())
+
+    # Pivot to a matrix, extend to all TFs, and fill with 1s
+    raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
+    raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
 
     thresholded_data = pd.concat(thresholded_data).reset_index(drop=True)
 
     # Pivot to a matrix, extend to all TFs, and fill with 1s
     prior_matrix = thresholded_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
     prior_matrix = prior_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
-
-    # Pivot to a matrix, extend to all TFs, and fill with 1s
-    raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
-    raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
 
     return thresholded_data, prior_matrix, raw_matrix
 
@@ -248,6 +256,22 @@ def _find_outliers_dbscan(tf_data):
         keep_edge |= lbl_idx
 
     return keep_edge
+
+
+def _find_outliers_stability(tf_data, steps=100, threshold=0.01):
+    scores = tf_data[PRIOR_SCORE].values.reshape(-1, 1)
+    smin, smax = scores.min(), scores.max()
+
+    step_size = (smax - smin) / steps
+    step_cuts = np.array([smin + step_size * i for i in range(steps)])
+    stabs = np.array([np.mean([scores <= s]) for s in step_cuts])
+    diffs = pd.Series(np.roll(stabs, -1)[:-1] - stabs[:-1]).cummax().values
+
+    threshold_steps = step_cuts[1:][diffs < threshold]
+    selected_score_cut = np.max(threshold_steps) if len(threshold_steps) > 0 else step_cuts[0]
+    print(tf_data[PRIOR_TF].iloc[0], end=": ")
+    print(selected_score_cut)
+    return scores >= selected_score_cut
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
