@@ -1,8 +1,9 @@
 import subprocess
 import io
 import pandas as pd
+import numpy as np
 
-from srrTomat0.motifs import chunk_motifs, homer_motif, SCAN_SCORE_COL
+from srrTomat0.motifs import chunk_motifs, homer_motif, SCAN_SCORE_COL, SCORE_PER_BASE
 from srrTomat0.motifs._motif import __MotifScanner
 from srrTomat0 import HOMER_EXECUTABLE_PATH
 
@@ -62,6 +63,8 @@ class HOMERScanner(__MotifScanner):
         motifs.drop([HOMER_SEQ_ID, HOMER_OFFSET], inplace=True, axis=1)
 
         motifs[SCAN_SCORE_COL] = [self.motifs[x].score_match(y) for x, y in
+                                  zip(motifs[HOMER_MOTIF], motifs[HOMER_MATCH])]
+        motifs[SCORE_PER_BASE] = [np.array(self.motifs[x]._info_match(y)) for x, y in
                                   zip(motifs[HOMER_MOTIF], motifs[HOMER_MATCH])]
 
         return motifs

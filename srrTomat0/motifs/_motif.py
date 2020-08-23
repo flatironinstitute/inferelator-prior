@@ -18,6 +18,7 @@ MOTIF_COL = "Motif_ID"
 MOTIF_NAME_COL = "Motif_Name"
 
 SCAN_SCORE_COL = "Tomat0_Score"
+SCORE_PER_BASE = "Per Base Array"
 
 
 class Motif:
@@ -29,6 +30,7 @@ class Motif:
     _motif_prob_array = None
     _motif_alphabet = None
     _motif_background = None
+    _motif_species = None
     _alphabet_map = None
     _consensus_seq = None
     _info_matrix = None
@@ -125,6 +127,15 @@ class Motif:
         second_prob = np.sort(self.probability_matrix, axis=1)[:, 2]
         return self.max_ln_odds - max((np.sum(np.log(second_prob[second_prob > 0.25] / 0.25)), 0.1 * self.max_ln_odds))
 
+    @property
+    def species(self):
+        return self._motif_species
+
+    @species.setter
+    def species(self, new_species):
+        self._motif_species = [] if self._motif_species is None else self._motif_species
+        self._motif_species.append(new_species)
+
     def __len__(self):
         return self.probability_matrix.shape[0] if self.probability_matrix is not None else 0
 
@@ -161,10 +172,10 @@ class Motif:
             return 0
 
         # Score anything with excessive nucleotides that have a p ~ 0.0 as 0
-        if score_zero_as_zero is not None and sum(p < 0.001 for p in self.__prob_match(match)) > score_zero_as_zero:
+        if score_zero_as_zero is not None and sum(p < 0.001 for p in self._prob_match(match)) > score_zero_as_zero:
             return 0
 
-        mse_ic = np.sum(np.square(np.subtract(self.__info_match(self.consensus), self.__info_match(match))))
+        mse_ic = np.sum(np.square(np.subtract(self._info_match(self.consensus), self._info_match(match))))
         return max((self.information_content - mse_ic, 0))
 
     def truncate(self, threshold=0.35):
@@ -173,10 +184,10 @@ class Motif:
         self.probability_matrix = self.probability_matrix[keepers, :]
         self._motif_probs = list(itertools.compress(self._motif_probs, keepers))
 
-    def __prob_match(self, match):
+    def _prob_match(self, match):
         return [self.probability_matrix[i, self._alphabet_map[ch.lower()]] for i, ch in enumerate(match)]
 
-    def __info_match(self, match):
+    def _info_match(self, match):
         return [self.ic_matrix[i, self._alphabet_map[ch.lower()]] for i, ch in enumerate(match)]
 
 

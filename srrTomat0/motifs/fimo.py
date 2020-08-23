@@ -1,10 +1,11 @@
 import io
 import subprocess
 import pandas as pd
+import numpy as np
 import pandas.errors as pde
 
 from srrTomat0 import FIMO_EXECUTABLE_PATH
-from srrTomat0.motifs import meme, chunk_motifs, SCAN_SCORE_COL
+from srrTomat0.motifs import meme, chunk_motifs, SCAN_SCORE_COL, SCORE_PER_BASE
 from srrTomat0.motifs._motif import __MotifScanner
 
 FIMO_DATA_SUFFIX = ".fimo.tsv"
@@ -58,6 +59,8 @@ class FIMOScanner(__MotifScanner):
                 raise RuntimeError("FIMO version not supported; update to 5.0.5")
 
             motifs[SCAN_SCORE_COL] = [self.motifs[x].score_match(y) for x, y in
+                                      zip(motifs[FIMO_MOTIF], motifs[FIMO_SEQUENCE])]
+            motifs[SCORE_PER_BASE] = [np.array(self.motifs[x]._info_match(y)) for x, y in
                                       zip(motifs[FIMO_MOTIF], motifs[FIMO_SEQUENCE])]
 
             return motifs
