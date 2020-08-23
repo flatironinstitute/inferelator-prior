@@ -1,13 +1,12 @@
 from srrTomat0.processor.gtf import GTF_GENENAME, GTF_CHROMOSOME, SEQ_START, SEQ_STOP
 from srrTomat0.motifs.motif_scan import MotifScan
-from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF_NAME_COL
+from srrTomat0.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF_NAME_COL, SCORE_PER_BASE
 
 import pandas as pd
 import pandas.api.types as pat
 import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
-
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -50,8 +49,6 @@ class MotifScorer:
         Score a single TF
         :param tf_motifs: Motif binding sites from FIMO/HOMER
         :type tf_motifs: pd.DataFrame
-        :param motif_len: Length of the motif recognition site
-        :type motif_len: int
         :return: Score if the TF should be kept, None otherwise
         """
 
@@ -72,10 +69,16 @@ class MotifScorer:
 
         # Collapse together any overlapping motifs to the maximum score
         if overlap.any():
-            tf_motifs["group_up"] = (~overlap).cumsum()
-            tf_motifs = tf_motifs.groupby("group_up").agg({MotifScan.start_col: "min",
-                                                           MotifScan.stop_col: "max",
-                                                           SCAN_SCORE_COL: "max"})
+
+            if (tf_motifs[MOTIF_NAME_COL] == "GAL4").any():
+                print(tf_motifs.sort_values(by=MotifScan.start_col))
+
+            tf_motifs["GROUP"] = (~overlap).cumsum()
+            tf_motifs = pd.concat([cls._agg_per_base(group) for _, group in tf_motifs.groupby("GROUP")])
+
+            if (tf_motifs[MOTIF_NAME_COL] == "GAL4").any():
+                print(tf_motifs.sort_values(by=MotifScan.start_col))
+
             n_sites = tf_motifs.shape[0]
 
         # If there's only one site check it and then return
@@ -155,8 +158,29 @@ class MotifScorer:
         except AttributeError:
             return series
 
+    @classmethod
+    def _agg_per_base(cls, overlap_df):
+        """
+        Aggregate an overlapping set of motif peaks by summing the maximum per-base IC for each base
+        :param overlap_df:
+        :return:
+        """
+        if len(overlap_df) == 1:
+            return overlap_df[[MotifScan.start_col, MotifScan.stop_col, SCAN_SCORE_COL, MOTIF_NAME_COL]]
 
-def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42, min_filter=0.005):
+        new_df = []
+        for i in overlap_df.index:
+            new_df.extend([(a, b) for a, b in zip(range(overlap_df.loc[i, MotifScan.start_col],
+                                                        overlap_df.loc[i, MotifScan.stop_col]),
+                                                  overlap_df.loc[i, SCORE_PER_BASE])])
+
+        return pd.DataFrame({MotifScan.start_col: [overlap_df[MotifScan.start_col].min()],
+                             MotifScan.stop_col: [overlap_df[MotifScan.stop_col].max()],
+                             SCAN_SCORE_COL: pd.DataFrame(new_df, columns=["B", "S"]).groupby("B").agg('max').sum(),
+                             MOTIF_NAME_COL: [overlap_df[MOTIF_NAME_COL].unique()[0]]})
+
+
+def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
@@ -176,7 +200,7 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
 
     # Trim down the motif dataframe and put it into a dict by chromosome
     motif_peaks = motif_peaks.reindex([MotifScan.name_col, MotifScan.chromosome_col, MotifScan.start_col,
-                                       MotifScan.stop_col, SCAN_SCORE_COL], axis=1)
+                                       MotifScan.stop_col, SCAN_SCORE_COL, SCORE_PER_BASE], axis=1)
 
     motif_id_to_name = motif_information.reindex([MOTIF_COL, MOTIF_NAME_COL], axis=1)
     invalid_names = (pd.isnull(motif_id_to_name[MOTIF_NAME_COL]) |
@@ -240,38 +264,27 @@ def _gene_gen(genes, motif_peaks):
             continue
 
 
-def _find_outliers_dbscan(tf_data):
+def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
     scores = tf_data[PRIOR_SCORE].values.reshape(-1, 1)
     counts = tf_data.shape[0]
 
-    labels = DBSCAN(min_samples=np.sqrt(counts), eps=1).fit_predict(scores)
-    outlier_labels = labels == -1
+    labels = DBSCAN(min_samples=np.log2(counts), eps=scores.max() / 100).fit_predict(scores)
 
-    mean_score = np.mean(scores)
-    keep_edge = pd.Series(outlier_labels & (tf_data[PRIOR_SCORE].values > mean_score), index=tf_data.index)
+    # Keep any outliers (outliers near 0 should be discarded)
+    keep_edge = pd.Series((labels == -1) & (tf_data[PRIOR_SCORE].values > np.mean(scores)), index=tf_data.index)
 
-    # Check the highest non-outlier cluster to see if it's worth including
-    lbl_idx = labels == (labels[scores[~keep_edge.values].argmax()])
-    if (np.min(scores[lbl_idx]) > mean_score) and (np.sum(lbl_idx) < (2 * np.sum(outlier_labels))):
-        keep_edge |= lbl_idx
+    # Iterate through clusters in reverse order until at least t_1 and no more than t_2 edges are included
+    for lab in np.unique(labels)[::-1]:
+        current_ratio = keep_edge.sum() / keep_edge.size
+        new_labels = labels == lab
+        if current_ratio > t_1:
+            break
+        elif current_ratio + (new_labels.sum() / new_labels.size) > t_2:
+            break
+        else:
+            keep_edge |= new_labels
 
     return keep_edge
-
-
-def _find_outliers_stability(tf_data, steps=100, threshold=0.01):
-    scores = tf_data[PRIOR_SCORE].values.reshape(-1, 1)
-    smin, smax = scores.min(), scores.max()
-
-    step_size = (smax - smin) / steps
-    step_cuts = np.array([smin + step_size * i for i in range(steps)])
-    stabs = np.array([np.mean([scores <= s]) for s in step_cuts])
-    diffs = pd.Series(np.roll(stabs, -1)[:-1] - stabs[:-1]).cummax().values
-
-    threshold_steps = step_cuts[1:][diffs < threshold]
-    selected_score_cut = np.max(threshold_steps) if len(threshold_steps) > 0 else step_cuts[0]
-    print(tf_data[PRIOR_TF].iloc[0], end=": ")
-    print(selected_score_cut)
-    return scores >= selected_score_cut
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
