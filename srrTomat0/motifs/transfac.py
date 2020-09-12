@@ -37,42 +37,53 @@ def _parse_transfac_file(transfac_fh):
 
 def __parse_motif_gen(handle):
 
-    active_motif = None
-    active_ac, active_id, active_species, active_name = None, None, None, []
+    active_motif = Motif()
 
     for line in handle:
-        line = line.strip().lower()
+        line = line.strip()
+
+        if len(line) < 2:
+            continue
+
+        line_id, line = line[:2].upper(), line[2:].strip()
 
         # Spacer
-        if line.startswith("XX"):
+        if line_id == "XX":
             continue
 
         # New record
-        elif line.startswith("//") and active_motif is not None:
+        elif line_id == "//" and len(active_motif) > 0:
             yield active_motif
-            active_ac, active_id, active_alphabet, active_species = None, None, None, []
+            active_motif = Motif()
+
+        elif line_id == "//":
+            active_motif = Motif()
 
         # Accession
-        elif line.startswith("AC"):
-            active_ac = line[2:].strip()
+        elif line_id == "AC":
+            active_motif.accession = line
 
         # ID
-        elif line.startswith("ID"):
-            active_id = line[2:].strip()
+        elif line_id == "ID":
+            active_motif.motif_id = line
 
         # Name
-        elif line.startswith("NA"):
-            active_name = line[2:].strip()
+        elif line_id == "NA":
+            active_motif.motif_name = line
 
         # Alphabet
-        elif line.startswith("P0"):
-            active_motif = Motif(active_ac, active_name, line[2:].strip().split())
+        elif line_id == "P0":
+            active_motif.alphabet = line.split()
+
+        elif line_id == "BF":
+            active_motif.species = line
 
         # Prob
-        elif line[:2].isdigit():
-            probs = line[2:].strip().split()[:-1]
-            total_seqs = sum(line)
-            active_motif.add_prob_line(list(map(lambda x: float(x) / total_seqs, probs)))
+        elif line_id.isdigit():
+            probs = list(map(float, line.split()[:-1]))
+            total_seqs = sum(probs)
+            active_motif.add_prob_line(list(map(lambda x: x / total_seqs, probs)))
 
-    if active_motif is not None:
+    if len(active_motif) > 0:
         yield active_motif
+

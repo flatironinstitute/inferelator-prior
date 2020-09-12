@@ -31,6 +31,7 @@ class Motif:
     _motif_alphabet = None
     _motif_background = None
     _motif_species = None
+    _motif_accession = None
     _alphabet_map = None
     _consensus_seq = None
     _info_matrix = None
@@ -39,6 +40,39 @@ class Motif:
     @property
     def alphabet(self):
         return self._motif_alphabet
+
+    @alphabet.setter
+    def alphabet(self, new_alphabet):
+        if new_alphabet is not None:
+            self._motif_alphabet = new_alphabet
+            self._alphabet_map = {ch.lower(): i for i, ch in enumerate(self._motif_alphabet)}
+
+    @property
+    def accession(self):
+        return self._motif_accession
+
+    @accession.setter
+    def accession(self, new_accession):
+        if new_accession is not None:
+            self._motif_accession = new_accession
+
+    @property
+    def id(self):
+        return self.motif_id
+
+    @id.setter
+    def id(self, new_id):
+        if new_id is not None:
+            self.motif_id = new_id
+
+    @property
+    def name(self):
+        return self.motif_name
+
+    @name.setter
+    def name(self, new_name):
+        if new_name is not None:
+            self.motif_name = new_name
 
     @property
     def alphabet_len(self):
@@ -133,8 +167,16 @@ class Motif:
 
     @species.setter
     def species(self, new_species):
-        self._motif_species = [] if self._motif_species is None else self._motif_species
-        self._motif_species.append(new_species)
+        is_list = isinstance(new_species, (list, tuple))
+
+        if is_list and self._motif_species is None:
+            self._motif_species = new_species
+        elif is_list:
+            self._motif_species.extend(new_species)
+        elif self._motif_species is None:
+            self._motif_species = [new_species]
+        else:
+            self._motif_species.append(new_species)
 
     def __len__(self):
         return self.probability_matrix.shape[0] if self.probability_matrix is not None else 0
@@ -145,11 +187,10 @@ class Motif:
                                                                    el=len(self),
                                                                    ic=self.information_content)
 
-    def __init__(self, motif_id, motif_name, motif_alphabet, motif_background=None):
-        self.motif_id = motif_id
-        self.motif_name = motif_name
-        self._motif_alphabet = motif_alphabet
-        self._alphabet_map = {ch.lower(): i for i, ch in enumerate(self._motif_alphabet)}
+    def __init__(self, motif_id=None, motif_name=None, motif_alphabet=None, motif_background=None):
+        self.id = motif_id
+        self.name = motif_name
+        self.alphabet = motif_alphabet
         self._motif_background = motif_background
         self._motif_probs = []
 
@@ -189,6 +230,14 @@ class Motif:
 
     def _info_match(self, match):
         return [self.ic_matrix[i, self._alphabet_map[ch.lower()]] for i, ch in enumerate(match)]
+
+    def species_contains(self, match_str):
+        if self.species is not None:
+            match_str = match_str.lower()
+            return any(match_str in s.lower() for s in self.species)
+        else:
+            return False
+
 
 
 class __MotifScanner:
