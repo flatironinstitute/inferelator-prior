@@ -163,11 +163,11 @@ class MotifScorer:
         if len(overlap_df) == 1:
             return overlap_df[[MotifScan.start_col, MotifScan.stop_col, SCAN_SCORE_COL, MOTIF_NAME_COL]]
 
-        new_df = []
-        for i in overlap_df.index:
-            new_df.extend([(a, b) for a, b in zip(range(overlap_df.loc[i, MotifScan.start_col],
-                                                        overlap_df.loc[i, MotifScan.stop_col]),
-                                                  overlap_df.loc[i, SCORE_PER_BASE])])
+        overlap_df.reset_index(inplace=True)
+
+        new_df = [(a, b) for i in overlap_df.index for a, b in zip(range(overlap_df.loc[i, MotifScan.start_col],
+                                                                         overlap_df.loc[i, MotifScan.stop_col]),
+                                                                   overlap_df.loc[i, SCORE_PER_BASE])]
 
         return pd.DataFrame({MotifScan.start_col: [overlap_df[MotifScan.start_col].min()],
                              MotifScan.stop_col: [overlap_df[MotifScan.stop_col].max()],
@@ -281,13 +281,16 @@ def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
     return keep_edge
 
 
-def _find_outliers_elliptic_envelope(tf_data, target=0.025):
+def _find_outliers_elliptic_envelope(tf_data, target=0.02):
 
     scores = tf_data.values
     keep_genes = pd.Series(False, index=tf_data.index)
 
     if np.var(scores) == 0.:
         return keep_genes
+
+    if np.sum(scores > 0) / scores.size * 2 < target:
+        return keep_genes | (scores > 0)
 
     try:
         labels = EllipticEnvelope(contamination=target, support_fraction=1).fit_predict(scores.reshape(-1,1))
