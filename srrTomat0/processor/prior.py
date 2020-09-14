@@ -281,7 +281,7 @@ def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
     return keep_edge
 
 
-def _find_outliers_elliptic_envelope(tf_data, target=0.01):
+def _find_outliers_elliptic_envelope(tf_data, target=0.025):
 
     scores = tf_data.values
     keep_genes = pd.Series(False, index=tf_data.index)
