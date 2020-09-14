@@ -7,6 +7,7 @@ import pandas.api.types as pat
 import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
+from sklearn.covariance import EllipticEnvelope
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -67,17 +68,11 @@ class MotifScorer:
         tf_motifs = tf_motifs.sort_values(by=MotifScan.start_col)
         overlap = tf_motifs[MotifScan.start_col] < tf_motifs[MotifScan.stop_col].shift()
 
-        # Collapse together any overlapping motifs to the maximum score
+        # Collapse together any overlapping motifs to the maximum score on a per-base basis
         if overlap.any():
-
-            if (tf_motifs[MOTIF_NAME_COL] == "GAL4").any():
-                print(tf_motifs.sort_values(by=MotifScan.start_col))
 
             tf_motifs["GROUP"] = (~overlap).cumsum()
             tf_motifs = pd.concat([cls._agg_per_base(group) for _, group in tf_motifs.groupby("GROUP")])
-
-            if (tf_motifs[MOTIF_NAME_COL] == "GAL4").any():
-                print(tf_motifs.sort_values(by=MotifScan.start_col))
 
             n_sites = tf_motifs.shape[0]
 
@@ -230,22 +225,21 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
 
     np.random.seed(seed)
 
-    thresholded_data = []
-    # Threshold using DBSCAN outlier detection
-    for reg in prior_data[PRIOR_TF].unique():
-        reg_edge = prior_data.loc[prior_data[PRIOR_TF] == reg, :]
-        reg_edge = reg_edge.loc[_find_outliers_dbscan(reg_edge), :]
-        thresholded_data.append(reg_edge.copy())
-
-    # Pivot to a matrix, extend to all TFs, and fill with 1s
+    # Pivot to a matrix, extend to all TFs, and fill with 0s
     raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
     raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+    raw_matrix.index.name = PRIOR_GENE
 
-    thresholded_data = pd.concat(thresholded_data).reset_index(drop=True)
+    prior_matrix = raw_matrix.copy()
+    # Threshold using DBSCAN outlier detection
+    for reg in prior_matrix.columns:
+        prior_matrix.loc[~_find_outliers_elliptic_envelope(prior_matrix[reg]), reg] = 0.
 
-    # Pivot to a matrix, extend to all TFs, and fill with 1s
-    prior_matrix = thresholded_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
-    prior_matrix = prior_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+    # Keep the peaks that we want
+    thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
+    thresholded_data = prior_data.merge(thresholded_data, on=[PRIOR_GENE, PRIOR_TF])
+    thresholded_data = thresholded_data.loc[thresholded_data['T'] != 0, :]
+    thresholded_data.drop('T', axis=1, inplace=True)
 
     return thresholded_data, prior_matrix, raw_matrix
 
@@ -265,13 +259,13 @@ def _gene_gen(genes, motif_peaks):
 
 
 def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
-    scores = tf_data[PRIOR_SCORE].values.reshape(-1, 1)
+    scores = tf_data.values.reshape(-1, 1)
     counts = tf_data.shape[0]
 
     labels = DBSCAN(min_samples=np.log2(counts), eps=scores.max() / 100).fit_predict(scores)
 
     # Keep any outliers (outliers near 0 should be discarded)
-    keep_edge = pd.Series((labels == -1) & (tf_data[PRIOR_SCORE].values > np.mean(scores)), index=tf_data.index)
+    keep_edge = pd.Series((labels == -1) & (tf_data.values > np.mean(scores)), index=tf_data.index)
 
     # Iterate through clusters in reverse order until at least t_1 and no more than t_2 edges are included
     for lab in np.unique(labels)[::-1]:
@@ -287,22 +281,44 @@ def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
     return keep_edge
 
 
+def _find_outliers_elliptic_envelope(tf_data, target=0.01):
+
+    scores = tf_data.values
+    keep_genes = pd.Series(False, index=tf_data.index)
+
+    if np.var(scores) == 0.:
+        return keep_genes
+
+    try:
+        labels = EllipticEnvelope(contamination=target, support_fraction=1).fit_predict(scores.reshape(-1,1))
+    except ValueError as _err:
+        return keep_genes
+
+    keep_genes |= ((labels == -1) & (scores > np.mean(scores)))
+    return keep_genes
+
+
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
     """
-    Takes ATAC peaks and Motif locations near a single gene and turns them into TF-gene scores
+    Takes motifs identified by scan near a single gene and turns them into TF-gene scores
 
-    :param gene_data: (str, pd.DataFrame, int, pd.DataFrame)
-        Unpacks to gene_name, motif_data, num_iteration, motif_data
-        gene_name: str identifier for the gene
-        chromatin_data: pd.DataFrame which has the ATAC (open chromatin) peaks near the gene
-        motif_data: pd.DataFrame which has the Motif locations near the gene
-        num_iteration: int the number of genes which have been processed
+    :param gene_info: Gene information from annotations
+    :type gene_info: pd.DataFrame
+    :param motif_data: Motif locations near the gene
+    :type motif_data: pd.DataFrame
+    :param motif_information: Motif information
+    :type motif_information: pd.DataFrame
+    :param num_iteration: Number of genes which have been processed
+    :type num_iteration: int
     :return prior_edges: pd.DataFrame [N x 5]
         'regulator': tf name
         'target': gene name
         'count': number of motifs found
-        'score': negative log10 of p-value
-        'pvalue': p-value calculated using poisson survival function
+        'score': information content-based score of binding site
+        'motif_ic': information content score of motif
+        'start': binding site start
+        'stop': binding site stop
+        'chromosome' binding site chromosome
     """
 
     gene_name = gene_info[GTF_GENENAME]
