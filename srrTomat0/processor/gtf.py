@@ -39,12 +39,13 @@ def load_gtf_to_dataframe(gtf_path):
     return _add_TSS(annotations)
 
 
-def open_window(annotation_dataframe, window_size, use_tss=False):
+def open_window(annotation_dataframe, window_size, use_tss=False, check_against_fasta=None):
     """
     This needs to adjust the start and stop in the annotation dataframe with window sizes
     :param annotation_dataframe: pd.DataFrame
     :param window_size: int
     :param use_tss: bool
+    :param check_against_fasta:
     :return window_annotate: pd.DataFrame
     """
     window_annotate = annotation_dataframe.copy()
@@ -71,6 +72,23 @@ def open_window(annotation_dataframe, window_size, use_tss=False):
         window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_STOP] = window_annotate[SEQ_STOP] + w_up
 
     window_annotate.loc[window_annotate[SEQ_START] < 0, SEQ_START] = 0
+
+    if check_against_fasta is not None:
+        fasta_len = {}
+        with open(check_against_fasta, mode="r") as fasta_fh:
+            current_record = None
+            for line in fasta_fh:
+                if line.startswith(">"):
+                    current_record = line[1:].split()[0]
+                    fasta_len[current_record] = 0
+                else:
+                    fasta_len[current_record] += len(line.strip())
+
+        for chromosome in window_annotate[GTF_CHROMOSOME].unique():
+            _chrlen = fasta_len[chromosome]
+            _idx = window_annotate[GTF_CHROMOSOME] == chromosome
+            window_annotate.loc[_idx & (window_annotate[SEQ_STOP] > _chrlen), SEQ_STOP] = _chrlen
+            window_annotate.loc[_idx & (window_annotate[SEQ_START] > _chrlen), SEQ_START] = _chrlen
 
     return window_annotate
 
