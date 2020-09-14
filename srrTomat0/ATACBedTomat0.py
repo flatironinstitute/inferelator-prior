@@ -11,7 +11,9 @@ import pandas as pd
 
 def main():
     ap = argparse.ArgumentParser(description="Create a prior from open chromatin peaks and motif peaks")
-    ap.add_argument("-m", "--motif", dest="motif", help="Motif MEME file", metavar="PATH", required=True)
+    ap.add_argument("-m", "--motif", dest="motif", help="Motif file", metavar="PATH", required=True)
+    ap.add_argument("--motif_format", dest="motif_format", help="Motif file FORMAT (transfac or meme)",
+                    metavar="FORMAT", default="meme")
     ap.add_argument("-a", "--atac", dest="atac", help="ATAC BED file", metavar="FILE", default=None)
     ap.add_argument("-f", "--fasta", dest="fasta", help="Genomic FASTA file", metavar="FILE", required=True)
     ap.add_argument("-g", "--gtf", dest="annotation", help="GTF Annotation File", metavar="PATH", required=True)
@@ -38,7 +40,8 @@ def main():
                                                                        window_size=args.window_size,
                                                                        num_cores=args.cores,
                                                                        use_tss=args.tss, motif_ic=args.min_ic,
-                                                                       scaner_type=args.scanner)
+                                                                       scanner_type=args.scanner,
+                                                                       motif_format=args.motif_format)
 
         prior_matrix.astype(int).to_csv(out_prefix + "_edge_matrix.tsv.gz", sep="\t")
         prior_edges.to_csv(out_prefix + "_edge_table.tsv.gz", sep="\t")
@@ -55,8 +58,9 @@ def main():
                                                                            window_size=args.window_size,
                                                                            num_cores=args.cores,
                                                                            use_tss=args.tss, motif_ic=args.min_ic,
-                                                                           scaner_type=args.scanner,
-                                                                           scanner_thresh=t)
+                                                                           scanner_type=args.scanner,
+                                                                           scanner_thresh=t,
+                                                                           motif_format=args.motif_format)
 
             edge_count[t] = (raw_matrix != 0).sum(axis=0)
 
@@ -66,13 +70,13 @@ def main():
         edge_count.to_csv(out_prefix + "_edge_count.tsv", sep="\t")
 
 
-def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
-                           use_tss=True, scaner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                           truncate_motifs=0.35, scanner_thresh="1e-4"):
+def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
+                           use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
+                           truncate_motifs=0.35, scanner_thresh="1e-4", motif_format="meme"):
     # Set the scanner type
-    if scaner_type.lower() == 'fimo':
+    if scanner_type.lower() == 'fimo':
         MotifScan.set_type_fimo()
-    elif scaner_type.lower() == 'homer':
+    elif scanner_type.lower() == 'homer':
         MotifScan.set_type_homer()
     else:
         raise ValueError("motif_type must be fimo or homer")
@@ -84,13 +88,22 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     genes = load_gtf_to_dataframe(annotation_file)
     print("\t{n} genes loaded".format(n=genes.shape[0]))
 
-    genes = open_window(genes, window_size=window_size, use_tss=use_tss)
+    genes = open_window(genes, window_size=window_size, use_tss=use_tss, check_against_fasta=genomic_fasta_file)
     print("\tPromoter regions defined with window {w}".format(w=window_size))
 
     # PROCESS MOTIF PWMS #
 
-    print("Loading motifs from file ({f})".format(f=motif_meme_file))
-    motifs = MotifScan.load_motif_file(motif_meme_file)
+    print("Loading motifs from file ({f})".format(f=motif_file))
+    if motif_format.lower() == "meme":
+        from srrTomat0.motifs.meme import read
+    elif motif_format.lower() == "transfac":
+        from srrTomat0.motifs.transfac import read
+    elif motif_format.lower() == "homer":
+        from srrTomat0.motifs.homer_motif import read
+    else:
+        raise ValueError("motif_format must be 'meme', 'homer', or 'transfac'")
+
+    motifs = read(motif_file)
     motif_information = motifs_to_dataframe(motifs)
     print("\t{n} motifs loaded".format(n=len(motif_information)))
 
@@ -100,7 +113,7 @@ def build_atac_motif_prior(motif_meme_file, atac_bed_file, annotation_file, geno
     # SCAN CHROMATIN FOR MOTIFS #
 
     # Load and scan target chromatin peaks
-    print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=atac_bed_file, f_m=motif_meme_file))
+    print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=atac_bed_file, f_m=motif_file))
 
     gene_locs = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]].copy()
     gene_locs[[SEQ_START, SEQ_STOP]] = gene_locs[[SEQ_START, SEQ_STOP]].astype(int)
