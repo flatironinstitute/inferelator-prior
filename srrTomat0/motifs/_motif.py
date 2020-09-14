@@ -27,6 +27,7 @@ class Motif:
     motif_url = None
 
     _motif_probs = None
+    _motif_counts = None
     _motif_prob_array = None
     _motif_alphabet = None
     _motif_background = None
@@ -95,6 +96,10 @@ class Motif:
     @probability_matrix.setter
     def probability_matrix(self, matrix):
         self._motif_prob_array = matrix
+
+    @property
+    def count_matrix(self):
+        return np.array(self._motif_counts) if self._motif_counts is not None else None
 
     @property
     def shannon_entropy(self):
@@ -197,6 +202,12 @@ class Motif:
     def add_prob_line(self, line):
         self._motif_probs.append(line)
 
+    def add_count_line(self, line):
+        if self._motif_counts is not None:
+            self._motif_counts.append(line)
+        else:
+            self._motif_counts = [line]
+
     def score_match(self, match, disallow_homopolymer=True, homopolymer_one_off_len=6, score_zero_as_zero=1):
 
         if len(match) != len(self):
@@ -237,7 +248,6 @@ class Motif:
             return any(match_str in s.lower() for s in self.species)
         else:
             return False
-
 
 
 class __MotifScanner:

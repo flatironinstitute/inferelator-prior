@@ -80,9 +80,10 @@ def __parse_motif_gen(handle):
 
         # Prob
         elif line_id.isdigit():
-            probs = list(map(float, line.split()[:-1]))
-            total_seqs = sum(probs)
-            active_motif.add_prob_line(list(map(lambda x: x / total_seqs, probs)))
+            counts = list(map(float, line.split()[:-1]))
+            active_motif.add_count_line(counts)
+            total_seqs = sum(counts)
+            active_motif.add_prob_line(list(map(lambda x: x / total_seqs, counts)))
 
     if len(active_motif) > 0:
         yield active_motif
