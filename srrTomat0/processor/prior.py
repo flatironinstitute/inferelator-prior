@@ -8,6 +8,7 @@ import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
 from sklearn.covariance import EllipticEnvelope
+from scipy.ndimage.filters import uniform_filter1d
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -281,7 +282,7 @@ def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
     return keep_edge
 
 
-def _find_outliers_elliptic_envelope(tf_data, target=0.02):
+def _find_outliers_elliptic_envelope(tf_data, outlier=2.5, skip_threshold=0.002):
 
     scores = tf_data.values
     keep_genes = pd.Series(False, index=tf_data.index)
@@ -289,15 +290,26 @@ def _find_outliers_elliptic_envelope(tf_data, target=0.02):
     if np.var(scores) == 0.:
         return keep_genes
 
-    if np.sum(scores > 0) / scores.size * 2 < target:
-        return keep_genes | (scores > 0)
+    _nz_idx = scores > 0
 
-    try:
-        labels = EllipticEnvelope(contamination=target, support_fraction=1).fit_predict(scores.reshape(-1,1))
-    except ValueError as _err:
+    if skip_threshold is not None and np.sum(_nz_idx) < (len(keep_genes) * skip_threshold):
+        return keep_genes | _nz_idx
+
+    # Calculate Mahalanobis distance
+    _nzs = scores[_nz_idx].reshape(-1, 1)
+
+    if np.var(_nzs) == 0.:
         return keep_genes
 
-    keep_genes |= ((labels == -1) & (scores > np.mean(scores)))
+    # Correct for just the dumbest bug in scipy
+    if (np.mean(_nzs) == np.median(_nzs)) & (np.sum(_nzs == np.median(_nzs)) > (0.5 * _nzs.size)):
+        keep_genes[_nz_idx] = (_nzs >= np.median(_nzs)).flatten()
+        return keep_genes
+
+    m_dist = EllipticEnvelope(support_fraction=1).fit(_nzs).score_samples(_nzs)
+    scaled_m_dist = (m_dist - np.mean(m_dist)) / np.std(m_dist)
+    keep_genes[_nz_idx] = scaled_m_dist < (-1 * outlier)
+
     return keep_genes
 
 
