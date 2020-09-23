@@ -1,3 +1,4 @@
+import warnings
 import pybedtools
 import pandas as pd
 
@@ -36,6 +37,10 @@ def load_gtf_to_dataframe(gtf_path):
 
     # Define genes as going from the minimum start for any subfeature to the maximum end for any subfeature
     annotations = _fix_genes(annotations)
+
+    # Fix chromosome names to always be strings
+    annotations[GTF_CHROMOSOME] = annotations[GTF_CHROMOSOME].astype(str)
+
     return _add_TSS(annotations)
 
 
@@ -84,7 +89,22 @@ def open_window(annotation_dataframe, window_size, use_tss=False, check_against_
                 else:
                     fasta_len[current_record] += len(line.strip())
 
-        for chromosome in window_annotate[GTF_CHROMOSOME].unique():
+        _gtf_chromosomes = set(window_annotate[GTF_CHROMOSOME].unique())
+        _fasta_chromsomes = set(fasta_len.keys())
+        _gtf_fasta_match = _gtf_chromosomes.intersection(_fasta_chromsomes)
+
+        if len(_gtf_fasta_match) != len(_gtf_chromosomes):
+            _msg = "GTF File Chromosomes {g} do not match FASTA File Chromosomes {f}\n"
+            _msg += "The following chromosomes will not map correctly: {ft}"
+            _msg = _msg.format(g=_gtf_chromosomes,
+                               f=_fasta_chromsomes,
+                               ft=_gtf_chromosomes.symmetric_difference(_fasta_chromsomes))
+            warnings.warn(_msg)
+
+        if len(_gtf_fasta_match) == 0:
+            raise ValueError("Unable to map FASTA and GTF chromosomes together")
+
+        for chromosome in _gtf_fasta_match:
             _chrlen = fasta_len[chromosome]
             _idx = window_annotate[GTF_CHROMOSOME] == chromosome
             window_annotate.loc[_idx & (window_annotate[SEQ_STOP] > _chrlen), SEQ_STOP] = _chrlen
