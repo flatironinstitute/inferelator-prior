@@ -1,7 +1,9 @@
-from inferelator_prior.processor.gtf import load_gtf_to_dataframe, open_window, GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND
+from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, GTF_CHROMOSOME,
+                                             SEQ_START, SEQ_STOP, GTF_STRAND)
 from inferelator_prior.processor.prior import build_prior_from_atac_motifs, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import motifs_to_dataframe, INFO_COL, MOTIF_NAME_COL
+from inferelator_prior.processor._species_constants import SPECIES_MAP
 
 import argparse
 import os
@@ -28,6 +30,8 @@ def main():
     ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
                     metavar="BASES", type=int, default=100)
     ap.add_argument("--threshold", nargs="+", default=None, type=str)
+    ap.add_argument("--species", dest="species", help="Load settings for a target species. Overrides other settings",
+                    default=None, type=str, choices=list(SPECIES_MAP.keys()) + [None])
 
     args = ap.parse_args()
     out_prefix = os.path.abspath(os.path.expanduser(args.out))
@@ -35,16 +39,29 @@ def main():
     if not os.path.exists(out_path):
         os.makedirs(out_prefix)
 
+    _species = args.species.lower() if args.species is not None else None
+
+    if _species is None:
+        _window = args.window_size
+        _tandem = args.tandem
+        _use_tss = args.tss
+    else:
+        _window = SPECIES_MAP[_species]['window']
+        _tandem = SPECIES_MAP[_species]['tandem']
+        _use_tss = SPECIES_MAP[_species]['use_tss']
+
     if args.threshold is None:
         prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation,
                                                                        args.fasta,
-                                                                       window_size=args.window_size,
+                                                                       window_size=_window,
                                                                        num_cores=args.cores,
-                                                                       use_tss=args.tss, motif_ic=args.min_ic,
+                                                                       use_tss=_use_tss,
+                                                                       motif_ic=args.min_ic,
+                                                                       tandem=_tandem,
                                                                        scanner_type=args.scanner,
                                                                        motif_format=args.motif_format)
 
-        prior_matrix.astype(int).to_csv(out_prefix + "_edge_matrix.tsv.gz", sep="\t")
+        (prior_matrix != 0).astype(int).to_csv(out_prefix + "_edge_matrix.tsv.gz", sep="\t")
         prior_edges.to_csv(out_prefix + "_edge_table.tsv.gz", sep="\t")
         raw_matrix.to_csv(out_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
     else:
@@ -56,11 +73,12 @@ def main():
         for t in args.threshold:
             prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation,
                                                                            args.fasta,
-                                                                           window_size=args.window_size,
+                                                                           window_size=_window,
                                                                            num_cores=args.cores,
-                                                                           use_tss=args.tss, motif_ic=args.min_ic,
+                                                                           use_tss=_use_tss, motif_ic=args.min_ic,
                                                                            scanner_type=args.scanner,
                                                                            scanner_thresh=t,
+                                                                           tandem=_tandem,
                                                                            motif_format=args.motif_format)
 
             edge_count[t] = (raw_matrix != 0).sum(axis=0)

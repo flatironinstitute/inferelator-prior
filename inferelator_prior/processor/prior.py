@@ -6,7 +6,7 @@ import pandas as pd
 import pandas.api.types as pat
 import numpy as np
 import pathos.multiprocessing as multiprocessing
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN, OPTICS
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.covariance import EllipticEnvelope
 from scipy.ndimage.filters import uniform_filter1d
@@ -233,9 +233,9 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
     raw_matrix.index.name = PRIOR_GENE
 
     prior_matrix = raw_matrix.copy()
-    # Threshold using DBSCAN outlier detection
+    # Threshold per-TF using DBSCAN
     for reg in prior_matrix.columns:
-        prior_matrix.loc[~_find_outliers_lof(prior_matrix[reg]), reg] = 0.
+        prior_matrix.loc[~_find_outliers_dbscan(prior_matrix[reg]), reg] = 0.
 
     # Keep the peaks that we want
     thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
@@ -260,75 +260,22 @@ def _gene_gen(genes, motif_peaks):
             continue
 
 
-def _find_outliers_dbscan(tf_data, t_1=0.01, t_2=0.05):
+def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     scores = tf_data.values.reshape(-1, 1)
-    counts = tf_data.shape[0]
 
-    labels = DBSCAN(min_samples=np.log2(counts), eps=scores.max() / 100).fit_predict(scores)
+    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, algorithm='brute').fit_predict(scores)
 
     # Keep any outliers (outliers near 0 should be discarded)
     keep_edge = pd.Series((labels == -1) & (tf_data.values > np.mean(scores)), index=tf_data.index)
 
-    # Iterate through clusters in reverse order until at least t_1 and no more than t_2 edges are included
-    for lab in np.unique(labels)[::-1]:
-        current_ratio = keep_edge.sum() / keep_edge.size
-        new_labels = labels == lab
-        if current_ratio > t_1:
-            break
-        elif current_ratio + (new_labels.sum() / new_labels.size) > t_2:
-            break
-        else:
-            keep_edge |= new_labels
+    # Add the cluster of values with the largest scores unless that exceeds max_sparsity
+    current_ratio = keep_edge.sum() / keep_edge.size
+    new_labels = labels == np.unique(labels)[-1]
+
+    if current_ratio + (new_labels.sum() / new_labels.size) <= max_sparsity:
+        keep_edge |= new_labels
 
     return keep_edge
-
-
-def _find_outliers_elliptic_envelope(tf_data, outlier=2.5, skip_threshold=0.002):
-
-    scores = tf_data.values
-    keep_genes = pd.Series(False, index=tf_data.index)
-
-    if np.var(scores) == 0.:
-        return keep_genes
-
-    _nz_idx = scores > 0
-
-    if skip_threshold is not None and np.sum(_nz_idx) < (len(keep_genes) * skip_threshold):
-        return keep_genes | _nz_idx
-
-    # Calculate Mahalanobis distance
-    _nzs = scores[_nz_idx].reshape(-1, 1)
-
-    if np.var(_nzs) == 0.:
-        return keep_genes
-
-    # Correct for just the dumbest bug in scipy
-    if (np.mean(_nzs) == np.median(_nzs)) & (np.sum(_nzs == np.median(_nzs)) > (0.5 * _nzs.size)):
-        keep_genes[_nz_idx] = (_nzs >= np.median(_nzs)).flatten()
-        return keep_genes
-
-    m_dist = EllipticEnvelope(support_fraction=1).fit(_nzs).score_samples(_nzs)
-    scaled_m_dist = (m_dist - np.mean(m_dist)) / np.std(m_dist)
-    keep_genes[_nz_idx] = scaled_m_dist < (-1 * outlier)
-
-    return keep_genes
-
-
-def _find_outliers_lof(tf_data, skip_threshold=0.002):
-    scores = tf_data[tf_data > 0]
-    keep_genes = pd.Series(False, index=tf_data.index)
-
-    if np.var(scores) == 0.:
-        return keep_genes
-
-    if skip_threshold is not None and scores.size < (tf_data.size * skip_threshold):
-        keep_genes[scores.index] = True
-        return keep_genes
-
-    labels = LocalOutlierFactor(n_neighbors=max(int(scores.size * 0.01), 20),
-                                algorithm='brute', p=1).fit_predict(scores.values.reshape(-1, 1))
-    keep_genes[scores.index] = (labels == -1) & (scores.values > np.mean(scores))
-    return keep_genes
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
