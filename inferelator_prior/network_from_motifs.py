@@ -1,6 +1,6 @@
 from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, GTF_CHROMOSOME,
                                              SEQ_START, SEQ_STOP, GTF_STRAND)
-from inferelator_prior.processor.prior import build_prior_from_atac_motifs, MotifScorer
+from inferelator_prior.processor.prior import build_prior_from_motifs, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import motifs_to_dataframe, INFO_COL, MOTIF_NAME_COL
 from inferelator_prior.processor._species_constants import SPECIES_MAP
@@ -148,8 +148,8 @@ def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_f
     # Processing into prior
     print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-    prior_edges, prior_matrix, raw_matrix = build_prior_from_atac_motifs(genes, motif_peaks, motif_information,
-                                                                         num_workers=num_cores)
+    prior_edges, prior_matrix, raw_matrix = build_prior_from_motifs(genes, motif_peaks, motif_information,
+                                                                    num_workers=num_cores)
     print("Prior matrix with {n} edges constructed".format(n=prior_edges.shape[0]))
     return prior_edges, prior_matrix, raw_matrix
 
