@@ -3,13 +3,9 @@ from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF_NAME_COL, SCORE_PER_BASE
 
 import pandas as pd
-import pandas.api.types as pat
 import numpy as np
 import pathos.multiprocessing as multiprocessing
-from sklearn.cluster import DBSCAN, OPTICS
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.covariance import EllipticEnvelope
-from scipy.ndimage.filters import uniform_filter1d
+from sklearn.cluster import DBSCAN
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'

@@ -3,7 +3,6 @@ import pandas as pd
 import warnings
 import os
 import tempfile
-import math
 import itertools
 import pathos
 from collections import Counter
@@ -362,6 +361,7 @@ def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
     """
 
     temp_dir = tempfile.gettempdir()
+    num_workers = pathos.multiprocessing.cpu_count() if num_workers is None else num_workers
 
     if min_ic is not None:
         motifs = list(itertools.compress(motifs, [m.information_content >= min_ic for m in motifs]))

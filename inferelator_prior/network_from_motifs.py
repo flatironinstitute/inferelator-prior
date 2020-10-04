@@ -21,7 +21,7 @@ def main():
     ap.add_argument("-g", "--gtf", dest="annotation", help="GTF Annotation File", metavar="FILE", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", required=True)
     ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0, nargs="+")
-    ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=1)
+    ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
     ap.add_argument("--no_tss", dest="tss", help="Use gene body for window (not TSS)", action='store_const',
                     const=False, default=True)
     ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='fimo')
