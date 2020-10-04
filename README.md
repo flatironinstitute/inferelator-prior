@@ -11,13 +11,16 @@ data that is compatible with the [inferelator](https://github.com/flatironinstit
                                   -g genome_annotation_file.gtf
                                   -o ~/output/path/prefix
                                   --species {yeast,fly,mouse,human}
-                                  -b constraning_bed_file.bed]
+                                  -b constraning_bed_file.bed
+                                  --cpu num_cores
                                   
 This requires a motif PWM database (`-m PATH`), 
 a genome to search (both sequence as a FASTA `-f PATH` and annotations `-g PATH`),
 and an output prefix for several files (`-o PATH`).
 In addition, default settings for a specific species can be set with (`--species`).
 A BED file can be provided (`-b PATH`) based on some constraining experiment to restrict searching to specific genomic areas.
+This will use multiple cores to search for motifs and process the resulting data.
+By default, all available processors will be used, but this can be overridden with `--cpu N`.
 
 ### Requirements
 

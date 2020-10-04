@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-install_requires = ["numpy", "pandas", "HTSeq", "pybedtools", "scipy", "pathos"]
+install_requires = ["numpy", "pandas", "HTSeq", "pybedtools", "scipy", "pathos", "sklearn"]
 tests_require = ["coverage", "nose", "pysam"]
 version = "0.2.0"
 
