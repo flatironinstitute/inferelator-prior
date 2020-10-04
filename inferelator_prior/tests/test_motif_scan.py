@@ -57,7 +57,7 @@ class TestScan(unittest.TestCase):
 
     def test_fimo(self):
         scanner = fimo.FIMOScanner(motifs=[MOTIF_OBJ], num_workers=1)
-        motif_locs = scanner.scan(BED_FILE_NAME, FASTA_FILE_NAME, min_ic=8)
+        motif_locs = scanner.scan(FASTA_FILE_NAME, atac_bed_file=BED_FILE_NAME, min_ic=8)
 
         self.assertEqual(motif_locs.shape[0], 10)
         self.assertEqual(motif_locs.loc[motif_locs[fimo.FIMO_STRAND] == "+", :].shape[0], 5)
@@ -72,7 +72,7 @@ class TestScan(unittest.TestCase):
 
     def test_homer(self):
         scanner = homer.HOMERScanner(motifs=[MOTIF_OBJ], num_workers=1)
-        motif_locs = scanner.scan(BED_FILE_NAME, FASTA_FILE_NAME, min_ic=8)
+        motif_locs = scanner.scan(FASTA_FILE_NAME, atac_bed_file=BED_FILE_NAME, min_ic=8)
 
         self.assertEqual(motif_locs.shape[0], 10)
         self.assertEqual(motif_locs.loc[motif_locs[homer.HOMER_STRAND] == "+", :].shape[0], 5)

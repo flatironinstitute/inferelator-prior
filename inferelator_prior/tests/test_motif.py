@@ -5,11 +5,12 @@ import pandas as pd
 import numpy.testing as npt
 import copy
 
-from inferelator_prior.motifs import meme, homer_motif
+from inferelator_prior.motifs import meme, homer_motif, transfac
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 
 MEME_FILE_NAME = "test.meme"
+TRANSFAC_FILE_NAME = "test.transfac.dat"
 MOTIF_FILE_NAME = "test.motif"
 PWM_FILE_NAME = "M00799_2.00.txt"
 ECORI_FILE_NAME = "test_ecori.meme"
@@ -45,7 +46,7 @@ class TestMotifParsers(unittest.TestCase):
 
         self.assertListEqual(motifs[0].alphabet, list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
-        self.assertAlmostEqual(motifs[0].information_content, 6.082, 3)
+        self.assertAlmostEqual(motifs[0].information_content, 7.6857, 3)
 
     def test_homer_motif_loader(self):
 
@@ -61,7 +62,7 @@ class TestMotifParsers(unittest.TestCase):
 
         self.assertListEqual(motifs[0].alphabet, list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
-        self.assertAlmostEqual(motifs[0].information_content, 6.082, 3)
+        self.assertAlmostEqual(motifs[0].information_content, 7.6857, 3)
 
     def test_pwm_loader(self):
 
@@ -77,7 +78,23 @@ class TestMotifParsers(unittest.TestCase):
 
         self.assertListEqual(motifs[0].alphabet, list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
-        self.assertAlmostEqual(motifs[0].information_content, 6.082, 3)
+        self.assertAlmostEqual(motifs[0].information_content, 7.6857, 3)
+
+    def test_transfac_loader(self):
+
+        motif_file_name = os.path.join(artifact_path, TRANSFAC_FILE_NAME)
+        motifs = transfac.read(motif_file_name)
+
+        with open(motif_file_name) as fh:
+            motifs2 = transfac.read(fh)
+
+        self.assertEqual(len(motifs), 1)
+        npt.assert_array_almost_equal(motifs[0].probability_matrix, PWM, 2)
+        npt.assert_array_almost_equal(motifs2[0].probability_matrix, PWM, 2)
+
+        self.assertListEqual(motifs[0].alphabet, list("ACGT"))
+        self.assertEqual(motifs[0].alphabet_len, 4)
+        self.assertAlmostEqual(motifs[0].information_content, 7.6535, 3)
 
 
 class TestMotifProps(unittest.TestCase):
