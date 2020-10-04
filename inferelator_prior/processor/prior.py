@@ -96,7 +96,7 @@ class MotifScorer:
         # If there's more than two sites do the complicated tandem checking stuff
         else:
             # Find things that are in tandems
-            consider_tandem = (tf_motifs[MotifScan.stop_col] - tf_motifs[MotifScan.start_col].shift(1))
+            consider_tandem = (tf_motifs[MotifScan.start_col] - tf_motifs[MotifScan.stop_col].shift(1))
             consider_tandem = consider_tandem <= cls.max_dist
 
             # Skip the rest if nothing is close enough to matter
@@ -155,8 +155,8 @@ class MotifScorer:
         except AttributeError:
             return series
 
-    @classmethod
-    def _agg_per_base(cls, overlap_df):
+    @staticmethod
+    def _agg_per_base(overlap_df):
         """
         Aggregate an overlapping set of motif peaks by summing the maximum per-base IC for each base
         :param overlap_df:
@@ -167,17 +167,21 @@ class MotifScorer:
 
         overlap_df.reset_index(inplace=True)
 
-        new_df = [(a, b) for i in overlap_df.index for a, b in zip(range(overlap_df.loc[i, MotifScan.start_col],
-                                                                         overlap_df.loc[i, MotifScan.stop_col]),
-                                                                   overlap_df.loc[i, SCORE_PER_BASE])]
+        # Melt the per-base information contents for each matching motif into a new dataframe
+        # Base number ["B"] and float score ["S"]
+        new_df = pd.DataFrame([(a, b) for i in overlap_df.index
+                               for a, b in zip(range(overlap_df.loc[i, MotifScan.start_col],
+                                                     overlap_df.loc[i, MotifScan.stop_col] + 1),
+                                               overlap_df.loc[i, SCORE_PER_BASE])], columns=["B", "S"])
 
+        # Return a new dataframe with the maximum per-base scores aggregated
         return pd.DataFrame({MotifScan.start_col: [overlap_df[MotifScan.start_col].min()],
                              MotifScan.stop_col: [overlap_df[MotifScan.stop_col].max()],
-                             SCAN_SCORE_COL: pd.DataFrame(new_df, columns=["B", "S"]).groupby("B").agg('max').sum(),
+                             SCAN_SCORE_COL: new_df.groupby("B").agg('max').sum(),
                              MOTIF_NAME_COL: [overlap_df[MOTIF_NAME_COL].unique()[0]]})
 
 
-def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42):
+def build_prior_from_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42, do_threshold=True):
     """
     Construct a prior [G x K] interaction matrix
     :param genes: pd.DataFrame [G x n]
@@ -234,8 +238,10 @@ def build_prior_from_atac_motifs(genes, motif_peaks, motif_information, num_work
 
     prior_matrix = raw_matrix.copy()
     # Threshold per-TF using DBSCAN
-    for reg in prior_matrix.columns:
-        prior_matrix.loc[~_find_outliers_dbscan(prior_matrix[reg]), reg] = 0.
+
+    if do_threshold:
+        for reg in prior_matrix.columns:
+            prior_matrix.loc[~_find_outliers_dbscan(prior_matrix[reg]), reg] = 0.
 
     # Keep the peaks that we want
     thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
