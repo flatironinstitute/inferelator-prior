@@ -1,0 +1,10 @@
+#!genome-build R64-1-1
+#!genome-version R64-1-1
+#!genome-date 2011-09
+#!genome-build-accession GCA_000146045.2
+#!genebuild-last-updated 2018-10
+seq1	sgd	gene	100	500	.	+	.	gene_id "T3ST"; gene_name "T3ST"; gene_source "sgd"; gene_biotype "protein_coding";
+seq1	sgd	transcript	100	500	.	+	.	gene_id "T3ST"; transcript_id "T3ST_mRNA"; gene_name "T3ST"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+seq1	sgd	exon	100	500	.	+	.	gene_id "T3ST"; transcript_id "T3ST_mRNA"; exon_number "1"; gene_name "T3ST"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "T3ST_mRNA-E1";
+seq1	sgd	CDS	100	500	.	+	0	gene_id "T3ST"; transcript_id "T3ST_mRNA"; exon_number "1"; gene_name "T3ST"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "T3ST";
+
