@@ -76,7 +76,7 @@ def open_window(annotation_dataframe, window_size, use_tss=False, check_against_
         window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_START] = window_annotate[SEQ_START] - w_down
         window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_STOP] = window_annotate[SEQ_STOP] + w_up
 
-    window_annotate.loc[window_annotate[SEQ_START] < 0, SEQ_START] = 0
+    window_annotate.loc[window_annotate[SEQ_START] < 1, SEQ_START] = 1
 
     if check_against_fasta is not None:
         fasta_len = {}
