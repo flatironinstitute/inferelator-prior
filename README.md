@@ -6,7 +6,7 @@ data that is compatible with the [inferelator](https://github.com/flatironinstit
 ### Usage
 
     python -m inferelator_prior.network_from_motifs
-    usage: network_from_motifs.py -m motif_PWM_file.meme
+    usage: network_from_motifs.py --motif motif_PWM_file.meme
                                   -f genome_fasta_file.fasta
                                   -g genome_annotation_file.gtf
                                   -o ~/output/path/prefix
