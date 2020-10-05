@@ -236,8 +236,18 @@ def build_prior_from_motifs(genes, motif_peaks, motif_information, num_workers=1
     # Threshold per-TF using DBSCAN
 
     if do_threshold:
-        for reg in prior_matrix.columns:
-            prior_matrix.loc[~_find_outliers_dbscan(prior_matrix[reg]), reg] = 0.
+        print("Selecting edges to retain with DBSCAN")
+
+        def _prior_clusterer(i, col_name):
+            if i % 50 == 0:
+                print("Clustering on {col} [{i} / {n}]".format(i=i, n=len(prior_matrix.columns), col=col_name))
+            return col_name, _find_outliers_dbscan(prior_matrix[col_name])
+
+        with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
+            prior_matrix_idx = pool.starmap(_prior_clusterer, enumerate(prior_matrix.columns), chunksize=10)
+
+            for reg, reg_idx in prior_matrix_idx:
+                prior_matrix.loc[~reg_idx, reg] = 0.
 
     # Keep the peaks that we want
     thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
