@@ -32,6 +32,10 @@ def main():
     ap.add_argument("--threshold", nargs="+", default=None, type=str)
     ap.add_argument("--species", dest="species", help="Load settings for a target species. Overrides other settings",
                     default=None, type=str, choices=list(SPECIES_MAP.keys()) + [None])
+    ap.add_argument("--mouse_ensid_to_symbol", dest="ensid", help="Replaces ENSID by GTF gene Symbol",
+                    default=None, type=int)
+    ap.add_argument("--nnz", dest="nnz", help="Removes all 0 rows",
+                    default=None, type=int)
 
     args = ap.parse_args()
     out_prefix = os.path.abspath(os.path.expanduser(args.out))
