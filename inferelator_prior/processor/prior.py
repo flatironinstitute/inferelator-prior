@@ -189,6 +189,27 @@ def build_prior_from_motifs(genes, motif_peaks, motif_information, num_workers=1
         A long-form edge table data frame and a wide-form interaction matrix data frame
     """
 
+    prior_data = _create_information_matrix(genes, motif_peaks, motif_information, num_workers=num_workers)
+    motif_names = motif_information[MOTIF_NAME_COL].unique()
+
+    # Pivot to a matrix, extend to all TFs, and fill with 0s
+    raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
+    raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+    raw_matrix.index.name = PRIOR_GENE
+
+    np.random.seed(seed)
+    prior_matrix = _cut_matrix(raw_matrix, num_workers=num_workers) if do_threshold else raw_matrix.copy()
+
+    # Keep the peaks that we want
+    thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
+    thresholded_data = prior_data.merge(thresholded_data, on=[PRIOR_GENE, PRIOR_TF])
+    thresholded_data = thresholded_data.loc[thresholded_data['T'] != 0, :]
+    thresholded_data.drop('T', axis=1, inplace=True)
+
+    return thresholded_data, prior_matrix, raw_matrix
+
+
+def _create_information_matrix(genes, motif_peaks, motif_information, num_workers=1):
     motif_ids = motif_information[MOTIF_COL].unique()
     print("Building prior from {g} genes and {k} Motifs".format(g=genes.shape[0], k=len(motif_ids)))
 
@@ -206,7 +227,6 @@ def build_prior_from_motifs(genes, motif_peaks, motif_information, num_workers=1
 
     motif_id_to_name.loc[invalid_names, MOTIF_NAME_COL] = motif_id_to_name.loc[invalid_names, MOTIF_COL]
     motif_peaks = motif_peaks.join(motif_id_to_name.set_index(MOTIF_COL, verify_integrity=True), on=MotifScan.name_col)
-    motif_names = motif_information[MOTIF_NAME_COL].unique()
 
     motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifScan.chromosome_col)}
 
@@ -225,37 +245,34 @@ def build_prior_from_motifs(genes, motif_peaks, motif_information, num_workers=1
     prior_data[PRIOR_START] = prior_data[PRIOR_START].astype(int)
     prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
 
-    np.random.seed(seed)
+    return prior_data
 
-    # Pivot to a matrix, extend to all TFs, and fill with 0s
-    raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
-    raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
-    raw_matrix.index.name = PRIOR_GENE
 
+def _cut_matrix(raw_matrix, num_workers=1):
     prior_matrix = raw_matrix.copy()
+
     # Threshold per-TF using DBSCAN
+    print("Selecting edges to retain with DBSCAN")
 
-    if do_threshold:
-        print("Selecting edges to retain with DBSCAN")
+    with multiprocessing.Pool(num_workers, maxtasksperchild=100) as pool:
+        prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(prior_matrix), chunksize=10)
 
-        def _prior_clusterer(i, col_name):
-            if i % 50 == 0:
-                print("Clustering on {col} [{i} / {n}]".format(i=i, n=len(prior_matrix.columns), col=col_name))
-            return col_name, _find_outliers_dbscan(prior_matrix[col_name])
+    for reg, reg_idx in prior_matrix_idx:
+        prior_matrix.loc[~reg_idx, reg] = 0.
 
-        with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
-            prior_matrix_idx = pool.starmap(_prior_clusterer, enumerate(prior_matrix.columns), chunksize=10)
+    return prior_matrix
 
-            for reg, reg_idx in prior_matrix_idx:
-                prior_matrix.loc[~reg_idx, reg] = 0.
 
-    # Keep the peaks that we want
-    thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
-    thresholded_data = prior_data.merge(thresholded_data, on=[PRIOR_GENE, PRIOR_TF])
-    thresholded_data = thresholded_data.loc[thresholded_data['T'] != 0, :]
-    thresholded_data.drop('T', axis=1, inplace=True)
+def _prior_gen(prior_matrix):
+    n = len(prior_matrix.columns)
+    for i, col_name in enumerate(prior_matrix.columns):
+        yield i, col_name, prior_matrix[col_name], n
 
-    return thresholded_data, prior_matrix, raw_matrix
+
+def _prior_clusterer(i, col_name, col_data, n):
+    if i % 50 == 0:
+        print("Clustering on {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
+    return col_name, _find_outliers_dbscan(col_data)
 
 
 def _gene_gen(genes, motif_peaks):
@@ -275,17 +292,18 @@ def _gene_gen(genes, motif_peaks):
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     scores = tf_data.values.reshape(-1, 1)
 
-    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, algorithm='brute').fit_predict(scores)
+    scanner = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, algorithm='brute', n_jobs=1)
+    labels = scanner.fit_predict(scores)
 
     # Keep any outliers (outliers near 0 should be discarded)
-    keep_edge = pd.Series((labels == -1) & (tf_data.values > np.mean(scores)), index=tf_data.index)
+    keeper_cluster = labels == np.unique(labels)[-1]
+    keep_edge = pd.Series((labels == -1) & (tf_data.values > np.mean(scores[keeper_cluster])), index=tf_data.index)
 
     # Add the cluster of values with the largest scores unless that exceeds max_sparsity
     current_ratio = keep_edge.sum() / keep_edge.size
-    new_labels = labels == np.unique(labels)[-1]
 
-    if current_ratio + (new_labels.sum() / new_labels.size) <= max_sparsity:
-        keep_edge |= new_labels
+    if current_ratio + (keeper_cluster.sum() / keeper_cluster.size) <= max_sparsity:
+        keep_edge |= keeper_cluster
 
     return keep_edge
 

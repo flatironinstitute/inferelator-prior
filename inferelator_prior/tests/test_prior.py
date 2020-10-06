@@ -4,6 +4,7 @@ import pandas as pd
 
 from inferelator_prior.motifs import meme, motifs_to_dataframe, MotifScan, fimo, MOTIF_NAME_COL, SCAN_SCORE_COL
 from inferelator_prior.processor import prior, gtf
+from inferelator_prior.processor.prior import _cut_matrix
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 
@@ -79,7 +80,6 @@ class TestPriorPipeline(unittest.TestCase):
 
     def test_multiple_genes_50_tandem_100_window(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=50)
-        print(self.genes)
         self.genes = pd.concat((self.genes, pd.DataFrame({"seqname": "seq1",
                                                           "start": 550.,
                                                           "end": 750.,
@@ -91,6 +91,22 @@ class TestPriorPipeline(unittest.TestCase):
         self.assertEqual(motif_peaks.shape[0], 10)
         self.assertEqual(prior_edges.shape[0], 2)
         self.assertListEqual(prior_edges['score'].values.tolist(), [72., 24.])
+
+    def test_matrix_cuts(self):
+        info_matrix = pd.read_csv(os.path.join(artifact_path, "test_info_matrix.tsv.gz"), sep="\t", index_col=0)
+        info_matrix = info_matrix.iloc[:, 0:10]
+        cut_matrix = _cut_matrix(info_matrix, num_workers=1)
+
+        for i in info_matrix.columns:
+            _is_called = cut_matrix[i] != 0
+            _num_called = _is_called.sum()
+
+            _kept = info_matrix[i][_is_called]
+            _not_kept = info_matrix[i][~_is_called]
+
+            print(i)
+
+            self.assertGreater(_kept.min(), _not_kept.max()) if _num_called > 0 else True
 
     def do_scan_prior(self, window_size, do_threshold=False, use_bed=True, use_tss=True):
         genes = gtf.open_window(self.genes, window_size=window_size, use_tss=use_tss,
