@@ -68,7 +68,6 @@ class MotifScorer:
 
         # Collapse together any overlapping motifs to the maximum score on a per-base basis
         if overlap.any():
-
             tf_motifs["GROUP"] = (~overlap).cumsum()
             tf_motifs = pd.concat([cls._agg_per_base(group) for _, group in tf_motifs.groupby("GROUP")])
 
@@ -230,15 +229,13 @@ def _create_information_matrix(genes, motif_peaks, motif_information, num_worker
 
     motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifScan.chromosome_col)}
 
-    def _prior_mapper(data):
-        i, gene_data, motifs = data
-        return _build_prior_for_gene(gene_data, motifs, motif_information, i)
-
     if num_workers == 1:
-        prior_data = list(map(_prior_mapper, _gene_gen(genes, motif_peaks)))
+        prior_data = list(map(lambda x: _build_prior_for_gene(*x), _gene_gen(genes, motif_peaks, motif_information)))
+
     else:
         with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
-            prior_data = pool.map(_prior_mapper, _gene_gen(genes, motif_peaks), chunksize=20)
+            prior_data = pool.starmap(_build_prior_for_gene,
+                                      _gene_gen(genes, motif_peaks, motif_information), chunksize=20)
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data).reset_index(drop=True)
@@ -275,7 +272,7 @@ def _prior_clusterer(i, col_name, col_data, n):
     return col_name, _find_outliers_dbscan(col_data)
 
 
-def _gene_gen(genes, motif_peaks):
+def _gene_gen(genes, motif_peaks, motif_information):
     for i, (idx, gene_data) in enumerate(genes.iterrows()):
         try:
             gene_chr, gene_start, gene_stop = gene_data[GTF_CHROMOSOME], gene_data[SEQ_START], gene_data[SEQ_STOP]
@@ -284,7 +281,7 @@ def _gene_gen(genes, motif_peaks):
             motif_mask = motif_data[MotifScan.stop_col] >= gene_start
             motif_mask &= motif_data[MotifScan.start_col] <= gene_stop
             motif_data = motif_data.loc[motif_mask, :].copy()
-            yield i, gene_data, motif_data
+            yield gene_data, motif_data, motif_information, i
         except KeyError:
             continue
 
