@@ -3,7 +3,7 @@ from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window,
 from inferelator_prior.processor.prior import build_prior_from_motifs, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import motifs_to_dataframe, INFO_COL, MOTIF_NAME_COL
-from inferelator_prior.processor._species_constants import SPECIES_MAP
+from inferelator_prior.processor._species_constants import SPECIES_MAP, _DEFAULT_WINDOW, _DEFAULT_TANDEM
 
 import argparse
 import os
@@ -20,7 +20,7 @@ def main():
     ap.add_argument("-f", "--fasta", dest="fasta", help="Genomic FASTA file", metavar="FILE", required=True)
     ap.add_argument("-g", "--gtf", dest="annotation", help="GTF Annotation File", metavar="FILE", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", required=True)
-    ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=0, nargs="+")
+    ap.add_argument("-w", "--window", dest="window_size", help="Window around genes", type=int, default=None, nargs="+")
     ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
     ap.add_argument("--no_tss", dest="tss", help="Use gene body for window (not TSS)", action='store_const',
                     const=False, default=True)
@@ -28,7 +28,7 @@ def main():
     ap.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
                     metavar="BITS", type=int, default=None)
     ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
-                    metavar="BASES", type=int, default=100)
+                    metavar="BASES", type=int, default=None)
     ap.add_argument("--threshold", nargs="+", default=None, type=str)
     ap.add_argument("--species", dest="species", help="Load settings for a target species. Overrides other settings",
                     default=None, type=str, choices=list(SPECIES_MAP.keys()) + [None])
@@ -42,15 +42,21 @@ def main():
     _species = args.species.lower() if args.species is not None else None
 
     if _species is None:
-        _window = args.window_size
-        _tandem = args.tandem
+        _window = args.window_size if args.window_size is not None else _DEFAULT_WINDOW
+        _tandem = args.tandem if args.tandem is not None else _DEFAULT_TANDEM
         _use_tss = args.tss
     else:
-        _window = SPECIES_MAP[_species]['window']
-        _tandem = SPECIES_MAP[_species]['tandem']
-        _use_tss = SPECIES_MAP[_species]['use_tss']
+        _window = SPECIES_MAP[_species]['window'] if args.window_size is None else args.window_size
+        _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
+        _use_tss = SPECIES_MAP[_species]['use_tss'] if args.tss else args.tss
 
     if args.threshold is None:
+
+        if _use_tss:
+            print("Scanning {w} around TSS for {t}bp TF arrays".format(w=_window, t=_tandem))
+        else:
+            print("Scanning {w} around gene for {t}bp TF arrays".format(w=_window, t=_tandem))
+
         prior_edges, prior_matrix, raw_matrix = build_atac_motif_prior(args.motif, args.atac, args.annotation,
                                                                        args.fasta,
                                                                        window_size=_window,

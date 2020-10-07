@@ -32,3 +32,7 @@ SPECIES_MAP = {
     "human": _HUMAN,
     "homo sapiens": _HUMAN
 }
+
+_DEFAULT_TANDEM = 25
+_DEFAULT_WINDOW = (5000, 500)
+_DEFAULT_TSS = True
