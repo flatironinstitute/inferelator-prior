@@ -25,6 +25,8 @@ HOMER2_EXPAND_STR_COLS = [HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]
 
 class HOMERScanner(__MotifScanner):
 
+    scanner_name = "HOMER"
+
     def _preprocess(self, min_ic=None):
         if self.motif_file is not None:
             self.motifs = homer_motif.read(self.motif_file)

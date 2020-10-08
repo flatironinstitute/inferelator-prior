@@ -252,6 +252,8 @@ class Motif:
 
 class __MotifScanner:
 
+    scanner_name = None
+
     def __init__(self, motif_file=None, motifs=None, num_workers=4):
 
         if (motif_file is None and motifs is None) or (motif_file is not None and motifs is not None):
@@ -301,18 +303,24 @@ class __MotifScanner:
 
     def _scan_extract(self, motif_files, extracted_fasta_file, threshold=None):
         # If the number of workers is 1, run fimo directly
-        if self.num_workers == 1:
+        if (self.num_workers == 1) or (len(motif_files) == 1):
             assert len(motif_files) == 1
+            print("Launching {name} scanner [1 / 1]")
             return self._get_motifs(extracted_fasta_file, motif_files[0], threshold=threshold)
 
         # Otherwise parallelize with a process pool (pathos because dill will do local functions)
         else:
             # Convenience local function
-            def _get_chunk_motifs(chunk_file):
-                return self._get_motifs(extracted_fasta_file, chunk_file, threshold=threshold)
+            n = len(motif_files)
+
+            def _get_chunk_motifs(i, chunk_file):
+                print("Launching {name} scanner [{i} / {n}]".format(name=self.scanner_name, i=i+1, n=n))
+                results = self._get_motifs(extracted_fasta_file, chunk_file, threshold=threshold)
+                print("Scanning completed [{i} / {n}]".format(i=i+1, n=n))
+                return results
 
             with pathos.multiprocessing.Pool(self.num_workers) as pool:
-                motif_data = [data for data in pool.imap(_get_chunk_motifs, motif_files)]
+                motif_data = [data for data in pool.starmap(_get_chunk_motifs, enumerate(motif_files))]
                 motif_data = pd.concat(motif_data)
 
         return motif_data

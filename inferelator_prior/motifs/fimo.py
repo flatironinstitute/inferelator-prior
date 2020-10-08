@@ -24,6 +24,8 @@ FIMO_COMMAND = [FIMO_EXECUTABLE_PATH, "--text", "--parse-genomic-coord"]
 
 class FIMOScanner(__MotifScanner):
 
+    scanner_name = "FIMO"
+
     def _preprocess(self, min_ic=None):
         if self.motif_file is not None:
             self.motifs = meme.read(self.motif_file)
