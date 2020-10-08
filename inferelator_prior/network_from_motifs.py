@@ -67,9 +67,14 @@ def main():
                                                                        scanner_type=args.scanner,
                                                                        motif_format=args.motif_format)
 
+        print("Writing output file {o}".format(o=out_prefix + "_edge_matrix.tsv.gz"))
         (prior_matrix != 0).astype(int).to_csv(out_prefix + "_edge_matrix.tsv.gz", sep="\t")
+        print("Writing output file {o}".format(o=out_prefix + "_edge_table.tsv.gz"))
         prior_edges.to_csv(out_prefix + "_edge_table.tsv.gz", sep="\t")
+        print("Writing output file {o}".format(o=out_prefix + "_unfiltered_matrix.tsv.gz"))
         raw_matrix.to_csv(out_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
+
+
     else:
         motifs = MotifScan.load_motif_file(args.motif)
         motif_information = motifs_to_dataframe(motifs)
