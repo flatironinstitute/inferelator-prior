@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
+from scipy import sparse
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -255,18 +256,17 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
         print("Selecting edges to retain with DBSCAN")
         prior_matrix = pd.DataFrame(False, index=raw_matrix.index, columns=raw_matrix.columns)
 
-        for i, col_name in enumerate(prior_matrix.columns):
+        if num_workers == 1:
+            prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x), _prior_gen(raw_matrix)))
 
-            if debug or (i % 50 == 0):
-                print("Clustering {col} [{i} / {n}]".format(i=i, n=prior_matrix.shape[1], col=col_name))
-
-            keep_idx = _find_outliers_dbscan(prior_matrix[col_name], n_cores=num_workers)
-            prior_matrix.loc[keep_idx, col_name] = True
-
-            if debug:
-                print("Completed clustering {col} [{i} / {n}]".format(i=i, n=prior_matrix.shape[1], col=col_name))
+        else:
+            with multiprocessing.Pool(num_workers, maxtasksperchild=1) as pool:
+                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=1)
 
         print("Completed edge selection with DBSCAN")
+        for reg, reg_idx in prior_matrix_idx:
+            prior_matrix.loc[reg_idx, reg] = True
+
         return prior_matrix
 
     else:
@@ -309,22 +309,23 @@ def _gene_gen(genes, motif_peaks, motif_information):
             continue
 
 
-def _find_outliers_dbscan(tf_data, max_sparsity=0.05, n_cores=1):
-    scores = tf_data.values.reshape(-1, 1)
+def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
+    scores, weights = np.unique(tf_data.values, return_counts=True)
 
-    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=n_cores).fit_predict(scores)
+    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=None)\
+        .fit_predict(scores.reshape(-1, 1), sample_weight=weights)
 
-    # Keep any outliers (outliers near 0 should be discarded)
-    keeper_cluster = labels == np.unique(labels)[-1]
-    keep_edge = pd.Series((labels == -1) & (tf_data.values > np.mean(scores[keeper_cluster])), index=tf_data.index)
+    min_score = np.min(scores[labels == np.unique(labels)[-1]])
 
-    # Add the cluster of values with the largest scores unless that exceeds max_sparsity
-    current_ratio = keep_edge.sum() / keep_edge.size
+    # If the largest cluster is less than max_sparsity, keep it and any outliers greater than it
+    keep_all_values = tf_data >= min_score
+    if keep_all_values.sum() / keep_all_values.size <= max_sparsity:
+        return keep_all_values
 
-    if current_ratio + (keeper_cluster.sum() / keeper_cluster.size) <= max_sparsity:
-        keep_edge |= keeper_cluster
-
-    return keep_edge
+    # If the largest cluster exceeds max_sparsity, only keep outliers
+    else:
+        keep_outlier_values = scores[(labels == -1) & (scores > min_score)]
+        return pd.Series(np.isin(tf_data.values, keep_outlier_values), index=tf_data.index)
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
