@@ -311,8 +311,7 @@ def _gene_gen(genes, motif_peaks, motif_information):
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     scores = tf_data.values.reshape(-1, 1)
 
-    scanner = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, algorithm='brute', n_jobs=1)
-    labels = scanner.fit_predict(scores)
+    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=1).fit_predict(scores)
 
     # Keep any outliers (outliers near 0 should be discarded)
     keeper_cluster = labels == np.unique(labels)[-1]
