@@ -259,7 +259,7 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
             prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x), _prior_gen(raw_matrix)))
 
         else:
-            with multiprocessing.Pool(num_workers, maxtasksperchild=10) as pool:
+            with multiprocessing.Pool(num_workers, maxtasksperchild=1) as pool:
                 prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=1)
 
         print("Completed edge selection with DBSCAN")
@@ -276,8 +276,9 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
 def _prior_gen(prior_matrix):
 
     n = len(prior_matrix.columns)
+
     for i, col_name in enumerate(prior_matrix.columns):
-        yield i, col_name, prior_matrix[col_name], n
+        yield i, col_name, prior_matrix[col_name].copy(), n
 
 
 def _prior_clusterer(i, col_name, col_data, n, debug=False):

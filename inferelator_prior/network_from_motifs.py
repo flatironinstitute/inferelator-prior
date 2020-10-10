@@ -1,11 +1,12 @@
 from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, GTF_CHROMOSOME,
-                                             SEQ_START, SEQ_STOP, GTF_STRAND)
+                                             SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME)
 from inferelator_prior.processor.prior import build_prior_from_motifs, summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import motifs_to_dataframe, INFO_COL, MOTIF_NAME_COL
 from inferelator_prior.processor._species_constants import SPECIES_MAP, _DEFAULT_WINDOW, _DEFAULT_TANDEM
 
 import argparse
+import gc
 import os
 import pathlib
 import pandas as pd
@@ -96,7 +97,7 @@ def main():
 def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
                            use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                            truncate_motifs=0.35, scanner_thresh="1e-4", motif_format="meme",
-                           gene_constraint_list=None, regulator_constraint_list=None, output_prefix=None):
+                           gene_constraint_list_file=None, regulator_constraint_list_file=None, output_prefix=None):
 
     # Set the scanner type
     if scanner_type.lower() == 'fimo':
@@ -112,6 +113,17 @@ def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_f
     # Load genes and open a window
     genes = load_gtf_to_dataframe(annotation_file)
     print("\t{n} genes loaded".format(n=genes.shape[0]))
+
+    # Constrain to a list of genes
+    if gene_constraint_list_file is not None:
+        _gene_constraint_list = pd.read_csv(gene_constraint_list_file, index_col=None).iloc[:, 0].tolist()
+        _gene_constraint_list = list(map(lambda x: x.upper(), _gene_constraint_list))
+
+        _gene_constraint_idx = genes[GTF_GENENAME].str.upper()
+        _gene_constraint_idx = _gene_constraint_idx.isin(_gene_constraint_list)
+
+        genes = genes.loc[_gene_constraint_idx, :].copy()
+        print("{c} Genes Retained ({n} in constraint list)".format(c=genes.shape[0], n=len(_gene_constraint_list)))
 
     genes = open_window(genes, window_size=window_size, use_tss=use_tss, check_against_fasta=genomic_fasta_file)
     print("\tPromoter regions defined with window {w}".format(w=window_size))
@@ -131,6 +143,9 @@ def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_f
     motifs = read(motif_file)
     motif_information = motifs_to_dataframe(motifs)
     print("\t{n} motifs loaded".format(n=len(motif_information)))
+
+    if regulator_constraint_list_file is not None:
+        _regulator_constraint_list = pd.read_csv(regulator_constraint_list_file, index_col=None).iloc[:, 0].tolist()
 
     if truncate_motifs is not None:
         [x.truncate(threshold=truncate_motifs) for x in motifs]
@@ -156,8 +171,9 @@ def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_f
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
     raw_matrix = summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=num_cores)
 
-    # Nuke the raw search dataframe
-    del motif_peaks
+    # Nuke a bunch of dataframes and force a cyclic check
+    del motif_information, motif_peaks, genes, gene_locs, motifs
+    gc.collect()
     print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
 
     if output_prefix is not None:
