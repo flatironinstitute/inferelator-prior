@@ -233,7 +233,7 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     return summarized_data
 
 
-def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True):
+def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True, debug=False):
     """
     Construct a prior [G x K] interaction matrix
     :param raw_matrix: pd.DataFrame [G x K]
@@ -274,15 +274,23 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
 
 
 def _prior_gen(prior_matrix):
+
     n = len(prior_matrix.columns)
     for i, col_name in enumerate(prior_matrix.columns):
         yield i, col_name, prior_matrix[col_name], n
 
 
-def _prior_clusterer(i, col_name, col_data, n):
-    if i % 50 == 0:
-        print("Clustering on {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
-    return col_name, _find_outliers_dbscan(col_data)
+def _prior_clusterer(i, col_name, col_data, n, debug=False):
+
+    if debug or (i % 50 == 0):
+        print("Clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
+
+    keep_idx = _find_outliers_dbscan(col_data)
+
+    if debug:
+        print("Completed clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
+
+    return col_name, keep_idx
 
 
 def _gene_gen(genes, motif_peaks, motif_information):
