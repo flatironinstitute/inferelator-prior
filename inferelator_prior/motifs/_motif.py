@@ -305,7 +305,7 @@ class __MotifScanner:
         # If the number of workers is 1, run fimo directly
         if (self.num_workers == 1) or (len(motif_files) == 1):
             assert len(motif_files) == 1
-            print("Launching {name} scanner [1 / 1]")
+            print("Launching {name} scanner [1 / 1]".format(name=self.scanner_name))
             return self._get_motifs(extracted_fasta_file, motif_files[0], threshold=threshold)
 
         # Otherwise parallelize with a process pool (pathos because dill will do local functions)
