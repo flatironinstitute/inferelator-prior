@@ -255,17 +255,18 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
         print("Selecting edges to retain with DBSCAN")
         prior_matrix = pd.DataFrame(False, index=raw_matrix.index, columns=raw_matrix.columns)
 
-        if num_workers == 1:
-            prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x), _prior_gen(raw_matrix)))
+        for i, col_name in enumerate(prior_matrix.columns):
 
-        else:
-            with multiprocessing.Pool(num_workers, maxtasksperchild=1) as pool:
-                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=1)
+            if debug or (i % 50 == 0):
+                print("Clustering {col} [{i} / {n}]".format(i=i, n=prior_matrix.shape[1], col=col_name))
+
+            keep_idx = _find_outliers_dbscan(prior_matrix[col_name], n_cores=num_workers)
+            prior_matrix.loc[keep_idx, col_name] = True
+
+            if debug:
+                print("Completed clustering {col} [{i} / {n}]".format(i=i, n=prior_matrix.shape[1], col=col_name))
 
         print("Completed edge selection with DBSCAN")
-        for reg, reg_idx in prior_matrix_idx:
-            prior_matrix.loc[reg_idx, reg] = True
-
         return prior_matrix
 
     else:
@@ -308,10 +309,10 @@ def _gene_gen(genes, motif_peaks, motif_information):
             continue
 
 
-def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
+def _find_outliers_dbscan(tf_data, max_sparsity=0.05, n_cores=1):
     scores = tf_data.values.reshape(-1, 1)
 
-    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=1).fit_predict(scores)
+    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=n_cores).fit_predict(scores)
 
     # Keep any outliers (outliers near 0 should be discarded)
     keeper_cluster = labels == np.unique(labels)[-1]
