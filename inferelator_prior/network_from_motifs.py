@@ -65,12 +65,8 @@ def main():
                                                           motif_ic=args.min_ic,
                                                           tandem=_tandem,
                                                           scanner_type=args.scanner,
-                                                          motif_format=args.motif_format)
-
-        print("Writing output file {o}".format(o=out_prefix + "_edge_matrix.tsv.gz"))
-        (prior_matrix != 0).astype(int).to_csv(out_prefix + "_edge_matrix.tsv.gz", sep="\t")
-        print("Writing output file {o}".format(o=out_prefix + "_unfiltered_matrix.tsv.gz"))
-        raw_matrix.to_csv(out_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
+                                                          motif_format=args.motif_format,
+                                                          output_prefix=out_prefix)
 
     else:
         motifs = MotifScan.load_motif_file(args.motif)
@@ -100,7 +96,7 @@ def main():
 def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_fasta_file, window_size=0,
                            use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                            truncate_motifs=0.35, scanner_thresh="1e-4", motif_format="meme",
-                           gene_constraint_list=None, regulator_constraint_list=None):
+                           gene_constraint_list=None, regulator_constraint_list=None, output_prefix=None):
 
     # Set the scanner type
     if scanner_type.lower() == 'fimo':
@@ -164,9 +160,18 @@ def build_atac_motif_prior(motif_file, atac_bed_file, annotation_file, genomic_f
     del motif_peaks
     print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
 
+    if output_prefix is not None:
+        print("Writing output file {o}".format(o=output_prefix + "_unfiltered_matrix.tsv.gz"))
+        raw_matrix.to_csv(output_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
+
     # Choose edges to keep
     prior_matrix = build_prior_from_motifs(raw_matrix, num_workers=num_cores)
     print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
+
+    if output_prefix is not None:
+        print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
+        (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
+
     return prior_matrix, raw_matrix
 
 
