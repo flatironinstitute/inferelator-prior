@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 install_requires = ["numpy", "pandas", "HTSeq", "pybedtools", "scipy", "pathos", "sklearn"]
 tests_require = ["coverage", "nose", "pysam"]
-version = "0.2.1"
+version = "0.2.2"
 
 # Description from README.md
 base_dir = os.path.dirname(os.path.abspath(__file__))

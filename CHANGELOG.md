@@ -1,3 +1,8 @@
+### Version 0.2.2
+
+* Added additional messaging
+* Restructured internal memory usage to be more efficient
+
 ### Version 0.2.1
 
 * Parallelized the final information matrix clustering and cutting
