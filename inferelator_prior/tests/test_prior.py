@@ -4,7 +4,6 @@ import pandas as pd
 
 from inferelator_prior.motifs import meme, motifs_to_dataframe, MotifScan, fimo, MOTIF_NAME_COL, SCAN_SCORE_COL
 from inferelator_prior.processor import prior, gtf
-from inferelator_prior.processor.prior import _cut_matrix
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 
@@ -23,7 +22,7 @@ class TestPriorPipeline(unittest.TestCase):
         self.motif_information = motifs_to_dataframe(self.motifs)
 
     def test_prior_agg_by_base(self):
-        motif_peaks, _ = self.do_scan_prior(20)
+        motif_peaks, _, _ = self.do_scan_prior(20)
         motif_peaks[fimo.FIMO_START] = [7, 13, 19, 1]
         motif_peaks[fimo.FIMO_STOP] = [18, 24, 30, 12]
         motif_peaks[MOTIF_NAME_COL] = 'ECORI'
@@ -44,39 +43,40 @@ class TestPriorPipeline(unittest.TestCase):
 
     def test_prior_no_tandem_20_window(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=0)
-        motif_peaks, (prior_edges, prior_matrix, raw_matrix) = self.do_scan_prior(20)
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(20)
         self.assertEqual(motif_peaks.shape[0], 4)
-        self.assertEqual(prior_edges.shape[0], 1)
-        self.assertEqual(prior_edges['score'].values[0], 24.)
+        self.assertEqual(prior_matrix.sum().sum(), 1)
+        self.assertEqual(raw_matrix.max().max(), 24.)
 
     def test_prior_no_tandem_200_window(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=0)
-        motif_peaks, (prior_edges, prior_matrix, raw_matrix) = self.do_scan_prior(200)
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(200)
         self.assertEqual(motif_peaks.shape[0], 12)
-        self.assertEqual(prior_edges.shape[0], 1)
-        self.assertEqual(prior_edges['score'].values[0], 24.)
+        self.assertEqual(prior_matrix.sum().sum(), 1)
+        self.assertEqual(raw_matrix.max().max(), 24.)
 
     def test_prior_50_tandem_200_window(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=50)
-        motif_peaks, (prior_edges, prior_matrix, raw_matrix) = self.do_scan_prior(200)
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(200)
 
         self.assertEqual(motif_peaks.shape[0], 12)
-        self.assertEqual(prior_edges.shape[0], 1)
-        self.assertEqual(prior_edges['score'].values[0], 72.)
+        self.assertEqual(prior_matrix.sum().sum(), 1)
+        self.assertEqual(raw_matrix.max().max(), 72.)
 
     def test_prior_50_tandem_10000_window(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=50)
-        motif_peaks, (prior_edges, prior_matrix, raw_matrix) = self.do_scan_prior(10000)
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(10000)
         self.assertEqual(motif_peaks.shape[0], 14)
-        self.assertEqual(prior_edges.shape[0], 1)
-        self.assertEqual(prior_edges['score'].values[0], 72.)
+        self.assertEqual(prior_matrix.sum().sum(), 1)
+        self.assertEqual(raw_matrix.max().max(), 72.)
 
     def test_prior_no_tandem_1000_window_no_bed(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=0)
-        motif_peaks, (prior_edges, prior_matrix, raw_matrix) = self.do_scan_prior(1000, use_bed=False)
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(1000, use_bed=False)
+
         self.assertEqual(motif_peaks.shape[0], 14)
-        self.assertEqual(prior_edges.shape[0], 1)
-        self.assertEqual(prior_edges['score'].values[0], 24.)
+        self.assertEqual(prior_matrix.sum().sum(), 1)
+        self.assertEqual(raw_matrix.max().max(), 24.)
 
     def test_multiple_genes_50_tandem_100_window(self):
         prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=50)
@@ -87,15 +87,17 @@ class TestPriorPipeline(unittest.TestCase):
                                                           "gene_name": "TEST2",
                                                           "strand": "-"}, index=[1])))
 
-        motif_peaks, (prior_edges, prior_matrix, raw_matrix) = self.do_scan_prior(100)
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(100)
         self.assertEqual(motif_peaks.shape[0], 10)
-        self.assertEqual(prior_edges.shape[0], 2)
-        self.assertListEqual(prior_edges['score'].values.tolist(), [72., 24.])
+        self.assertEqual(prior_matrix.sum().sum(), 2)
+
+        tf = raw_matrix.iloc[:, 0]
+        self.assertListEqual(tf.values.tolist(), [72., 24.])
 
     def test_matrix_cuts(self):
         info_matrix = pd.read_csv(os.path.join(artifact_path, "test_info_matrix.tsv.gz"), sep="\t", index_col=0)
         info_matrix = info_matrix.iloc[:, 0:10]
-        cut_matrix = _cut_matrix(info_matrix, num_workers=1)
+        cut_matrix = prior.build_prior_from_motifs(info_matrix, num_workers=1)
 
         for i in info_matrix.columns:
             _is_called = cut_matrix[i] != 0
@@ -103,8 +105,6 @@ class TestPriorPipeline(unittest.TestCase):
 
             _kept = info_matrix[i][_is_called]
             _not_kept = info_matrix[i][~_is_called]
-
-            print(i)
 
             self.assertGreater(_kept.min(), _not_kept.max()) if _num_called > 0 else True
 
@@ -120,7 +120,7 @@ class TestPriorPipeline(unittest.TestCase):
                               promoter_bed=self.gene_locs,
                               min_ic=0, threshold=5e-4)
 
-        return (motif_peaks, prior.build_prior_from_motifs(genes, motif_peaks,
-                                                           self.motif_information,
-                                                           num_workers=1,
-                                                           do_threshold=do_threshold))
+        raw_matrix = prior.summarize_target_per_regulator(genes, motif_peaks, self.motif_information, num_workers=1)
+        prior_matrix = prior.build_prior_from_motifs(raw_matrix, num_workers=1, do_threshold=do_threshold)
+
+        return motif_peaks, prior_matrix, raw_matrix

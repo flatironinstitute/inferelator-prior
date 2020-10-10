@@ -176,41 +176,24 @@ class MotifScorer:
                              MOTIF_NAME_COL: [overlap_df[MOTIF_NAME_COL].unique()[0]]})
 
 
-def build_prior_from_motifs(genes, motif_peaks, motif_information, num_workers=1, seed=42, do_threshold=True):
+def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None):
     """
-    Construct a prior [G x K] interaction matrix
+    Process a large dataframe of motif hits into a dataframe with the best hit for each regulator-target pair
     :param genes: pd.DataFrame [G x n]
     :param motif_peaks: pd.DataFrame
         Motif search data loaded from FIMO or HOMER
     :param motif_information: pd.DataFrame [n x 5]
         Motif characteristics loaded from a MEME file
-    :return prior_data, prior_matrix: pd.DataFrame [G*K x 6], pd.DataFrame [G x K]
-        A long-form edge table data frame and a wide-form interaction matrix data frame
+    :param num_workers: int
+        Number of cores to use
+    :return summarized_data: pd.DataFrame [G x K]
+        A information matrix connecting genes and regulators
     """
 
-    prior_data = _create_information_matrix(genes, motif_peaks, motif_information, num_workers=num_workers)
-    motif_names = motif_information[MOTIF_NAME_COL].unique()
-
-    # Pivot to a matrix, extend to all TFs, and fill with 0s
-    raw_matrix = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
-    raw_matrix = raw_matrix.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
-    raw_matrix.index.name = PRIOR_GENE
-
-    np.random.seed(seed)
-    prior_matrix = _cut_matrix(raw_matrix, num_workers=num_workers) if do_threshold else raw_matrix.copy()
-
-    # Keep the peaks that we want
-    thresholded_data = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='T')
-    thresholded_data = prior_data.merge(thresholded_data, on=[PRIOR_GENE, PRIOR_TF])
-    thresholded_data = thresholded_data.loc[thresholded_data['T'] != 0, :]
-    thresholded_data.drop('T', axis=1, inplace=True)
-
-    return thresholded_data, prior_matrix, raw_matrix
-
-
-def _create_information_matrix(genes, motif_peaks, motif_information, num_workers=1):
     motif_ids = motif_information[MOTIF_COL].unique()
-    print("Building prior from {g} genes and {k} Motifs".format(g=genes.shape[0], k=len(motif_ids)))
+    motif_names = motif_information[MOTIF_NAME_COL].unique()
+    print("Building prior from {g} genes and {k} Motifs ({t} TFs)".format(g=genes.shape[0], k=len(motif_ids),
+                                                                          t=len(motif_names)))
 
     motif_peaks, motif_information = MotifScorer.preprocess_motifs(motif_peaks, motif_information)
     print("Preliminary search identified {n} binding sites".format(n=motif_peaks.shape[0]))
@@ -242,22 +225,47 @@ def _create_information_matrix(genes, motif_peaks, motif_information, num_worker
     prior_data[PRIOR_START] = prior_data[PRIOR_START].astype(int)
     prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
 
-    return prior_data
+    # Pivot to a matrix, extend to all TFs, and fill with 0s
+    summarized_data = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
+    summarized_data = summarized_data.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+    summarized_data.index.name = PRIOR_GENE
+
+    return summarized_data
 
 
-def _cut_matrix(raw_matrix, num_workers=1):
-    prior_matrix = raw_matrix.copy()
+def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True):
+    """
+    Construct a prior [G x K] interaction matrix
+    :param raw_matrix: pd.DataFrame [G x K]
+        Scored matrix between targets and regulators
+    :param num_workers: int
+        Number of cores to use
+    :param seed: int
+        Random seed for numpy random pool
+    :param do_threshold: bool
+        Threshold using DBSCAN if true; retain all non-zero edges if false
+    :return prior_matrix: pd.DataFrame [G x K]
+        An interaction matrix data frame
+    """
 
-    # Threshold per-TF using DBSCAN
-    print("Selecting edges to retain with DBSCAN")
+    np.random.seed(seed)
 
-    with multiprocessing.Pool(num_workers, maxtasksperchild=100) as pool:
-        prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(prior_matrix), chunksize=10)
+    if do_threshold:
+        # Threshold per-TF using DBSCAN
+        print("Selecting edges to retain with DBSCAN")
+        prior_matrix = pd.DataFrame(False, index=raw_matrix.index, columns=raw_matrix.columns)
 
-    for reg, reg_idx in prior_matrix_idx:
-        prior_matrix.loc[~reg_idx, reg] = 0.
+        with multiprocessing.Pool(num_workers, maxtasksperchild=100) as pool:
+            prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=10)
 
-    return prior_matrix
+        for reg, reg_idx in prior_matrix_idx:
+            prior_matrix.loc[reg_idx, reg] = True
+
+        return prior_matrix
+
+    else:
+        print("Retaining all edges")
+        return raw_matrix != 0
 
 
 def _prior_gen(prior_matrix):
