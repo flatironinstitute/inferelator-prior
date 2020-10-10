@@ -279,7 +279,7 @@ def _prior_gen(prior_matrix):
     n = len(prior_matrix.columns)
 
     for i, col_name in enumerate(prior_matrix.columns):
-        yield i, col_name, prior_matrix[col_name].copy(), n
+        yield i, col_name, prior_matrix[col_name], n
 
 
 def _prior_clusterer(i, col_name, col_data, n, debug=False):
