@@ -255,9 +255,14 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
         print("Selecting edges to retain with DBSCAN")
         prior_matrix = pd.DataFrame(False, index=raw_matrix.index, columns=raw_matrix.columns)
 
-        with multiprocessing.Pool(num_workers, maxtasksperchild=100) as pool:
-            prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=10)
+        if num_workers == 1:
+            prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x), _prior_gen(raw_matrix)))
 
+        else:
+            with multiprocessing.Pool(num_workers, maxtasksperchild=10) as pool:
+                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=1)
+
+        print("Completed edge selection with DBSCAN")
         for reg, reg_idx in prior_matrix_idx:
             prior_matrix.loc[reg_idx, reg] = True
 
