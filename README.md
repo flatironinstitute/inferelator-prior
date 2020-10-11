@@ -13,14 +13,23 @@ data that is compatible with the [inferelator](https://github.com/flatironinstit
                                   --species {yeast,fly,mouse,human}
                                   -b constraning_bed_file.bed
                                   --cpu num_cores
+                                  --genes gene_list.txt
+                                  --tfs tf_list.txt
                                   
 This requires a motif PWM database (`-m PATH`), 
 a genome to search (both sequence as a FASTA `-f PATH` and annotations `-g PATH`),
 and an output prefix for several files (`-o PATH`).
 In addition, default settings for a specific species can be set with (`--species`).
-A BED file can be provided (`-b PATH`) based on some constraining experiment to restrict searching to specific genomic areas.
+A BED file can be provided (`-b PATH`) based on some constraining experiment to restrict searching to 
+specific genomic areas.
 This will use multiple cores to search for motifs and process the resulting data.
 By default, all available processors will be used, but this can be overridden with `--cpu N`.
+A list of genes (one per line in a text file) can be provided to `--genes` 
+and a list of tfs (one per line in a text file) can be provided to `--tfs`.
+A network will be built for only these genes or TFs.
+
+The output from this script is an unsigned connectivity matrix (0, 1) connecting genes on rows to regulators on columns.
+In addition, this produces an unfiltered score matrix (0, ) connecting genes on rows to regulators on columns.
 
 ### Requirements
 

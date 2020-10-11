@@ -2,6 +2,7 @@
 
 * Added additional messaging
 * Restructured internal memory usage to be more efficient
+* Added constraint lists for TFs and genes
 
 ### Version 0.2.1
 
