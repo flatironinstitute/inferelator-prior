@@ -251,7 +251,6 @@ class Motif:
 
 
 class __MotifScanner:
-
     scanner_name = None
 
     def __init__(self, motif_file=None, motifs=None, num_workers=4):
@@ -314,9 +313,9 @@ class __MotifScanner:
             n = len(motif_files)
 
             def _get_chunk_motifs(i, chunk_file):
-                print("Launching {name} scanner [{i} / {n}]".format(name=self.scanner_name, i=i+1, n=n))
+                print("Launching {name} scanner [{i} / {n}]".format(name=self.scanner_name, i=i + 1, n=n))
                 results = self._get_motifs(extracted_fasta_file, chunk_file, threshold=threshold)
-                print("Scanning completed [{i} / {n}]".format(i=i+1, n=n))
+                print("Scanning completed [{i} / {n}]".format(i=i + 1, n=n))
                 return results
 
             with pathos.multiprocessing.Pool(self.num_workers) as pool:
@@ -364,18 +363,28 @@ def select_motifs(motifs, regulator_constraint_list):
     :return motifs: A list of motif objects
     :rtype: list[Motifs]
     """
-    if regulator_constraint_list is not None:
-        _regulator_constraint_list = list(map(lambda x: x.upper(), regulator_constraint_list))
+    if regulator_constraint_list is None:
+        return motifs
 
-        _pre_len = len(motifs)
-        motifs = [m for m in motifs if m.motif_name.upper() in _regulator_constraint_list]
-        _retained_names = np.unique([m.motif_name for m in motifs])
+    if len(regulator_constraint_list) == 0:
+        raise ValueError("No elements provided in regulator_constraint_list")
 
-        print("{c} TFs Retained ({n} in constraint list, {t) / {al} motifs)".format(c=len(_retained_names),
-                                                                                    n=len(_regulator_constraint_list),
-                                                                                    t=len(motifs),
-                                                                                    al=_pre_len))
+    _regulator_constraint_list = list(map(lambda x: x.upper(), regulator_constraint_list))
 
+    _pre_len = len(motifs)
+    motifs = [m for m in motifs if m.motif_name.upper() in _regulator_constraint_list]
+    _retained_names = np.unique([m.motif_name for m in motifs])
+
+    if len(motifs) == 0:
+        _msg = "No overlap between motifs ({mo} ...) and constraint list ({li} ...)"
+        _msg = _msg.format(mo=list(map(lambda x: x.motif_name, motifs[:min(3, len(motifs))])),
+                           li=regulator_constraint_list[:min(3, len(regulator_constraint_list))])
+        raise ValueError(_msg)
+
+    print("{c} TFs Retained ({n} in constraint list, {t} / {al} motifs)".format(c=len(_retained_names),
+                                                                                n=len(_regulator_constraint_list),
+                                                                                t=len(motifs),
+                                                                                al=_pre_len))
     return motifs
 
 

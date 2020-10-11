@@ -127,10 +127,19 @@ def select_genes(gene_dataframe, gene_constraint_list):
     if gene_constraint_list is None:
         return gene_dataframe
 
+    if len(gene_constraint_list) == 0:
+        raise ValueError("No elements provided in gene_constraint_list")
+
     _gene_constraint_list = list(map(lambda x: x.upper(), gene_constraint_list))
 
     _gene_constraint_idx = gene_dataframe[GTF_GENENAME].str.upper()
     _gene_constraint_idx = _gene_constraint_idx.isin(_gene_constraint_list)
+
+    if _gene_constraint_idx.sum() == 0:
+        _msg = "No overlap between annotations ({an} ...) and constraint list ({li} ...)"
+        _msg = _msg.format(an=list(gene_dataframe[GTF_GENENAME][:min(3, gene_dataframe.shape[0])]),
+                           li=gene_constraint_list[:min(3, len(gene_constraint_list))])
+        raise ValueError(_msg)
 
     gene_dataframe = gene_dataframe.loc[_gene_constraint_idx, :].copy()
     print("{c} Genes Retained ({n} in constraint list)".format(c=gene_dataframe.shape[0], n=len(_gene_constraint_list)))
