@@ -73,17 +73,29 @@ def main():
         _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
         _use_tss = SPECIES_MAP[_species]['use_tss'] if args.tss else args.tss
 
-    build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
-                                 constraint_bed_file=args.constraint,
-                                 window_size=_window,
-                                 num_cores=args.cores,
-                                 motif_ic=args.min_ic,
-                                 tandem=_tandem,
-                                 scanner_type=args.scanner,
-                                 motif_format=args.motif_format,
-                                 output_prefix=out_prefix,
-                                 gene_constraint_list_file=args.gene_list,
-                                 regulator_constraint_list_file=args.tf_list)
+    _do_genes, _do_promoters = args.annotation is not None, args.promoter is not None
+
+    if _do_genes and _do_promoters:
+        raise ValueError("Providing both a GTF file to -g and a promoter BED file to -p is not supported")
+
+    elif _do_genes:
+        build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
+                                     constraint_bed_file=args.constraint,
+                                     window_size=_window,
+                                     num_cores=args.cores,
+                                     motif_ic=args.min_ic,
+                                     tandem=_tandem,
+                                     scanner_type=args.scanner,
+                                     motif_format=args.motif_format,
+                                     output_prefix=out_prefix,
+                                     gene_constraint_list_file=args.gene_list,
+                                     regulator_constraint_list_file=args.tf_list)
+
+    elif _do_promoters:
+        raise ValueError("Gene promoter location is not supported yet")
+
+    else:
+        raise ValueError("Provide a GTF file to -g or a promoter BED file to -p")
 
 
 def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file, constraint_bed_file=None,
