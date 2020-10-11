@@ -107,8 +107,6 @@ class TestPriorPipeline(unittest.TestCase):
 
             self.assertGreater(_kept.min(), _not_kept.max()) if _num_called > 0 else True
 
-        assert False
-
     def do_scan_prior(self, window_size, do_threshold=False, use_bed=True, use_tss=True):
         genes = gtf.open_window(self.genes, window_size=window_size, use_tss=use_tss,
                                 check_against_fasta=FASTA_FILE_NAME)
