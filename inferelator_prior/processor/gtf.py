@@ -113,6 +113,31 @@ def open_window(annotation_dataframe, window_size, use_tss=False, check_against_
     return window_annotate
 
 
+def select_genes(gene_dataframe, gene_constraint_list):
+    """
+    Keep only genes in a list. Case-insensitive.
+
+    :param gene_dataframe: Dataframe of genes
+    :type gene_dataframe: pd.DataFrame
+    :param gene_constraint_list: List of genes to keep. None disables.
+    :type gene_constraint_list: list[str], None
+    :return:
+    """
+
+    if gene_constraint_list is None:
+        return gene_dataframe
+
+    _gene_constraint_list = list(map(lambda x: x.upper(), gene_constraint_list))
+
+    _gene_constraint_idx = gene_dataframe[GTF_GENENAME].str.upper()
+    _gene_constraint_idx = _gene_constraint_idx.isin(_gene_constraint_list)
+
+    gene_dataframe = gene_dataframe.loc[_gene_constraint_idx, :].copy()
+    print("{c} Genes Retained ({n} in constraint list)".format(c=gene_dataframe.shape[0], n=len(_gene_constraint_list)))
+
+    return gene_dataframe
+
+
 def _fix_genes(gene_dataframe):
     """
     Find minimum start and maximum stop

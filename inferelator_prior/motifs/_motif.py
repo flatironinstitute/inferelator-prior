@@ -263,7 +263,7 @@ class __MotifScanner:
         self.motifs = motifs
         self.num_workers = num_workers
 
-    def scan(self, genome_fasta_file, atac_bed_file=None, promoter_bed=None, min_ic=None, threshold=None):
+    def scan(self, genome_fasta_file, constraint_bed_file=None, promoter_bed=None, min_ic=None, threshold=None):
         """
         """
 
@@ -273,15 +273,15 @@ class __MotifScanner:
         self.motifs = {mot.motif_id: mot for mot in self.motifs}
 
         try:
-            if atac_bed_file is None and promoter_bed is None:
+            if constraint_bed_file is None and promoter_bed is None:
                 motif_data = self._scan_extract(motif_files, genome_fasta_file, threshold=threshold)
                 return self._postprocess(motif_data)
-            elif atac_bed_file is not None and promoter_bed is None:
-                bed_file = load_bed_to_bedtools(atac_bed_file)
-            elif atac_bed_file is None and promoter_bed is not None:
+            elif constraint_bed_file is not None and promoter_bed is None:
+                bed_file = load_bed_to_bedtools(constraint_bed_file)
+            elif constraint_bed_file is None and promoter_bed is not None:
                 bed_file = load_bed_to_bedtools(promoter_bed)
             else:
-                bed_file = intersect_bed(load_bed_to_bedtools(atac_bed_file), load_bed_to_bedtools(promoter_bed))
+                bed_file = intersect_bed(load_bed_to_bedtools(constraint_bed_file), load_bed_to_bedtools(promoter_bed))
 
             extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
 
@@ -351,6 +351,46 @@ def motifs_to_dataframe(motifs):
         index=[MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL]).T
 
     return df
+
+
+def select_motifs(motifs, regulator_constraint_list):
+    """
+    Keep only motifs for TFs in a list. Case-insensitive.
+
+    :param motifs: A list of motif objects
+    :type motifs: list[Motif]
+    :param regulator_constraint_list: A list of regulator names. Skip if None.
+    :type regulator_constraint_list: list[str], None
+    :return motifs: A list of motif objects
+    :rtype: list[Motifs]
+    """
+    if regulator_constraint_list is not None:
+        _regulator_constraint_list = list(map(lambda x: x.upper(), regulator_constraint_list))
+
+        _pre_len = len(motifs)
+        motifs = [m for m in motifs if m.motif_name.upper() in _regulator_constraint_list]
+        _retained_names = np.unique([m.motif_name for m in motifs])
+
+        print("{c} TFs Retained ({n} in constraint list, {t) / {al} motifs)".format(c=len(_retained_names),
+                                                                                    n=len(_regulator_constraint_list),
+                                                                                    t=len(motifs),
+                                                                                    al=_pre_len))
+
+    return motifs
+
+
+def truncate_motifs(motifs, truncate_value):
+    """
+    Remove flanking bases in motif until reaching a base that has a probability at least equal to truncate_value
+
+    :param motifs: List of motif objects
+    :type motifs: list[Motif]
+    :param truncate_value: Required probability. None disables.
+    :type truncate_value: numeric, None
+    """
+
+    if truncate_value is not None:
+        [x.truncate(threshold=truncate_value) for x in motifs]
 
 
 def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):

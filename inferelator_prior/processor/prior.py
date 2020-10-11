@@ -296,17 +296,23 @@ def _prior_clusterer(i, col_name, col_data, n, debug=False):
 
 
 def _gene_gen(genes, motif_peaks, motif_information):
-    for i, (idx, gene_data) in enumerate(genes.iterrows()):
-        try:
-            gene_chr, gene_start, gene_stop = gene_data[GTF_CHROMOSOME], gene_data[SEQ_START], gene_data[SEQ_STOP]
+    gene_names = genes[GTF_GENENAME].unique()
 
-            motif_data = motif_peaks[gene_data[GTF_CHROMOSOME]]
+    for i, gene in enumerate(gene_names):
+        gene_data = genes.loc[genes[GTF_GENENAME] == gene, :]
+        gene_loc = {GTF_GENENAME: gene, GTF_CHROMOSOME: gene_data.iloc[0, :][GTF_CHROMOSOME]}
+
+        gene_motifs = []
+        for _, row in gene_data.iterrows():
+            gene_chr, gene_start, gene_stop = row[GTF_CHROMOSOME], row[SEQ_START], row[SEQ_STOP]
+
+            motif_data = motif_peaks[gene_chr]
             motif_mask = motif_data[MotifScan.stop_col] >= gene_start
             motif_mask &= motif_data[MotifScan.start_col] <= gene_stop
-            motif_data = motif_data.loc[motif_mask, :].copy()
-            yield gene_data, motif_data, motif_information, i
-        except KeyError:
-            continue
+            gene_motifs.append(motif_data.loc[motif_mask, :])
+
+        gene_motifs = pd.concat(gene_motifs)
+        yield gene_loc, gene_motifs, motif_information, i
 
 
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
@@ -351,8 +357,7 @@ def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteratio
         'chromosome' binding site chromosome
     """
 
-    gene_name = gene_info[GTF_GENENAME]
-    gene_chr, gene_start, gene_stop = gene_info[GTF_CHROMOSOME], gene_info[SEQ_START], gene_info[SEQ_STOP]
+    gene_name, gene_chr = gene_info[GTF_GENENAME], gene_info[GTF_CHROMOSOME]
 
     if num_iteration % 100 == 0:
         print("Processing gene {i} [{gn}]".format(i=num_iteration, gn=gene_name))

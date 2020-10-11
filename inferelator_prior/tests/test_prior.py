@@ -115,7 +115,7 @@ class TestPriorPipeline(unittest.TestCase):
 
         ms = MotifScan.scanner(motifs=self.motifs, num_workers=1)
         motif_peaks = ms.scan(FASTA_FILE_NAME,
-                              atac_bed_file=BED_FILE_NAME if use_bed else None,
+                              constraint_bed_file=BED_FILE_NAME if use_bed else None,
                               promoter_bed=self.gene_locs,
                               min_ic=0, threshold=5e-4)
 

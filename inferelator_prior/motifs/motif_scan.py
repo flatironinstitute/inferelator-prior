@@ -19,6 +19,16 @@ class MotifScan(object):
     scanner = FIMOScanner
 
     @classmethod
+    def set_type(cls, motif_type_str):
+        # Set the scanner type
+        if motif_type_str.lower() == 'fimo':
+            cls.set_type_fimo()
+        elif motif_type_str.lower() == 'homer':
+            cls.set_type_homer()
+        else:
+            raise ValueError("motif_type must be fimo or homer")
+
+    @classmethod
     def set_type_fimo(cls):
         cls.name_col = FIMO_MOTIF
         cls.score_col = FIMO_SCORE
