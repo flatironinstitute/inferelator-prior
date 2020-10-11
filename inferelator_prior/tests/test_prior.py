@@ -96,7 +96,6 @@ class TestPriorPipeline(unittest.TestCase):
 
     def test_matrix_cuts(self):
         info_matrix = pd.read_csv(os.path.join(artifact_path, "test_info_matrix.tsv.gz"), sep="\t", index_col=0)
-        info_matrix = info_matrix.iloc[:, 0:10]
         cut_matrix = prior.build_prior_from_motifs(info_matrix, num_workers=1)
 
         for i in info_matrix.columns:
@@ -107,6 +106,8 @@ class TestPriorPipeline(unittest.TestCase):
             _not_kept = info_matrix[i][~_is_called]
 
             self.assertGreater(_kept.min(), _not_kept.max()) if _num_called > 0 else True
+
+        assert False
 
     def do_scan_prior(self, window_size, do_threshold=False, use_bed=True, use_tss=True):
         genes = gtf.open_window(self.genes, window_size=window_size, use_tss=use_tss,
