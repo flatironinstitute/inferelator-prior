@@ -321,7 +321,8 @@ def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=None)\
         .fit_predict(scores.reshape(-1, 1), sample_weight=weights)
 
-    min_score = np.min(scores[labels == np.unique(labels)[-1]])
+    largest_cluster = np.argmax(np.array([np.min(scores[labels == i]) for i in range(np.max(labels) + 1)]))
+    min_score = np.min(scores[labels == largest_cluster])
 
     # If the largest cluster is less than max_sparsity, keep it and any outliers greater than it
     keep_all_values = tf_data >= min_score
