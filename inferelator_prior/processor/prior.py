@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
-from scipy import sparse
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -303,13 +302,27 @@ def _gene_gen(genes, motif_peaks, motif_information):
         gene_loc = {GTF_GENENAME: gene, GTF_CHROMOSOME: gene_data.iloc[0, :][GTF_CHROMOSOME]}
 
         gene_motifs = []
+        bad_chr = []
         for _, row in gene_data.iterrows():
             gene_chr, gene_start, gene_stop = row[GTF_CHROMOSOME], row[SEQ_START], row[SEQ_STOP]
 
-            motif_data = motif_peaks[gene_chr]
+            try:
+                motif_data = motif_peaks[gene_chr]
+            except KeyError:
+                # If this chromosome is some weird scaffold or not in the genome, skip it
+                # Only print the error message once though
+                if gene_chr not in bad_chr:
+                    print("Chromosome {c} not found; skipping gene {g}".format(c=gene_chr, g=gene))
+                    bad_chr.append(gene_chr)
+
+                continue
+
             motif_mask = motif_data[MotifScan.stop_col] >= gene_start
             motif_mask &= motif_data[MotifScan.start_col] <= gene_stop
             gene_motifs.append(motif_data.loc[motif_mask, :])
+
+        if len(gene_motifs) == 0:
+            continue
 
         gene_motifs = pd.concat(gene_motifs)
         yield gene_loc, gene_motifs, motif_information, i
