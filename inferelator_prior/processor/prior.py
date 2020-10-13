@@ -296,13 +296,13 @@ def _prior_clusterer(i, col_name, col_data, n, debug=False):
 
 def _gene_gen(genes, motif_peaks, motif_information):
     gene_names = genes[GTF_GENENAME].unique().tolist()
+    bad_chr = {}
 
     for i, gene in enumerate(gene_names):
         gene_data = genes.loc[genes[GTF_GENENAME] == gene, :]
         gene_loc = {GTF_GENENAME: gene, GTF_CHROMOSOME: gene_data.iloc[0, :][GTF_CHROMOSOME]}
 
         gene_motifs = []
-        bad_chr = []
         for _, row in gene_data.iterrows():
             gene_chr, gene_start, gene_stop = row[GTF_CHROMOSOME], row[SEQ_START], row[SEQ_STOP]
 
@@ -311,9 +311,11 @@ def _gene_gen(genes, motif_peaks, motif_information):
             except KeyError:
                 # If this chromosome is some weird scaffold or not in the genome, skip it
                 # Only print the error message once though
-                if gene_chr not in bad_chr:
+                if gene_chr not in bad_chr.keys():
                     print("Chromosome {c} not found; skipping gene {g}".format(c=gene_chr, g=gene))
-                    bad_chr.append(gene_chr)
+                    bad_chr[gene_chr] = 1
+                else:
+                    bad_chr[gene_chr] += 1
 
                 continue
 
@@ -326,6 +328,9 @@ def _gene_gen(genes, motif_peaks, motif_information):
 
         gene_motifs = pd.concat(gene_motifs)
         yield gene_loc, gene_motifs, motif_information, i
+
+    for chromosome, bad_genes in bad_chr.items():
+        print("{n} genes annotated to chromosome {c} have been skipped".format(n=bad_genes, c=chromosome))
 
 
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
