@@ -295,7 +295,7 @@ def _prior_clusterer(i, col_name, col_data, n, debug=False):
 
 
 def _gene_gen(genes, motif_peaks, motif_information):
-    gene_names = genes[GTF_GENENAME].unique()
+    gene_names = genes[GTF_GENENAME].unique().tolist()
 
     for i, gene in enumerate(gene_names):
         gene_data = genes.loc[genes[GTF_GENENAME] == gene, :]

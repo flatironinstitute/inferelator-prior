@@ -94,6 +94,20 @@ class TestPriorPipeline(unittest.TestCase):
         tf = raw_matrix.iloc[:, 0]
         self.assertListEqual(tf.values.tolist(), [72., 24.])
 
+    def test_multiple_genes_bad_chr(self):
+        prior.MotifScorer.set_information_criteria(min_binding_ic=8, max_dist=50)
+        self.genes = pd.concat((self.genes, pd.DataFrame({"seqname": "seq200",
+                                                          "start": 550.,
+                                                          "end": 750.,
+                                                          "TSS": 750.,
+                                                          "gene_name": "TEST2",
+                                                          "strand": "-"}, index=[1])))
+
+        motif_peaks, prior_matrix, raw_matrix = self.do_scan_prior(200)
+        self.assertEqual(motif_peaks.shape[0], 12)
+        self.assertEqual(prior_matrix.sum().sum(), 1)
+        self.assertEqual(raw_matrix.max().max(), 72.)
+
     def test_matrix_cuts(self):
         info_matrix = pd.read_csv(os.path.join(artifact_path, "test_info_matrix.tsv.gz"), sep="\t", index_col=0)
         print((info_matrix != 0).sum().sum())
@@ -116,7 +130,6 @@ class TestPriorPipeline(unittest.TestCase):
             print(_not_kept.max())
 
             self.assertGreater(_kept.min(), _not_kept.max()) if _num_called > 0 else True
-
 
     def do_scan_prior(self, window_size, do_threshold=False, use_bed=True, use_tss=True):
         genes = gtf.open_window(self.genes, window_size=window_size, use_tss=use_tss,
