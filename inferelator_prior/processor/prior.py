@@ -176,7 +176,7 @@ class MotifScorer:
                              MOTIF_NAME_COL: [overlap_df[MOTIF_NAME_COL].unique()[0]]})
 
 
-def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None):
+def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None, debug=False):
     """
     Process a large dataframe of motif hits into a dataframe with the best hit for each regulator-target pair
     :param genes: pd.DataFrame [G x n]
@@ -218,7 +218,7 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     else:
         with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
             prior_data = pool.starmap(_build_prior_for_gene,
-                                      _gene_gen(genes, motif_peaks, motif_information), chunksize=20)
+                                      _gene_gen(genes, motif_peaks, motif_information, debug=debug), chunksize=20)
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data).reset_index(drop=True)
@@ -260,7 +260,7 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
 
         else:
             with multiprocessing.Pool(num_workers, maxtasksperchild=1) as pool:
-                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix), chunksize=1)
+                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix, debug=debug), chunksize=1)
 
         print("Completed edge selection with DBSCAN")
         for reg, reg_idx in prior_matrix_idx:
@@ -273,28 +273,28 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
         return raw_matrix != 0
 
 
-def _prior_gen(prior_matrix):
+def _prior_gen(prior_matrix, debug=False):
 
     n = len(prior_matrix.columns)
 
     for i, col_name in enumerate(prior_matrix.columns):
-        yield i, col_name, prior_matrix[col_name], n
+        yield i, col_name, prior_matrix[col_name], n, debug
 
 
 def _prior_clusterer(i, col_name, col_data, n, debug=False):
 
-    if debug or (i % 50 == 0):
+    if not debug and (i % 50 == 0):
         print("Clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
 
     keep_idx = _find_outliers_dbscan(col_data)
 
     if debug:
-        print("Completed clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
+        print("Keeping {ed} edges for gene {col} [{i} / {n}]".format(ed=keep_idx.sum(), i=i, n=n, col=col_name))
 
     return col_name, keep_idx
 
 
-def _gene_gen(genes, motif_peaks, motif_information):
+def _gene_gen(genes, motif_peaks, motif_information, debug=False):
     gene_names = genes[GTF_GENENAME].unique().tolist()
     bad_chr = {}
 
@@ -310,9 +310,9 @@ def _gene_gen(genes, motif_peaks, motif_information):
                 motif_data = motif_peaks[gene_chr]
             except KeyError:
                 # If this chromosome is some weird scaffold or not in the genome, skip it
-                # Only print the error message once though
+                print("Chromosome {c} not found; skipping gene {g}".format(c=gene_chr, g=gene)) if debug else None
+
                 if gene_chr not in bad_chr.keys():
-                    print("Chromosome {c} not found; skipping gene {g}".format(c=gene_chr, g=gene))
                     bad_chr[gene_chr] = 1
                 else:
                     bad_chr[gene_chr] += 1

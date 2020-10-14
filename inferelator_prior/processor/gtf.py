@@ -1,4 +1,3 @@
-import warnings
 import pybedtools
 import pandas as pd
 
@@ -99,7 +98,7 @@ def open_window(annotation_dataframe, window_size, use_tss=False, check_against_
             _msg = _msg.format(g=_gtf_chromosomes,
                                f=_fasta_chromsomes,
                                ft=_gtf_chromosomes.symmetric_difference(_fasta_chromsomes))
-            warnings.warn(_msg)
+            print(_msg)
 
         if len(_gtf_fasta_match) == 0:
             raise ValueError("Unable to map FASTA and GTF chromosomes together")

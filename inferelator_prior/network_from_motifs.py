@@ -52,6 +52,8 @@ def main():
                     default=None, type=str)
     ap.add_argument("--tfs", dest="tf_list", help="A list of TFs to build connectivity matrix for. Optional.",
                     default=None, type=str)
+    ap.add_argument("--debug", dest="debug", help="Activate Debug Mode", action='store_const',
+                    const=True, default=False)
 
     args = ap.parse_args()
     out_prefix = os.path.abspath(os.path.expanduser(args.out))
@@ -89,7 +91,8 @@ def main():
                                      motif_format=args.motif_format,
                                      output_prefix=out_prefix,
                                      gene_constraint_list_file=args.gene_list,
-                                     regulator_constraint_list_file=args.tf_list)
+                                     regulator_constraint_list_file=args.tf_list,
+                                     debug=args.debug)
 
     elif _do_promoters:
         raise ValueError("Gene promoter location is not supported yet")
@@ -102,7 +105,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  window_size=0, use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list_file=None, regulator_constraint_list_file=None,
-                                 output_prefix=None):
+                                 output_prefix=None, debug=False):
     """
     Build a motif-based prior from windows around annotated genes.
     
@@ -175,7 +178,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     return network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
                                   constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
                                   scanner_type=scanner_type, scanner_thresh=scanner_thresh, num_cores=num_cores,
-                                  motif_ic=motif_ic, tandem=tandem, output_prefix=output_prefix)
+                                  motif_ic=motif_ic, tandem=tandem, output_prefix=output_prefix, debug=debug)
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_file=None, truncate_prob=None):
@@ -193,10 +196,14 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_
 
 def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file, constraint_bed_file=None,
                            promoter_bed_file=None, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                           scanner_thresh="1e-4", output_prefix=None):
+                           scanner_thresh="1e-4", output_prefix=None, debug=False):
 
     # Load and scan target chromatin peaks
     MotifScan.set_type(scanner_type)
+
+    if debug:
+        for chromosome, df in genes[GTF_CHROMOSOME].value_counts().iteritems():
+            print("Chromosome {c}: {n} genes".format(c=chromosome, n=df))
 
     motif_peaks = MotifScan.scanner(motifs=motifs, num_workers=num_cores).scan(genomic_fasta_file,
                                                                                constraint_bed_file=constraint_bed_file,
@@ -204,12 +211,17 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
                                                                                min_ic=motif_ic,
                                                                                threshold=scanner_thresh)
 
+    if debug:
+        for chromosome, df in motif_peaks[MotifScan.chromosome_col].value_counts().iteritems():
+            print("Chromosome {c}: {n} motif hits".format(c=chromosome, n=df))
+
     # PROCESS CHROMATIN PEAKS INTO NETWORK MATRIX ######################################################################
 
     # Process into an information score matrix
     print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-    raw_matrix = summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=num_cores)
+    raw_matrix = summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=num_cores,
+                                                debug=debug)
 
     # Nuke a bunch of dataframes and force a cyclic check
     del motif_peaks
@@ -221,7 +233,7 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
         raw_matrix.to_csv(output_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
 
     # Choose edges to keep
-    prior_matrix = build_prior_from_motifs(raw_matrix, num_workers=num_cores)
+    prior_matrix = build_prior_from_motifs(raw_matrix, num_workers=num_cores, debug=debug)
     print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
 
     if output_prefix is not None:
