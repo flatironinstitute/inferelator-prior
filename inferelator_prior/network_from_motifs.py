@@ -1,5 +1,5 @@
 from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, select_genes, GTF_CHROMOSOME,
-                                             SEQ_START, SEQ_STOP, GTF_STRAND)
+                                             SEQ_START, SEQ_STOP, GTF_STRAND, get_fasta_lengths)
 from inferelator_prior.processor.prior import build_prior_from_motifs, summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import load_motif_file, select_motifs, truncate_motifs
@@ -150,7 +150,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
     print("Loading genes from file ({f})".format(f=annotation_file))
     # Load genes and open a window
-    genes = load_gtf_to_dataframe(annotation_file)
+    fasta_gene_len = get_fasta_lengths(genomic_fasta_file)
+    genes = load_gtf_to_dataframe(annotation_file, fasta_record_lengths=fasta_gene_len)
     print("{n} genes loaded".format(n=genes.shape[0]))
 
     # Constrain to a list of genes
@@ -158,7 +159,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
         _gene_constraint_list = pd.read_csv(gene_constraint_list_file, index_col=None).iloc[:, 0].tolist()
         genes = select_genes(genes, _gene_constraint_list)
 
-    genes = open_window(genes, window_size=window_size, use_tss=use_tss, check_against_fasta=genomic_fasta_file)
+    genes = open_window(genes, window_size=window_size, use_tss=use_tss, fasta_record_lengths=fasta_gene_len)
     print("Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene"))
 
     # PROCESS MOTIF PWMS ###############################################################################################
