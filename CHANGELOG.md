@@ -1,3 +1,7 @@
+### Version 0.2.3
+
+* Added additional messaging and a `--debug` mode
+
 ### Version 0.2.2
 
 * Added additional messaging
