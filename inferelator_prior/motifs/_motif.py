@@ -7,7 +7,9 @@ import itertools
 import pathos
 from collections import Counter
 
-from inferelator_prior.processor.bedtools import extract_bed_sequence, intersect_bed, load_bed_to_bedtools
+from inferelator_prior.processor.bedtools import (extract_bed_sequence, intersect_bed, load_bed_to_bedtools,
+                                                  BED_CHROMOSOME)
+from inferelator_prior.processor.gtf import get_fasta_lengths, check_chromosomes_match
 
 INFO_COL = "Information Content"
 ENTROPY_COL = "Shannon Entropy"
@@ -262,9 +264,14 @@ class __MotifScanner:
         self.motifs = motifs
         self.num_workers = num_workers
 
-    def scan(self, genome_fasta_file, constraint_bed_file=None, promoter_bed=None, min_ic=None, threshold=None):
+    def scan(self, genome_fasta_file, constraint_bed_file=None, promoter_bed=None, min_ic=None, threshold=None,
+             valid_fasta_chromosomes=None, debug=False):
         """
         """
+
+        if valid_fasta_chromosomes is None:
+            _chr_lens = get_fasta_lengths(genome_fasta_file)
+            valid_fasta_chromosomes = list(_chr_lens.keys())
 
         # Preprocess motifs into a list of temp chunk files
         motif_files = self._preprocess(min_ic=min_ic)
@@ -272,15 +279,32 @@ class __MotifScanner:
         self.motifs = {mot.motif_id: mot for mot in self.motifs}
 
         try:
-            if constraint_bed_file is None and promoter_bed is None:
+            con_bed_file = load_bed_to_bedtools(constraint_bed_file) if constraint_bed_file is not None else None
+            pro_bed_file = load_bed_to_bedtools(promoter_bed) if promoter_bed is not None else None
+
+            if con_bed_file is not None and valid_fasta_chromosomes is not None:
+                check_chromosomes_match(con_bed_file.to_dataframe(), valid_fasta_chromosomes,
+                                        chromosome_column=BED_CHROMOSOME, file_name=constraint_bed_file,
+                                        raise_no_overlap=False)
+                if debug:
+                    self._print_bed_summary(con_bed_file, constraint_bed_file)
+
+            if pro_bed_file is not None and valid_fasta_chromosomes is not None:
+                check_chromosomes_match(pro_bed_file.to_dataframe(), valid_fasta_chromosomes,
+                                        chromosome_column=BED_CHROMOSOME, file_name=pro_bed_file,
+                                        raise_no_overlap=False)
+                if debug:
+                    self._print_bed_summary(pro_bed_file, promoter_bed)
+
+            if con_bed_file is not None and pro_bed_file is not None:
+                bed_file = intersect_bed(load_bed_to_bedtools(constraint_bed_file), load_bed_to_bedtools(promoter_bed))
+            elif con_bed_file is not None:
+                bed_file = con_bed_file
+            elif pro_bed_file is not None:
+                bed_file = pro_bed_file
+            else:
                 motif_data = self._scan_extract(motif_files, genome_fasta_file, threshold=threshold)
                 return self._postprocess(motif_data)
-            elif constraint_bed_file is not None and promoter_bed is None:
-                bed_file = load_bed_to_bedtools(constraint_bed_file)
-            elif constraint_bed_file is None and promoter_bed is not None:
-                bed_file = load_bed_to_bedtools(promoter_bed)
-            else:
-                bed_file = intersect_bed(load_bed_to_bedtools(constraint_bed_file), load_bed_to_bedtools(promoter_bed))
 
             extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
 
@@ -335,6 +359,12 @@ class __MotifScanner:
 
     def _parse_output(self, output_handle):
         raise NotImplementedError
+
+    @staticmethod
+    def _print_bed_summary(bedtools_obj, bed_file_name):
+        for chromosome, ct in bedtools_obj.to_dataframe()[BED_CHROMOSOME].value_counts().iteritems():
+            print("BED File ({f}) parsing complete:".format(f=bed_file_name))
+            print("\tChromosome {c}: {n} intervals found".format(c=chromosome, n=ct))
 
 
 def motifs_to_dataframe(motifs):

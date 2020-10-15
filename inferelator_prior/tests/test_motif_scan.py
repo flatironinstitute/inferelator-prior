@@ -44,7 +44,7 @@ class TestScan(unittest.TestCase):
         scanner = MotifScanner(motifs=[MOTIF_OBJ], num_workers=1)
 
         with self.assertRaises(NotImplementedError):
-            scanner.scan(BED_FILE_NAME, FASTA_FILE_NAME, min_ic=8)
+            scanner.scan(FASTA_FILE_NAME, constraint_bed_file=BED_FILE_NAME, min_ic=8)
 
         with self.assertRaises(NotImplementedError):
             scanner._preprocess(8)
