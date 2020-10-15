@@ -1,5 +1,5 @@
 # inferelator-prior
-[![PyPI version](https://badge.fury.io/py/inferelator-prior.png)](https://badge.fury.io/py/inferelator-prior)
+[![PyPI version](https://badge.fury.io/py/inferelator-prior.svg)](https://badge.fury.io/py/inferelator-prior)
 
 This is a set of pipelines to create expression and prior matrices for network inference. They are designed to create
 data that is compatible with the [inferelator](https://github.com/flatironinstitute/inferelator) package. 
@@ -25,7 +25,7 @@ A BED file can be provided (`-b PATH`) based on some constraining experiment to 
 specific genomic areas.
 This will use multiple cores to search for motifs and process the resulting data.
 By default, all available processors will be used, but this can be overridden with `--cpu N`.
-A list of genes (one per line in a text file) can be provided to `--genes` 
+A list of genes (on e per line in a text file) can be provided to `--genes` 
 and a list of tfs (one per line in a text file) can be provided to `--tfs`.
 A network will be built for only these genes or TFs.
 
