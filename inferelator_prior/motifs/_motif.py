@@ -265,7 +265,7 @@ class __MotifScanner:
         self.num_workers = num_workers
 
     def scan(self, genome_fasta_file, constraint_bed_file=None, promoter_bed=None, min_ic=None, threshold=None,
-             valid_fasta_chromosomes=None):
+             valid_fasta_chromosomes=None, debug=False):
         """
         """
 
@@ -286,11 +286,15 @@ class __MotifScanner:
                 check_chromosomes_match(con_bed_file.to_dataframe(), valid_fasta_chromosomes,
                                         chromosome_column=BED_CHROMOSOME, file_name=constraint_bed_file,
                                         raise_no_overlap=False)
+                if debug:
+                    self._print_bed_summary(con_bed_file, constraint_bed_file)
 
             if pro_bed_file is not None and valid_fasta_chromosomes is not None:
                 check_chromosomes_match(pro_bed_file.to_dataframe(), valid_fasta_chromosomes,
                                         chromosome_column=BED_CHROMOSOME, file_name=pro_bed_file,
                                         raise_no_overlap=False)
+                if debug:
+                    self._print_bed_summary(pro_bed_file, promoter_bed)
 
             if con_bed_file is not None and pro_bed_file is not None:
                 bed_file = intersect_bed(load_bed_to_bedtools(constraint_bed_file), load_bed_to_bedtools(promoter_bed))
@@ -355,6 +359,12 @@ class __MotifScanner:
 
     def _parse_output(self, output_handle):
         raise NotImplementedError
+
+    @staticmethod
+    def _print_bed_summary(bedtools_obj, bed_file_name):
+        for chromosome, ct in bedtools_obj.to_dataframe()[BED_CHROMOSOME].value_counts().iteritems():
+            print("BED File ({f}) parsing complete:".format(f=bed_file_name))
+            print("\tChromosome {c}: {n} intervals found".format(c=chromosome, n=ct))
 
 
 def motifs_to_dataframe(motifs):
