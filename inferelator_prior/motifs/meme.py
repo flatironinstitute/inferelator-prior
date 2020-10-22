@@ -1,6 +1,7 @@
 from inferelator_prior.motifs import Motif
 
 import numpy as np
+import pandas as pd
 
 MEME4_HEADER = """\
 MEME version 4
@@ -37,7 +38,7 @@ def read(file_descript):
 
 def write(file_descript, motifs, alphabet=None, background=None, mode="w"):
 
-    motifs = [motifs] if not isinstance(motifs, list) else motifs
+    motifs = [motifs] if not isinstance(motifs, (list, tuple, pd.Series)) else motifs
     alphabet = alphabet if alphabet is not None else motifs[0].alphabet
     background = np.array([[1 / len(alphabet)] * len(alphabet)]) if background is None else background
 
