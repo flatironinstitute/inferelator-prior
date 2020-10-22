@@ -17,6 +17,7 @@ OCC_COL = "Occurrence"
 LEN_COL = "Length"
 MOTIF_COL = "Motif_ID"
 MOTIF_NAME_COL = "Motif_Name"
+MOTIF_OBJ_COL = "Motif_Object"
 
 SCAN_SCORE_COL = "Tomat0_Score"
 SCORE_PER_BASE = "Per Base Array"
@@ -375,9 +376,9 @@ def motifs_to_dataframe(motifs):
     names = list(map(lambda x: x.motif_name, motifs))
 
     df = pd.DataFrame(
-        [ids, names, info, entropy, occurrence, list(map(lambda x: len(x), motifs))],
+        [ids, names, info, entropy, occurrence, list(map(lambda x: len(x), motifs)), motifs],
         columns=list(map(lambda x: x.motif_name, motifs)),
-        index=[MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL]).T
+        index=[MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL, MOTIF_OBJ_COL]).T
 
     return df
 
@@ -430,6 +431,32 @@ def truncate_motifs(motifs, truncate_value):
 
     if truncate_value is not None:
         [x.truncate(threshold=truncate_value) for x in motifs]
+
+
+def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL):
+
+    motif_dataframe['FUZZY_MATCH'] = motif_dataframe[merge_col].str.lower()
+    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.strip()
+    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.strip(",-:\\/")
+    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.replace("-", "", regex=False)
+
+    matched_data = []
+    for motif_fuzz, fuzz_df in motif_dataframe.groupby('FUZZY_MATCH'):
+        if len(fuzz_df) > 1:
+            _nn = fuzz_df[MOTIF_NAME_COL].value_counts().index[0]
+        else:
+            _nn = fuzz_df[MOTIF_NAME_COL].iloc[0]
+
+        def _renamer(obj):
+            obj.motif_name = _nn
+
+        fuzz_df['Old_Motif_Name'] = fuzz_df[MOTIF_NAME_COL]
+        fuzz_df[MOTIF_OBJ_COL].apply(_renamer)
+        fuzz_df[MOTIF_NAME_COL] = _nn
+
+        matched_data.append(fuzz_df)
+
+    return pd.concat(matched_data)
 
 
 def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
