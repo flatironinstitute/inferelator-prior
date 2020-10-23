@@ -469,6 +469,8 @@ def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL, remove_dimers=
         matched_data = matched_data.loc[~matched_data[MOTIF_NAME_COL].str.contains(", "), :]
         matched_data = matched_data.loc[~matched_data[MOTIF_NAME_COL].str.contains(";"), :].copy()
 
+    print("Fuzzy merging completed: {p} TFs reduced to {n} TFs".format(n=len(matched_data[MOTIF_NAME_COL].unique()),
+                                                                       p=len(motif_dataframe[MOTIF_NAME_COL].unique())))
     return matched_data
 
 
