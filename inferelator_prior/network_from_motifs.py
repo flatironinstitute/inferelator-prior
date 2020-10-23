@@ -2,7 +2,7 @@ from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window,
                                              SEQ_START, SEQ_STOP, GTF_STRAND, get_fasta_lengths)
 from inferelator_prior.processor.prior import build_prior_from_motifs, summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
-from inferelator_prior.motifs import load_motif_file, select_motifs, truncate_motifs
+from inferelator_prior.motifs import load_motif_file, select_motifs, truncate_motifs, fuzzy_merge_motifs, MOTIF_OBJ_COL
 from inferelator_prior.processor.species_constants import SPECIES_MAP, DEFAULT_WINDOW, DEFAULT_TANDEM
 
 import argparse
@@ -54,6 +54,8 @@ def main():
                     default=None, type=str)
     ap.add_argument("--debug", dest="debug", help="Activate Debug Mode", action='store_const',
                     const=True, default=False)
+    ap.add_argument("--fuzzy", dest="fuzzy", help="Use fuzzy motif name merging", action='store_const',
+                    const=True, default=False)
 
     args = ap.parse_args()
     out_prefix = os.path.abspath(os.path.expanduser(args.out))
@@ -92,7 +94,8 @@ def main():
                                      output_prefix=out_prefix,
                                      gene_constraint_list_file=args.gene_list,
                                      regulator_constraint_list_file=args.tf_list,
-                                     debug=args.debug)
+                                     debug=args.debug,
+                                     fuzzy_motif_names=args.fuzzy)
 
     elif _do_promoters:
         raise ValueError("Gene promoter location is not supported yet")
@@ -105,7 +108,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  window_size=0, use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list_file=None, regulator_constraint_list_file=None,
-                                 output_prefix=None, debug=False):
+                                 output_prefix=None, debug=False, fuzzy_motif_names=False):
     """
     Build a motif-based prior from windows around annotated genes.
     
@@ -140,8 +143,12 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type gene_constraint_list_file: str, None
     :param regulator_constraint_list_file:
     :type regulator_constraint_list_file: str, None
-    :param output_prefix:
+    :param output_prefix: Prefix output files with this path / prefix
     :type output_prefix: str
+    :param debug:
+    :type debug: bool
+    :param fuzzy_motif_names: Use fuzzy merging of motif names
+    :type fuzzy_motif_names: bool
     :return prior_matrix, raw_matrix:
     :rtype: pd.DataFrame, pd.DataFrame
     """
@@ -165,7 +172,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     # PROCESS MOTIF PWMS ###############################################################################################
 
     motifs, motif_information = load_and_process_motifs(motif_file, motif_format, truncate_prob=truncate_prob,
-                                                        regulator_constraint_list_file=regulator_constraint_list_file)
+                                                        regulator_constraint_list_file=regulator_constraint_list_file,
+                                                        fuzzy=fuzzy_motif_names)
 
     # SCAN CHROMATIN FOR MOTIFS ########################################################################################
 
@@ -182,13 +190,32 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                   motif_ic=motif_ic, tandem=tandem, output_prefix=output_prefix, debug=debug)
 
 
-def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_file=None, truncate_prob=None):
+def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_file=None, truncate_prob=None,
+                            fuzzy=False):
 
     motifs, motif_information = load_motif_file(motif_file, motif_format)
 
+    if fuzzy:
+        motif_information = fuzzy_merge_motifs(motif_information, remove_dimers=True)
+        motifs = motif_information[MOTIF_OBJ_COL].tolist()
+
     if regulator_constraint_list_file is not None:
-        _regulator_constraint_list = pd.read_csv(regulator_constraint_list_file, index_col=None).iloc[:, 0].tolist()
-        motifs = select_motifs(motifs, _regulator_constraint_list)
+        _regulator_df = pd.read_csv(regulator_constraint_list_file, index_col=None, header=None).drop_duplicates()
+
+        if _regulator_df.shape[1] > 1:
+            _regulator_translator = pd.Series(_regulator_df.iloc[:, 1], index=_regulator_df.iloc[:, 0]).to_dict()
+            _translated = 0
+
+            print("Translating motif names based on {f}".format(f=regulator_constraint_list_file))
+            for m in motifs:
+                try:
+                    m.motif_name = _regulator_translator[m.motif_name]
+                    _translated += 1
+                except KeyError:
+                    continue
+            print("Renamed {t} / {n} motif names".format(t=_translated, n=len(motifs)))
+
+        motifs = select_motifs(motifs, _regulator_df.iloc[:, 0].tolist())
 
     truncate_motifs(motifs, truncate_prob)
 
