@@ -433,12 +433,18 @@ def truncate_motifs(motifs, truncate_value):
         [x.truncate(threshold=truncate_value) for x in motifs]
 
 
-def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL):
+def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL, remove_dimers=False):
 
     motif_dataframe['FUZZY_MATCH'] = motif_dataframe[merge_col].str.lower()
-    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.strip()
-    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.strip(",-:\\/")
+
+    # Drop any dashes (e.g ETS-1 ETS1 should merge)
     motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.replace("-", "", regex=False)
+
+    # Drop anything in parens (e.g. Tal-1 (Scl) should just be Tal-1)
+    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.replace("\(.*\)", "", regex=True)
+
+    # Polish up the ends to get rid of crap
+    motif_dataframe['FUZZY_MATCH'] = motif_dataframe['FUZZY_MATCH'].str.strip(",-:\\/ \r\n")
 
     matched_data = []
     for motif_fuzz, fuzz_df in motif_dataframe.groupby('FUZZY_MATCH'):
@@ -456,7 +462,14 @@ def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL):
 
         matched_data.append(fuzz_df)
 
-    return pd.concat(matched_data)
+    matched_data = pd.concat(matched_data)
+
+    if remove_dimers:
+        matched_data = matched_data.loc[~matched_data[MOTIF_NAME_COL].str.contains(":"), :]
+        matched_data = matched_data.loc[~matched_data[MOTIF_NAME_COL].str.contains(", "), :]
+        matched_data = matched_data.loc[~matched_data[MOTIF_NAME_COL].str.contains(";"), :].copy()
+
+    return matched_data
 
 
 def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
