@@ -11,16 +11,28 @@ from inferelator_prior.processor.bedtools import (extract_bed_sequence, intersec
                                                   BED_CHROMOSOME)
 from inferelator_prior.processor.gtf import get_fasta_lengths, check_chromosomes_match
 
-INFO_COL = "Information Content"
-ENTROPY_COL = "Shannon Entropy"
+INFO_COL = "Information_Content"
+ENTROPY_COL = "Shannon_Entropy"
 OCC_COL = "Occurrence"
 LEN_COL = "Length"
 MOTIF_COL = "Motif_ID"
 MOTIF_NAME_COL = "Motif_Name"
 MOTIF_OBJ_COL = "Motif_Object"
+MOTIF_CONSENSUS_COL = "Consensus"
 
-SCAN_SCORE_COL = "Tomat0_Score"
+SCAN_SCORE_COL = "Inferelator_Score"
 SCORE_PER_BASE = "Per Base Array"
+
+DEGEN_LOOKUP = {frozenset(("A", "T")): "W",
+                frozenset(("A", "C")): "M",
+                frozenset(("A", "G")): "R",
+                frozenset(("C", "G")): "S",
+                frozenset(("C", "T")): "Y",
+                frozenset(("G", "T")): "K",
+                frozenset("A"): "A",
+                frozenset("T"): "T",
+                frozenset("G"): "G",
+                frozenset("C"): "C"}
 
 
 class Motif:
@@ -37,6 +49,7 @@ class Motif:
     _motif_accession = None
     _alphabet_map = None
     _consensus_seq = None
+    _consensus_seq_degen = None
     _info_matrix = None
     _homer_odds = None
 
@@ -160,6 +173,16 @@ class Motif:
         return self._consensus_seq
 
     @property
+    def consensus_degen(self):
+        if self._consensus_seq_degen is None:
+            def _csdegen(x):
+                return DEGEN_LOOKUP[frozenset(self.alphabet[x >= 0.35])] if np.sum(x >= 0.35) > 0 else "N"
+
+            self._consensus_seq_degen = "".join(np.apply_along_axis(_csdegen, axis=1, arr=self.probability_matrix))
+
+        return self._consensus_seq_degen
+
+    @property
     def max_ln_odds(self):
         max_ln_odd = np.log(np.amax(self.probability_matrix, axis=1) / 0.25)
         return np.sum(max_ln_odd)
@@ -198,7 +221,7 @@ class Motif:
     def __init__(self, motif_id=None, motif_name=None, motif_alphabet=None, motif_background=None):
         self.id = motif_id
         self.name = motif_name
-        self.alphabet = motif_alphabet
+        self.alphabet = np.array(motif_alphabet)
         self._motif_background = motif_background
         self._motif_probs = []
 
@@ -374,11 +397,13 @@ def motifs_to_dataframe(motifs):
     info = list(map(lambda x: x.information_content, motifs))
     ids = list(map(lambda x: x.motif_id, motifs))
     names = list(map(lambda x: x.motif_name, motifs))
+    cons = list(map(lambda x: x.consensus_degen, motifs))
 
     df = pd.DataFrame(
-        [ids, names, info, entropy, occurrence, list(map(lambda x: len(x), motifs)), motifs],
-        columns=list(map(lambda x: x.motif_name, motifs)),
-        index=[MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL, MOTIF_OBJ_COL]).T
+        zip(ids, names, info, entropy, occurrence, list(map(lambda x: len(x), motifs)), motifs, cons),
+        index=list(map(lambda x: x.motif_name, motifs)),
+        columns=[MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, OCC_COL, LEN_COL, MOTIF_OBJ_COL, MOTIF_CONSENSUS_COL]
+    )
 
     return df
 

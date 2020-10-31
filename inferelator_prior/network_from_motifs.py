@@ -2,7 +2,8 @@ from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window,
                                              SEQ_START, SEQ_STOP, GTF_STRAND, get_fasta_lengths)
 from inferelator_prior.processor.prior import build_prior_from_motifs, summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
-from inferelator_prior.motifs import load_motif_file, select_motifs, truncate_motifs, fuzzy_merge_motifs, MOTIF_OBJ_COL
+from inferelator_prior.motifs import (load_motif_file, select_motifs, truncate_motifs, fuzzy_merge_motifs,
+                                      MOTIF_COL, MOTIF_NAME_COL, MOTIF_OBJ_COL)
 from inferelator_prior.processor.species_constants import SPECIES_MAP, DEFAULT_WINDOW, DEFAULT_TANDEM
 
 import argparse
@@ -35,11 +36,12 @@ def main():
 
     ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='fimo')
     ap.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
-                    metavar="BITS", type=int, default=None)
+                    metavar="BITS", type=float, default=None)
     ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
                     metavar="BASES", type=int, default=None)
     ap.add_argument("--motif_format", dest="motif_format", help="Motif file FORMAT (transfac or meme)",
                     metavar="FORMAT", default="meme")
+    ap.add_argument("--motif_info", dest="motif_info", help="Motif information TSV FILE", metavar="File", default=None)
     ap.add_argument("--species", dest="species", help="Load settings for a target species. Overrides other settings",
                     default=None, type=str, choices=list(SPECIES_MAP.keys()) + [None])
 
@@ -95,7 +97,8 @@ def main():
                                      gene_constraint_list_file=args.gene_list,
                                      regulator_constraint_list_file=args.tf_list,
                                      debug=args.debug,
-                                     fuzzy_motif_names=args.fuzzy)
+                                     fuzzy_motif_names=args.fuzzy,
+                                     motif_info=args.motif_info)
 
     elif _do_promoters:
         raise ValueError("Gene promoter location is not supported yet")
@@ -108,7 +111,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  window_size=0, use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list_file=None, regulator_constraint_list_file=None,
-                                 output_prefix=None, debug=False, fuzzy_motif_names=False):
+                                 output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None):
     """
     Build a motif-based prior from windows around annotated genes.
     
@@ -173,7 +176,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
     motifs, motif_information = load_and_process_motifs(motif_file, motif_format, truncate_prob=truncate_prob,
                                                         regulator_constraint_list_file=regulator_constraint_list_file,
-                                                        fuzzy=fuzzy_motif_names)
+                                                        fuzzy=fuzzy_motif_names, motif_info_file=motif_info)
 
     # SCAN CHROMATIN FOR MOTIFS ########################################################################################
 
@@ -191,7 +194,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_file=None, truncate_prob=None,
-                            fuzzy=False):
+                            fuzzy=False, motif_info_file=None):
 
     motifs, motif_information = load_motif_file(motif_file, motif_format)
 
@@ -199,22 +202,27 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_
         motif_information = fuzzy_merge_motifs(motif_information, remove_dimers=True)
         motifs = motif_information[MOTIF_OBJ_COL].tolist()
 
+    if motif_info_file:
+        new_motif_information = pd.read_csv(motif_info_file, sep="\t")
+        print("Loaded info for {n} motifs from {f}".format(n=len(new_motif_information), f=motif_info_file))
+
+        _before_n = len(motifs)
+        # Join the loaded motifs onto the provided info to decide what to keep
+        mi_join = motif_information.set_index(MOTIF_COL).drop(MOTIF_NAME_COL, axis=1)
+        motif_information = new_motif_information[[MOTIF_COL, MOTIF_NAME_COL]].join(mi_join, on=MOTIF_COL)
+        motif_information = motif_information.dropna()
+
+        def _renamer(s):
+            s[MOTIF_OBJ_COL].motif_name = s[MOTIF_NAME_COL]
+
+        motif_information.apply(_renamer, axis=1)
+        motifs = motif_information[MOTIF_OBJ_COL].tolist()
+
+        print("Retained {n} / {m} motifs ({x} TFs)".format(n=len(motifs), m=_before_n,
+                                                           x=len(motif_information[MOTIF_NAME_COL].unique())))
+
     if regulator_constraint_list_file is not None:
         _regulator_df = pd.read_csv(regulator_constraint_list_file, index_col=None, header=None).drop_duplicates()
-
-        if _regulator_df.shape[1] > 1:
-            _regulator_translator = pd.Series(_regulator_df.iloc[:, 1], index=_regulator_df.iloc[:, 0]).to_dict()
-            _translated = 0
-
-            print("Translating motif names based on {f}".format(f=regulator_constraint_list_file))
-            for m in motifs:
-                try:
-                    m.motif_name = _regulator_translator[m.motif_name]
-                    _translated += 1
-                except KeyError:
-                    continue
-            print("Renamed {t} / {n} motif names".format(t=_translated, n=len(motifs)))
-
         motifs = select_motifs(motifs, _regulator_df.iloc[:, 0].tolist())
 
     truncate_motifs(motifs, truncate_prob)
