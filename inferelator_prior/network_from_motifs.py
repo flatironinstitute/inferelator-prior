@@ -50,9 +50,9 @@ def main():
     ap.add_argument("-b", "--bed", dest="constraint", help="Constraint BED file", metavar="FILE", default=None)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", default="./prior")
     ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
-    ap.add_argument("--genes", dest="gene_list", help="A list of genes to build connectivity matrix for. Optional.",
+    ap.add_argument("--genes", dest="genes", help="A list of genes to build connectivity matrix for. Optional.",
                     default=None, type=str)
-    ap.add_argument("--tfs", dest="tf_list", help="A list of TFs to build connectivity matrix for. Optional.",
+    ap.add_argument("--tfs", dest="tfs", help="A list of TFs to build connectivity matrix for. Optional.",
                     default=None, type=str)
     ap.add_argument("--debug", dest="debug", help="Activate Debug Mode", action='store_const',
                     const=True, default=False)
@@ -79,6 +79,22 @@ def main():
         _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
         _use_tss = SPECIES_MAP[_species]['use_tss'] if args.tss else args.tss
 
+    # Load gene and regulator lists
+    _gl = pd.read_csv(args.genes, index_col=None, header=None)[0].tolist() if args.genes is not None else None
+    _tfl = pd.read_csv(args.tfs, index_col=None, header=None)[0].tolist() if args.tfs is not None else None
+
+    # Load motif constraint info
+    if args.motif_info is not None:
+        _minfo = pd.read_csv(args.motif_info, sep="\t", index_col=None)
+        _minfo.attrs["filename"] = args.motif_info
+        if MOTIF_COL not in _minfo.columns or MOTIF_NAME_COL not in _minfo.columns:
+            _msg = "motif_info must have columns {a} and {b}; use inferelator_prior.motif_information as a template"
+            _msg = _msg.format(a=MOTIF_COL, b=MOTIF_NAME_COL)
+            raise ValueError(_msg)
+    else:
+        _minfo = None
+
+    # Decide which function to call
     _do_genes, _do_promoters = args.annotation is not None, args.promoter is not None
 
     if _do_genes and _do_promoters:
@@ -94,11 +110,11 @@ def main():
                                      scanner_type=args.scanner,
                                      motif_format=args.motif_format,
                                      output_prefix=out_prefix,
-                                     gene_constraint_list_file=args.gene_list,
-                                     regulator_constraint_list_file=args.tf_list,
+                                     gene_constraint_list=_gl,
+                                     regulator_constraint_list=_tfl,
                                      debug=args.debug,
                                      fuzzy_motif_names=args.fuzzy,
-                                     motif_info=args.motif_info)
+                                     motif_info=_minfo)
 
     elif _do_promoters:
         raise ValueError("Gene promoter location is not supported yet")
@@ -110,7 +126,7 @@ def main():
 def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file, constraint_bed_file=None,
                                  window_size=0, use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
-                                 gene_constraint_list_file=None, regulator_constraint_list_file=None,
+                                 gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None):
     """
     Build a motif-based prior from windows around annotated genes.
@@ -142,10 +158,10 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type scanner_thresh: numeric
     :param motif_format: File format for motif_file. Defaults to meme. Also supports transfac.
     :type motif_format: str
-    :param gene_constraint_list_file: A file
-    :type gene_constraint_list_file: str, None
-    :param regulator_constraint_list_file:
-    :type regulator_constraint_list_file: str, None
+    :param gene_constraint_list: A file
+    :type gene_constraint_list: str, None
+    :param regulator_constraint_list:
+    :type regulator_constraint_list: str, None
     :param output_prefix: Prefix output files with this path / prefix
     :type output_prefix: str
     :param debug:
@@ -165,9 +181,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     print("{n} genes loaded".format(n=genes.shape[0]))
 
     # Constrain to a list of genes
-    if gene_constraint_list_file is not None:
-        _gene_constraint_list = pd.read_csv(gene_constraint_list_file, index_col=None).iloc[:, 0].tolist()
-        genes = select_genes(genes, _gene_constraint_list)
+    if gene_constraint_list is not None:
+        genes = select_genes(genes, gene_constraint_list)
 
     genes = open_window(genes, window_size=window_size, use_tss=use_tss, fasta_record_lengths=fasta_gene_len)
     print("Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene"))
@@ -175,8 +190,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     # PROCESS MOTIF PWMS ###############################################################################################
 
     motifs, motif_information = load_and_process_motifs(motif_file, motif_format, truncate_prob=truncate_prob,
-                                                        regulator_constraint_list_file=regulator_constraint_list_file,
-                                                        fuzzy=fuzzy_motif_names, motif_info_file=motif_info)
+                                                        regulator_constraint_list=regulator_constraint_list,
+                                                        fuzzy=fuzzy_motif_names, motif_constraint_info=motif_info)
 
     # SCAN CHROMATIN FOR MOTIFS ########################################################################################
 
@@ -193,8 +208,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                   motif_ic=motif_ic, tandem=tandem, output_prefix=output_prefix, debug=debug)
 
 
-def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_file=None, truncate_prob=None,
-                            fuzzy=False, motif_info_file=None):
+def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,
+                            fuzzy=False, motif_constraint_info=None):
 
     motifs, motif_information = load_motif_file(motif_file, motif_format)
 
@@ -202,14 +217,14 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_
         motif_information = fuzzy_merge_motifs(motif_information, remove_dimers=True)
         motifs = motif_information[MOTIF_OBJ_COL].tolist()
 
-    if motif_info_file:
-        new_motif_information = pd.read_csv(motif_info_file, sep="\t")
-        print("Loaded info for {n} motifs from {f}".format(n=len(new_motif_information), f=motif_info_file))
+    if motif_constraint_info is not None:
+        print("Loaded info for {n} motifs from {f}".format(n=len(motif_constraint_info),
+                                                           f=motif_constraint_info.attrs["filename"]))
 
         _before_n = len(motifs)
         # Join the loaded motifs onto the provided info to decide what to keep
         mi_join = motif_information.set_index(MOTIF_COL).drop(MOTIF_NAME_COL, axis=1)
-        motif_information = new_motif_information[[MOTIF_COL, MOTIF_NAME_COL]].join(mi_join, on=MOTIF_COL)
+        motif_information = motif_constraint_info[[MOTIF_COL, MOTIF_NAME_COL]].join(mi_join, on=MOTIF_COL)
         motif_information = motif_information.dropna()
 
         def _renamer(s):
@@ -221,9 +236,8 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list_
         print("Retained {n} / {m} motifs ({x} TFs)".format(n=len(motifs), m=_before_n,
                                                            x=len(motif_information[MOTIF_NAME_COL].unique())))
 
-    if regulator_constraint_list_file is not None:
-        _regulator_df = pd.read_csv(regulator_constraint_list_file, index_col=None, header=None).drop_duplicates()
-        motifs = select_motifs(motifs, _regulator_df.iloc[:, 0].tolist())
+    if regulator_constraint_list is not None:
+        motifs = select_motifs(motifs, regulator_constraint_list)
 
     truncate_motifs(motifs, truncate_prob)
 
