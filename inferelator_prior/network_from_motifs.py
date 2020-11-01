@@ -214,7 +214,7 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=
     motifs, motif_information = load_motif_file(motif_file, motif_format)
 
     if fuzzy:
-        motif_information = fuzzy_merge_motifs(motif_information, remove_dimers=True)
+        motif_information = fuzzy_merge_motifs(motif_information)
         motifs = motif_information[MOTIF_OBJ_COL].tolist()
 
     if motif_constraint_info is not None:
