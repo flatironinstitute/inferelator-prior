@@ -1,9 +1,9 @@
 import argparse
 
 from inferelator_prior.network_from_motifs import load_and_process_motifs, fuzzy_merge_motifs
-from inferelator_prior.motifs import MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, LEN_COL, MOTIF_CONSENSUS_COL
+from inferelator_prior.motifs import (MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, LEN_COL, MOTIF_CONSENSUS_COL,
+                                      MOTIF_ORIGINAL_NAME_COL)
 
-ORIGINAL_NAME_COL = 'Motif_Name_Original'
 OUTPUT_COLS = [MOTIF_COL, MOTIF_NAME_COL, INFO_COL, ENTROPY_COL, LEN_COL, MOTIF_CONSENSUS_COL]
 
 
@@ -27,14 +27,7 @@ def main():
 def summarize_motifs(motif_file, output_file, motif_format="meme", fuzzy=False):
 
     _, motif_information = load_and_process_motifs(motif_file, motif_format, fuzzy=fuzzy)
-
-    if fuzzy:
-        motif_information[ORIGINAL_NAME_COL] = motif_information[MOTIF_NAME_COL].copy()
-        out_cols = OUTPUT_COLS + [ORIGINAL_NAME_COL]
-        motif_information = fuzzy_merge_motifs(motif_information, remove_dimers=False)
-    else:
-        out_cols = OUTPUT_COLS
-
+    out_cols = OUTPUT_COLS + [MOTIF_ORIGINAL_NAME_COL] if fuzzy else OUTPUT_COLS
     motif_information[out_cols].to_csv(output_file, sep="\t", float_format='%.3f', index=False)
 
     return motif_information

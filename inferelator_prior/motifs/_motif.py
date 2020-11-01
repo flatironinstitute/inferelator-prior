@@ -19,6 +19,7 @@ MOTIF_COL = "Motif_ID"
 MOTIF_NAME_COL = "Motif_Name"
 MOTIF_OBJ_COL = "Motif_Object"
 MOTIF_CONSENSUS_COL = "Consensus"
+MOTIF_ORIGINAL_NAME_COL = 'Motif_Name_Original'
 
 SCAN_SCORE_COL = "Inferelator_Score"
 SCORE_PER_BASE = "Per Base Array"
@@ -60,7 +61,7 @@ class Motif:
     @alphabet.setter
     def alphabet(self, new_alphabet):
         if new_alphabet is not None:
-            self._motif_alphabet = new_alphabet
+            self._motif_alphabet = np.array(new_alphabet)
             self._alphabet_map = {ch.lower(): i for i, ch in enumerate(self._motif_alphabet)}
 
     @property
@@ -221,7 +222,7 @@ class Motif:
     def __init__(self, motif_id=None, motif_name=None, motif_alphabet=None, motif_background=None):
         self.id = motif_id
         self.name = motif_name
-        self.alphabet = np.array(motif_alphabet)
+        self.alphabet = np.array(motif_alphabet) if motif_alphabet is not None else None
         self._motif_background = motif_background
         self._motif_probs = []
 
@@ -459,6 +460,9 @@ def truncate_motifs(motifs, truncate_value):
 
 
 def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL, remove_dimers=False):
+
+    motif_dataframe = motif_dataframe.copy()
+    motif_dataframe[MOTIF_ORIGINAL_NAME_COL] = motif_dataframe[MOTIF_NAME_COL].copy()
 
     motif_dataframe['FUZZY_MATCH'] = motif_dataframe[merge_col].str.lower()
 
