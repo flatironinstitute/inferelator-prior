@@ -11,6 +11,8 @@ def main():
     ap.add_argument("-m", "--motif", dest="motif", help="Motif PWM files", metavar="PATH", required=True, nargs="+")
     ap.add_argument("-i", "--info", dest="info", help="Motif Info File", metavar="PATH", required=True)
     ap.add_argument("-o", "--out", dest="out", help="Output FILE", metavar="FILE", required=True)
+    ap.add_argument("--indirect", dest="direct", help="Include indirect motifs", action='store_const',
+                    const=False, default=True)
 
     args = ap.parse_args()
 
@@ -18,13 +20,13 @@ def main():
     for mf in args.motif:
         files.extend(glob.glob(os.path.expanduser(mf)))
 
-    pwm_to_meme(files, args.info, args.out)
+    pwm_to_meme(files, args.info, args.out, direct=args.direct)
 
 
-def pwm_to_meme(pwm_file_list, tf_info_file, output_file):
+def pwm_to_meme(pwm_file_list, tf_info_file, output_file, direct=True):
 
     print("Parsing {x} PWM files".format(x=len(pwm_file_list)))
-    motifs = read(pwm_file_list, tf_info_file, direct_only=True)
+    motifs = read(pwm_file_list, tf_info_file, direct_only=direct)
 
     print("Parsed {m} motifs, writing to file {f}".format(m=len(motifs), f=output_file))
     write(output_file, list(motifs))

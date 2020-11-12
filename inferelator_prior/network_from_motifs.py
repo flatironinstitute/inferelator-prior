@@ -219,7 +219,7 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=
 
     if motif_constraint_info is not None:
         print("Loaded info for {n} motifs from {f}".format(n=len(motif_constraint_info),
-                                                           f=motif_constraint_info.attrs["filename"]))
+                                                           f=motif_constraint_info.attrs.get("filename", None)))
 
         _before_n = len(motifs)
         # Join the loaded motifs onto the provided info to decide what to keep
