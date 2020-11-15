@@ -309,15 +309,15 @@ class __MotifScanner:
 
             if con_bed_file is not None and valid_fasta_chromosomes is not None:
                 check_chromosomes_match(con_bed_file.to_dataframe(), valid_fasta_chromosomes,
-                                        chromosome_column=BED_CHROMOSOME, file_name=constraint_bed_file,
-                                        raise_no_overlap=False)
+                                        chromosome_column=BED_CHROMOSOME, file_name=constraint_bed_file)
+
                 if debug:
                     self._print_bed_summary(con_bed_file, constraint_bed_file)
 
             if pro_bed_file is not None and valid_fasta_chromosomes is not None:
                 check_chromosomes_match(pro_bed_file.to_dataframe(), valid_fasta_chromosomes,
-                                        chromosome_column=BED_CHROMOSOME, file_name=pro_bed_file,
-                                        raise_no_overlap=False)
+                                        chromosome_column=BED_CHROMOSOME, file_name=pro_bed_file)
+
                 if debug:
                     self._print_bed_summary(pro_bed_file, promoter_bed)
 

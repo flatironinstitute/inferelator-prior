@@ -1,4 +1,4 @@
-import pybedtools
+import gzip
 import pandas as pd
 
 GENE_ID_REGEX = 'gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;'
@@ -110,7 +110,10 @@ def get_fasta_lengths(fasta_file):
     """
 
     fasta_len = {}
-    with open(fasta_file, mode="r") as fasta_fh:
+
+    _opener = gzip.open if fasta_file.endswith(".gz") else open
+
+    with _opener(fasta_file, mode="r") as fasta_fh:
         current_record = None
         for line in fasta_fh:
             if line.startswith(">"):

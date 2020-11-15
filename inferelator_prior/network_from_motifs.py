@@ -168,6 +168,9 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type debug: bool
     :param fuzzy_motif_names: Use fuzzy merging of motif names
     :type fuzzy_motif_names: bool
+    :param motif_info: Information about motifs. This will override any details read in from motif file.
+        A template can be generated from ``inferelator_prior.motif_information`` and modified as needed.
+    :type motif_info: pd.DataFrame
     :return prior_matrix, raw_matrix:
     :rtype: pd.DataFrame, pd.DataFrame
     """
