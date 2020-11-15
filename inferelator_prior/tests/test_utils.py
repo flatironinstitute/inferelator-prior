@@ -27,6 +27,7 @@ class TestUtils(unittest.TestCase):
         with self.assertRaises(ValueError):
             utils.get_genome_file_locs("not_a_real_thing")
 
+    @unittest.skipIf("TRAVIS_PYTHON_VERSION" in os.environ, "Skipping URL test on TRAVIS")
     def test_get_file_from_url(self):
         fasta, gtf = utils.get_genome_file_locs("sc64")
         target_path = os.path.join(self.temp_path, "test.gtf.gz")
@@ -44,7 +45,7 @@ class TestUtils(unittest.TestCase):
 
         self.assertTrue(utils.test_requirements_exist(test_targets=["python"],
                                                       test_package={"python": ("python", ["python", "--version"])},
-                                                      test_htseq=True, test_chroma=True))
+                                                      test_htseq=True, test_chroma=False))
 
         with self.assertRaises(FileNotFoundError):
             utils.test_requirements_exist(test_targets=["not_a-.thing"],

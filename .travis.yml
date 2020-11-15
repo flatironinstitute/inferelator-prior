@@ -27,11 +27,11 @@ install:
   - python setup.py install
   - cd ../inferelator-prior
 script:
-  - python -c "import os; print(repr(os.name))"
   - coverage run --source=inferelator_prior setup.py test
 after_success:
   - codecov
 after_failure:
+  - python -c "import os; print(repr(os.name))"
   - pwd
   - find .
   - conda list
