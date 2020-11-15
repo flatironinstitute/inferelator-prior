@@ -34,7 +34,7 @@ def main():
 
     # MOTIF ARGUMENTS ##################################################################################################
 
-    ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='fimo')
+    ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='FIMO', choices=['FIMO', 'HOMER'])
     ap.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
                     metavar="BITS", type=float, default=None)
     ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",

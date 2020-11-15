@@ -1,7 +1,5 @@
 import os
 
-__version__ = '0.1.0'
-
 # Paths to the executable files
 # Defaults assume that executables are in the shell path
 

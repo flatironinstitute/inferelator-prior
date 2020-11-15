@@ -44,7 +44,7 @@ class TestMotifParsers(unittest.TestCase):
         npt.assert_array_almost_equal(motifs[0].probability_matrix, PWM, 4)
         npt.assert_array_almost_equal(motifs2[0].probability_matrix, PWM, 4)
 
-        self.assertListEqual(motifs[0].alphabet, list("ACGT"))
+        self.assertListEqual(motifs[0].alphabet.tolist(), list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
         self.assertAlmostEqual(motifs[0].information_content, 7.6857, 3)
 
@@ -60,7 +60,7 @@ class TestMotifParsers(unittest.TestCase):
         npt.assert_array_almost_equal(motifs[0].probability_matrix, PWM, 4)
         npt.assert_array_almost_equal(motifs2[0].probability_matrix, PWM, 4)
 
-        self.assertListEqual(motifs[0].alphabet, list("ACGT"))
+        self.assertListEqual(motifs[0].alphabet.tolist(), list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
         self.assertAlmostEqual(motifs[0].information_content, 7.6857, 3)
 
@@ -76,7 +76,7 @@ class TestMotifParsers(unittest.TestCase):
         npt.assert_array_almost_equal(motifs[0].probability_matrix, PWM, 4)
         npt.assert_array_almost_equal(motifs2[0].probability_matrix, PWM, 4)
 
-        self.assertListEqual(motifs[0].alphabet, list("ACGT"))
+        self.assertListEqual(motifs[0].alphabet.tolist(), list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
         self.assertAlmostEqual(motifs[0].information_content, 7.6857, 3)
 
@@ -92,7 +92,7 @@ class TestMotifParsers(unittest.TestCase):
         npt.assert_array_almost_equal(motifs[0].probability_matrix, PWM, 2)
         npt.assert_array_almost_equal(motifs2[0].probability_matrix, PWM, 2)
 
-        self.assertListEqual(motifs[0].alphabet, list("ACGT"))
+        self.assertListEqual(motifs[0].alphabet.tolist(), list("ACGT"))
         self.assertEqual(motifs[0].alphabet_len, 4)
         self.assertAlmostEqual(motifs[0].information_content, 7.6535, 3)
 

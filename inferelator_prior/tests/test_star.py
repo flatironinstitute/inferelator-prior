@@ -9,7 +9,7 @@ from inferelator_prior.processor.star import star_mkref, star_align_fastqs
 
 GENOME_FILE_NAME = "sc64_mito.fasta"
 ANNOTATION_FILE_NAME = "sc64_mito.gtf"
-TEST_FASTQ = "test_alignment.fastq"
+TEST_FASTQ = "test_alignment.fastq.gz"
 
 STAR_REF_FILES = ["chrLength.txt", "chrName.txt", "exonGeTrInfo.tab", "geneInfo.tab", "genomeParameters.txt", "SA",
                   "sjdbInfo.txt", "sjdbList.out.tab", "chrNameLength.txt", "chrStart.txt", "exonInfo.tab", "Genome",
