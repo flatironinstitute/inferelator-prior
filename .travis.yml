@@ -17,7 +17,7 @@ install:
   - conda install -c bioconda meme=5.1.1
   - conda install -c bioconda bedtools homer star samtools pysam
   - conda install -c bioconda pybedtools
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION bedtools homer star samtools pysam sra-tools pandas numpy scipy scikit-learn pybedtools
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION bedtools homer star samtools pysam sra-tools meme pandas numpy scipy scikit-learn pybedtools
   - conda activate test-environment
   - pip install nose codecov pathos
   - python setup.py install
@@ -35,4 +35,3 @@ after_failure:
   - pwd
   - find .
   - conda list
-  - which fimo
