@@ -1,6 +1,7 @@
 # inferelator-prior
 [![PyPI version](https://badge.fury.io/py/inferelator-prior.svg)](https://badge.fury.io/py/inferelator-prior)
 [![Travis](https://travis-ci.org/flatironinstitute/inferelator-prior.svg?branch=release)](https://travis-ci.org/flatironinstitute/inferelator-prior)
+[![codecov](https://codecov.io/gh/flatironinstitute/inferelator-prior/branch/release/graph/badge.svg)](https://codecov.io/gh/flatironinstitute/inferelator-prior)
 
 
 This is a set of pipelines to create expression and prior matrices for network inference. They are designed to create
