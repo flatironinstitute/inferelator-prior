@@ -6,14 +6,12 @@ import os
 STAR_EXECUTABLE_PATH = os.path.expanduser("STAR")
 PREFETCH_EXECUTABLE_PATH = os.path.expanduser("prefetch")
 FASTQDUMP_EXECUTABLE_PATH = os.path.expanduser("fastq-dump")
-CHROMA_EXECUTABLE_PATH = os.path.expanduser("ChromA")
 SAMTOOLS_EXECUTABLE_PATH = os.path.expanduser("samtools")
 FIMO_EXECUTABLE_PATH = os.path.expanduser("fimo")
 HOMER_EXECUTABLE_PATH = os.path.expanduser("homer2")
 BEDTOOLS_EXECUTABLE_PATH = os.path.expanduser("bedtools")
 
 HTSEQ_MODULE_NAME = "HTSeq.scripts.count"
-CHROMA_MODULE_NAME = "ChromA"
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"

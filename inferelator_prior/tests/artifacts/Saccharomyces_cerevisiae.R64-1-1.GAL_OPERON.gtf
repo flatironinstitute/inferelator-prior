@@ -1,0 +1,59 @@
+#!genome-build R64-1-1-GAL-OPERON
+#!genome-version R64-1-1-GAL-OPERON
+#!genome-date 2011-09
+#!genome-build-accession GCA_000146045.2
+#!genebuild-last-updated 2018-10
+II	sgd	gene	270836	273765	.	-	.	gene_id "YBR017C"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	270836	273765	.	-	.	gene_id "YBR017C"; transcript_id "YBR017C_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	270836	273765	.	-	.	gene_id "YBR017C"; transcript_id "YBR017C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR017C_mRNA-E1";
+II	sgd	CDS	270950	273703	.	-	0	gene_id "YBR017C"; transcript_id "YBR017C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR017C";
+II	sgd	start_codon	273701	273703	.	-	0	gene_id "YBR017C"; transcript_id "YBR017C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	270947	270949	.	-	0	gene_id "YBR017C"; transcript_id "YBR017C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	274203	275565	.	-	.	gene_id "YBR018C"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	274203	275565	.	-	.	gene_id "YBR018C"; transcript_id "YBR018C_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	274203	275565	.	-	.	gene_id "YBR018C"; transcript_id "YBR018C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR018C_mRNA-E1";
+II	sgd	CDS	274430	275527	.	-	0	gene_id "YBR018C"; transcript_id "YBR018C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR018C";
+II	sgd	start_codon	275525	275527	.	-	0	gene_id "YBR018C"; transcript_id "YBR018C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	274427	274429	.	-	0	gene_id "YBR018C"; transcript_id "YBR018C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	275819	278411	.	-	.	gene_id "YBR019C"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	275819	278411	.	-	.	gene_id "YBR019C"; transcript_id "YBR019C_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	275819	278411	.	-	.	gene_id "YBR019C"; transcript_id "YBR019C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR019C_mRNA-E1";
+II	sgd	CDS	276256	278352	.	-	0	gene_id "YBR019C"; transcript_id "YBR019C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR019C";
+II	sgd	start_codon	278350	278352	.	-	0	gene_id "YBR019C"; transcript_id "YBR019C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	276253	276255	.	-	0	gene_id "YBR019C"; transcript_id "YBR019C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	278842	281389	.	+	.	gene_id "YBR020W"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	278842	281389	.	+	.	gene_id "YBR020W"; transcript_id "YBR020W_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	278842	281389	.	+	.	gene_id "YBR020W"; transcript_id "YBR020W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR020W_mRNA-E1";
+II	sgd	CDS	279021	280604	.	+	0	gene_id "YBR020W"; transcript_id "YBR020W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR020W";
+II	sgd	start_codon	279021	279023	.	+	0	gene_id "YBR020W"; transcript_id "YBR020W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	280605	280607	.	+	0	gene_id "YBR020W"; transcript_id "YBR020W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	281307	283471	.	+	.	gene_id "YBR021W"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	281307	283471	.	+	.	gene_id "YBR021W"; transcript_id "YBR021W_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	281307	283471	.	+	.	gene_id "YBR021W"; transcript_id "YBR021W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR021W_mRNA-E1";
+II	sgd	CDS	281443	283341	.	+	0	gene_id "YBR021W"; transcript_id "YBR021W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR021W";
+II	sgd	start_codon	281443	281445	.	+	0	gene_id "YBR021W"; transcript_id "YBR021W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	283342	283344	.	+	0	gene_id "YBR021W"; transcript_id "YBR021W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	283655	284433	.	+	.	gene_id "YBR022W"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	283655	284433	.	+	.	gene_id "YBR022W"; transcript_id "YBR022W_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	283655	284433	.	+	.	gene_id "YBR022W"; transcript_id "YBR022W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR022W_mRNA-E1";
+II	sgd	CDS	283738	284268	.	+	0	gene_id "YBR022W"; transcript_id "YBR022W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR022W";
+II	sgd	start_codon	283738	283740	.	+	0	gene_id "YBR022W"; transcript_id "YBR022W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	284269	284271	.	+	0	gene_id "YBR022W"; transcript_id "YBR022W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	284428	287925	.	-	.	gene_id "YBR023C"; gene_name "CHS3"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	284428	287925	.	-	.	gene_id "YBR023C"; transcript_id "YBR023C_mRNA"; gene_name "CHS3"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	284428	287925	.	-	.	gene_id "YBR023C"; transcript_id "YBR023C_mRNA"; exon_number "1"; gene_name "CHS3"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR023C_mRNA-E1";
+II	sgd	CDS	284431	287925	.	-	0	gene_id "YBR023C"; transcript_id "YBR023C_mRNA"; exon_number "1"; gene_name "CHS3"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR023C";
+II	sgd	start_codon	287923	287925	.	-	0	gene_id "YBR023C"; transcript_id "YBR023C_mRNA"; exon_number "1"; gene_name "CHS3"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	284428	284430	.	-	0	gene_id "YBR023C"; transcript_id "YBR023C_mRNA"; exon_number "1"; gene_name "CHS3"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	289325	290677	.	+	.	gene_id "YBR024W"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	289325	290677	.	+	.	gene_id "YBR024W"; transcript_id "YBR024W_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	289325	290677	.	+	.	gene_id "YBR024W"; transcript_id "YBR024W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR024W_mRNA-E1";
+II	sgd	CDS	289445	290347	.	+	0	gene_id "YBR024W"; transcript_id "YBR024W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR024W";
+II	sgd	start_codon	289445	289447	.	+	0	gene_id "YBR024W"; transcript_id "YBR024W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	290348	290350	.	+	0	gene_id "YBR024W"; transcript_id "YBR024W_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	gene	290379	291986	.	-	.	gene_id "YBR025C"; gene_source "sgd"; gene_biotype "protein_coding";
+II	sgd	transcript	290379	291986	.	-	.	gene_id "YBR025C"; transcript_id "YBR025C_mRNA"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	exon	290379	291986	.	-	.	gene_id "YBR025C"; transcript_id "YBR025C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; exon_id "YBR025C_mRNA-E1";
+II	sgd	CDS	290684	291865	.	-	0	gene_id "YBR025C"; transcript_id "YBR025C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding"; protein_id "YBR025C";
+II	sgd	start_codon	291863	291865	.	-	0	gene_id "YBR025C"; transcript_id "YBR025C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";
+II	sgd	stop_codon	290681	290683	.	-	0	gene_id "YBR025C"; transcript_id "YBR025C_mRNA"; exon_number "1"; gene_source "sgd"; gene_biotype "protein_coding"; transcript_source "sgd"; transcript_biotype "protein_coding";

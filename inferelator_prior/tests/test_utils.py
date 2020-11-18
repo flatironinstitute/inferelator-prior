@@ -41,16 +41,16 @@ class TestUtils(unittest.TestCase):
     def test_requirements(self):
         self.assertTrue(utils.test_requirements_exist(test_targets=["python"],
                                                       test_package={"python": ("python", ["python", "--version"])},
-                                                      test_htseq=False, test_chroma=False))
+                                                      test_htseq=False))
 
         self.assertTrue(utils.test_requirements_exist(test_targets=["python"],
                                                       test_package={"python": ("python", ["python", "--version"])},
-                                                      test_htseq=True, test_chroma=False))
+                                                      test_htseq=True))
 
         with self.assertRaises(FileNotFoundError):
             utils.test_requirements_exist(test_targets=["not_a-.thing"],
                                           test_package={"not_a-.thing": ("fake", ["not_a-.thing", "--version"])},
-                                          test_htseq=False, test_chroma=False)
+                                          test_htseq=False)
 
     def test_file_path_abs(self):
         self.assertEqual(os.path.abspath(os.path.expanduser("~")), utils.file_path_abs("~"))

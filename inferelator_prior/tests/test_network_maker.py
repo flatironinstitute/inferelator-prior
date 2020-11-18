@@ -1,11 +1,15 @@
 import os
 import unittest
-import pandas as pd
+import pandas.testing as pdt
 
 from inferelator_prior.motifs import meme, select_motifs, truncate_motifs
 from inferelator_prior.processor import gtf
+from inferelator_prior.network_from_motifs import (network_scan_and_build, load_and_process_motifs,
+                                                   build_motif_prior_from_genes)
+from inferelator_prior.motif_information import summarize_motifs
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
+data_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "../../data/")
 
 
 class TestConstraints(unittest.TestCase):
@@ -60,3 +64,34 @@ class TestConstraints(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             trim_motifs = select_motifs(self.motifs, constraint_to)
+
+
+class TestFullStack(unittest.TestCase):
+
+    def test_load_motifs(self):
+        m, minfo = load_and_process_motifs(os.path.join(artifact_path, "test_gal4.meme"), "meme",
+                                           regulator_constraint_list=["GAL4"])
+
+        self.assertEqual(len(m), 1)
+        self.assertEqual(m[0].motif_name, "GAL4")
+
+        with self.assertRaises(ValueError):
+            m, minfo = load_and_process_motifs(os.path.join(artifact_path, "test_gal4.meme"), "meme",
+                                               regulator_constraint_list=["NOT_GAL4"])
+
+        minfo_2 = summarize_motifs(os.path.join(artifact_path, "test_gal4.meme"), None)
+
+        pdt.assert_frame_equal(minfo, minfo_2)
+
+    def test_full_stack_network_build(self):
+        cut, raw = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                                             "test_gal4.meme"),
+                                                os.path.join(artifact_path,
+                                                             "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                                                os.path.join(data_path,
+                                                             "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                                                window_size=(500, 100))
+
+        self.assertEqual(cut.sum().sum(), 3)
+        self.assertListEqual(cut[cut["GAL4"]].index.tolist(), ["YBR018C", "YBR019C", "YBR020W"])
+        self.assertEqual((raw > 0).sum().sum(), 3)

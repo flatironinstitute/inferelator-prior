@@ -336,8 +336,17 @@ def _gene_gen(genes, motif_peaks, motif_information, debug=False):
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     scores, weights = np.unique(tf_data.values, return_counts=True)
 
-    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=None)\
+    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 5), eps=1, n_jobs=None)\
         .fit_predict(scores.reshape(-1, 1), sample_weight=weights)
+
+    # Short circuit if all the labels are outliers
+    # This shouldn't happen real-world unless there aren't many genes in the network
+    if np.all(labels == -1):
+        return pd.Series(tf_data.values > 0, index=tf_data.index)
+
+    # Short circuit if all the labels are in the same cluster
+    if np.all(labels == 0):
+        return pd.Series(False, index=tf_data.index)
 
     largest_cluster = np.argmax(np.array([np.min(scores[labels == i]) for i in range(np.max(labels) + 1)]))
     min_score = np.min(scores[labels == largest_cluster])

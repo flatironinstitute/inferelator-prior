@@ -21,11 +21,6 @@ install:
   - conda activate test-environment
   - pip install nose codecov pathos
   - python setup.py install
-  - cd ..
-  - git clone https://github.com/marianogabitto/ChromA.git
-  - cd ChromA
-  - python setup.py install
-  - cd ../inferelator-prior
 script:
   - coverage run --source=inferelator_prior setup.py test
 after_success:

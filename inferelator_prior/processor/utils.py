@@ -80,8 +80,7 @@ def file_path_abs(file_path):
     return os.path.abspath(os.path.expanduser(file_path))
 
 
-def test_requirements_exist(test_targets=_TEST_REQUIREMENTS.keys(), test_package=_TEST_REQUIREMENTS, test_htseq=True,
-                            test_chroma=False):
+def test_requirements_exist(test_targets=_TEST_REQUIREMENTS.keys(), test_package=_TEST_REQUIREMENTS, test_htseq=True):
     """
     Test that the requirements to run this package exist. Print versions of what can be found and raise a ValueError if
     any required software is missing.
@@ -91,8 +90,6 @@ def test_requirements_exist(test_targets=_TEST_REQUIREMENTS.keys(), test_package
         A dict, keyed by package names, of the commands to run to test the package versions
     :param test_htseq: bool
         Test for the python HTSeq package
-    :param test_chroma: bool
-        Test for the python ChromA package
     :return:
     """
 
@@ -113,14 +110,6 @@ def test_requirements_exist(test_targets=_TEST_REQUIREMENTS.keys(), test_package
             print("HTSeq : " + str(HTSeq.__version__))
         except ImportError:
             print("HTSeq : HTSeq not found (ImportError)")
-            failed = True
-
-    if test_chroma:
-        try:
-            import ChromA
-            print("ChromA : " + str(ChromA.__version__))
-        except ImportError:
-            print("ChromA : ChromA not found (ImportError)")
             failed = True
 
     if failed:

@@ -28,7 +28,9 @@ def summarize_motifs(motif_file, output_file, motif_format="meme", fuzzy=False):
 
     _, motif_information = load_and_process_motifs(motif_file, motif_format, fuzzy=fuzzy)
     out_cols = OUTPUT_COLS + [MOTIF_ORIGINAL_NAME_COL] if fuzzy else OUTPUT_COLS
-    motif_information[out_cols].to_csv(output_file, sep="\t", float_format='%.3f', index=False)
+
+    if output_file is not None:
+        motif_information[out_cols].to_csv(output_file, sep="\t", float_format='%.3f', index=False)
 
     return motif_information
 

@@ -219,6 +219,20 @@ class Motif:
                                                                    el=len(self),
                                                                    ic=self.information_content)
 
+    def __eq__(self, other):
+        try:
+            return np.allclose(self.probability_matrix, other.probability_matrix) \
+                   and (self.motif_id == other.motif_id) and (self.motif_name == other.motif_name)
+        except AttributeError:
+            pass
+
+        try:
+            return self.motif_name == other
+        except TypeError:
+            pass
+
+        return False
+
     def __init__(self, motif_id=None, motif_name=None, motif_alphabet=None, motif_background=None):
         self.id = motif_id
         self.name = motif_name
