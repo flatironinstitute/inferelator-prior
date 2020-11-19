@@ -1,7 +1,7 @@
 import gzip
 import pandas as pd
 
-GENE_ID_REGEX = 'gene_id\s\"([A-Za-z0-9\.\-\(\)]+)\"\;'
+GENE_ID_REGEX = 'gene_id\s\"(.*?)\"\;'
 
 # Column names
 GTF_ATTRIBUTES = 'attributes'
