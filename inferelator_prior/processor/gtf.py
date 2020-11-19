@@ -1,7 +1,9 @@
 import gzip
 import pandas as pd
+import re
 
-GENE_ID_REGEX = 'gene_id\s\"(.*?)\"\;'
+GTF_GENE_ID_REGEX = 'gene_id\s\"(.*?)\"\;'
+GFF_GENE_ID_REGEX = '\=gene:(.*?)[;|$]'
 
 # Column names
 GTF_ATTRIBUTES = 'attributes'
@@ -17,8 +19,9 @@ GTF_COLUMNS = ["seqname", "source", "feature", "start", "end", "score", "strand"
 
 def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
     """
-    Loads genes from a GTF into a dataframe and returns them
-    :param gtf_path: Path to the GTF file
+    Loads genes from a GTF or GFF into a dataframe and returns them
+
+    :param gtf_path: Path to the GTF or GFF file
     :type gtf_path: str
     :param fasta_record_lengths: A dict of valid FASTA records, keyed by name
     :type fasta_record_lengths: dict(int)
@@ -31,8 +34,16 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
     :rtype: pd.DataFrame
     """
 
+    if any(gtf_path.lower().endswith(x) for x in [".gff", ".gff3", ".gff.gz", ".gff3.gz"]):
+        _gregex = GFF_GENE_ID_REGEX
+    else:
+        _gregex = GTF_GENE_ID_REGEX
+
     # Load annotations into a dataframe with pybedtools
     annotations = pd.read_csv(gtf_path, sep="\t", names=GTF_COLUMNS, comment="#")
+
+    if len(annotations) == 0:
+        raise ValueError("No records present in {f}".format(f=gtf_path))
 
     # Fix chromosome names to always be strings
     annotations[GTF_CHROMOSOME] = annotations[GTF_CHROMOSOME].astype(str)
@@ -45,7 +56,13 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
     annotations = annotations.loc[~pd.isnull(annotations[SEQ_START]) & ~pd.isnull(annotations[SEQ_STOP]), :]
 
     # Regex extract the gene_id from the annotations column
-    annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(GENE_ID_REGEX, expand=False)
+    annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(_gregex, expand=False, flags=re.IGNORECASE)
+
+    # Drop any NaNs in GENE_NAME:
+    annotations.dropna(inplace=True, subset=[GTF_GENENAME])
+
+    if len(annotations) == 0:
+        raise ValueError("Unable to parse gene IDs from annotation file attributes")
 
     # Define genes as going from the minimum start for any subfeature to the maximum end for any subfeature
     annotations = _fix_genes(annotations)
@@ -211,7 +228,7 @@ def _fix_genes(gene_dataframe):
     # Define the functions for aggregating gene records
     aggregate_functions = {SEQ_START: min, SEQ_STOP: max, GTF_CHROMOSOME: _most_common, GTF_STRAND: _most_common}
 
-    return gene_dataframe.groupby("gene_name").aggregate(aggregate_functions).reset_index()
+    return gene_dataframe.groupby(GTF_GENENAME).aggregate(aggregate_functions).reset_index()
 
 
 def _add_TSS(gene_dataframe):
