@@ -49,6 +49,8 @@ def main():
 
     ap.add_argument("-b", "--bed", dest="constraint", help="Constraint BED file", metavar="FILE", default=None)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", default="./prior")
+    ap.add_argument("--save_location_data", dest="save_locs", help="Save a dataframe with TF->Gene binding locations",
+                    action='store_const', const=True, default=False)
     ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
     ap.add_argument("--genes", dest="genes", help="A list of genes to build connectivity matrix for. Optional.",
                     default=None, type=str)
@@ -103,21 +105,25 @@ def main():
         raise ValueError("Providing both a GTF file to -g and a promoter BED file to -p is not supported")
 
     elif _do_genes:
-        build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
-                                     constraint_bed_file=args.constraint,
-                                     window_size=_window,
-                                     num_cores=args.cores,
-                                     motif_ic=args.min_ic,
-                                     tandem=_tandem,
-                                     scanner_type=args.scanner,
-                                     motif_format=args.motif_format,
-                                     output_prefix=out_prefix,
-                                     gene_constraint_list=_gl,
-                                     regulator_constraint_list=_tfl,
-                                     debug=args.debug,
-                                     fuzzy_motif_names=args.fuzzy,
-                                     motif_info=_minfo,
-                                     shuffle=args.shuffle)
+        _, _, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
+                                                        constraint_bed_file=args.constraint,
+                                                        window_size=_window,
+                                                        num_cores=args.cores,
+                                                        motif_ic=args.min_ic,
+                                                        tandem=_tandem,
+                                                        scanner_type=args.scanner,
+                                                        motif_format=args.motif_format,
+                                                        output_prefix=out_prefix,
+                                                        gene_constraint_list=_gl,
+                                                        regulator_constraint_list=_tfl,
+                                                        debug=args.debug,
+                                                        fuzzy_motif_names=args.fuzzy,
+                                                        motif_info=_minfo,
+                                                        shuffle=args.shuffle)
+
+        if args.save_locs:
+            print("Writing output file {o}".format(o=out_prefix + "_genomic_locations.tsv.gz"))
+            prior_data.to_csv(out_prefix + "_genomic_locations.tsv.gz", sep="\t", index=False)
 
     elif _do_promoters:
         raise ValueError("Gene promoter location is not supported yet")
@@ -221,7 +227,6 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,
                             fuzzy=False, motif_constraint_info=None, shuffle=None):
-
     motifs, motif_information = load_motif_file(motif_file, motif_format)
 
     if fuzzy:
@@ -262,7 +267,6 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=
 def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file, constraint_bed_file=None,
                            promoter_bed_file=None, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                            scanner_thresh="1e-4", output_prefix=None, debug=False):
-
     # Load and scan target chromatin peaks
     MotifScan.set_type(scanner_type)
 
