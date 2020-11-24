@@ -134,7 +134,7 @@ class TestPriorPipeline(unittest.TestCase):
                               promoter_bed=self.gene_locs,
                               min_ic=0, threshold=5e-4)
 
-        raw_matrix = prior.summarize_target_per_regulator(genes, motif_peaks, self.motif_information, num_workers=1)
+        raw_matrix, _ = prior.summarize_target_per_regulator(genes, motif_peaks, self.motif_information, num_workers=1)
         prior_matrix = prior.build_prior_from_motifs(raw_matrix, num_workers=1, do_threshold=do_threshold)
 
         return motif_peaks, prior_matrix, raw_matrix

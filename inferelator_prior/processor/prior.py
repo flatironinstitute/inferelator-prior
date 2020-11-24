@@ -230,7 +230,7 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     summarized_data = summarized_data.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
     summarized_data.index.name = PRIOR_GENE
 
-    return summarized_data
+    return summarized_data, prior_data
 
 
 def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True, debug=False):

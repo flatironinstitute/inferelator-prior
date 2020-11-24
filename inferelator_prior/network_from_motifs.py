@@ -3,7 +3,7 @@ from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window,
 from inferelator_prior.processor.prior import build_prior_from_motifs, summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import (load_motif_file, select_motifs, truncate_motifs, fuzzy_merge_motifs,
-                                      MOTIF_COL, MOTIF_NAME_COL, MOTIF_OBJ_COL)
+                                      shuffle_motifs, MOTIF_COL, MOTIF_NAME_COL, MOTIF_OBJ_COL)
 from inferelator_prior.processor.species_constants import SPECIES_MAP, DEFAULT_WINDOW, DEFAULT_TANDEM
 
 import argparse
@@ -58,6 +58,8 @@ def main():
                     const=True, default=False)
     ap.add_argument("--fuzzy", dest="fuzzy", help="Use fuzzy motif name merging", action='store_const',
                     const=True, default=False)
+    ap.add_argument("--shuffle", dest="shuffle", help="Shuffle motif PWMs using SEED", metavar="SEED",
+                    const=42, default=None, action='store', nargs='?', type=int)
 
     args = ap.parse_args()
     out_prefix = os.path.abspath(os.path.expanduser(args.out))
@@ -114,7 +116,8 @@ def main():
                                      regulator_constraint_list=_tfl,
                                      debug=args.debug,
                                      fuzzy_motif_names=args.fuzzy,
-                                     motif_info=_minfo)
+                                     motif_info=_minfo,
+                                     shuffle=args.shuffle)
 
     elif _do_promoters:
         raise ValueError("Gene promoter location is not supported yet")
@@ -127,7 +130,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  window_size=0, use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
-                                 output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None):
+                                 output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
+                                 shuffle=None):
     """
     Build a motif-based prior from windows around annotated genes.
     
@@ -171,6 +175,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :param motif_info: Information about motifs. This will override any details read in from motif file.
         A template can be generated from ``inferelator_prior.motif_information`` and modified as needed.
     :type motif_info: pd.DataFrame
+    :param shuffle: Randomly shuffle motif PWMs using this seed. None disables. Defaults to None.
+    :type shuffle: None, int
     :return prior_matrix, raw_matrix:
     :rtype: pd.DataFrame, pd.DataFrame
     """
@@ -194,7 +200,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
     motifs, motif_information = load_and_process_motifs(motif_file, motif_format, truncate_prob=truncate_prob,
                                                         regulator_constraint_list=regulator_constraint_list,
-                                                        fuzzy=fuzzy_motif_names, motif_constraint_info=motif_info)
+                                                        fuzzy=fuzzy_motif_names, motif_constraint_info=motif_info,
+                                                        shuffle=shuffle)
 
     # SCAN CHROMATIN FOR MOTIFS ########################################################################################
 
@@ -212,13 +219,17 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,
-                            fuzzy=False, motif_constraint_info=None):
+                            fuzzy=False, motif_constraint_info=None, shuffle=None):
 
     motifs, motif_information = load_motif_file(motif_file, motif_format)
 
     if fuzzy:
         motif_information = fuzzy_merge_motifs(motif_information)
         motifs = motif_information[MOTIF_OBJ_COL].tolist()
+
+    if shuffle:
+        print("Shuffling motif PWMs")
+        shuffle_motifs(motifs, random_seed=shuffle)
 
     if motif_constraint_info is not None:
         print("Loaded info for {n} motifs from {f}".format(n=len(motif_constraint_info),
@@ -273,8 +284,8 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
     # Process into an information score matrix
     print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-    raw_matrix = summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=num_cores,
-                                                debug=debug)
+    raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
+                                                            num_workers=num_cores, debug=debug)
 
     # Nuke a bunch of dataframes and force a cyclic check
     del motif_peaks
@@ -293,7 +304,7 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
         print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
         (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
 
-    return prior_matrix, raw_matrix
+    return prior_matrix, raw_matrix, prior_data
 
 
 if __name__ == '__main__':

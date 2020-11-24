@@ -290,6 +290,16 @@ class Motif:
         else:
             return False
 
+    def shuffle(self, rng=None, random_seed=42):
+        """
+        Shuffles per-base probabilities
+        """
+
+        if rng is not None:
+            rng.shuffle(self.probability_matrix.T)
+        else:
+            np.random.default_rng(random_seed).shuffle(self.probability_matrix.T)
+
 
 class __MotifScanner:
     scanner_name = None
@@ -471,6 +481,19 @@ def truncate_motifs(motifs, truncate_value):
 
     if truncate_value is not None:
         [x.truncate(threshold=truncate_value) for x in motifs]
+
+
+def shuffle_motifs(motifs, random_seed):
+    """
+    Shuffle probabilities for each base as a random control
+
+    :param motifs: List of motif objects
+    :type motifs: list[Motif]
+    :param random_seed: Random generator seed
+    :type random_seed: int
+    """
+
+    [m.shuffle(rng=np.random.default_rng(random_seed)) for m in motifs]
 
 
 def fuzzy_merge_motifs(motif_dataframe, merge_col=MOTIF_NAME_COL, remove_dimers=False):

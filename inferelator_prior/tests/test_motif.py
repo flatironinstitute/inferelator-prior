@@ -2,10 +2,11 @@ import unittest
 import os
 import io
 import pandas as pd
+import numpy as np
 import numpy.testing as npt
 import copy
 
-from inferelator_prior.motifs import meme, homer_motif, transfac
+from inferelator_prior.motifs import meme, homer_motif, transfac, shuffle_motifs
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 
@@ -129,3 +130,29 @@ class TestMotifProps(unittest.TestCase):
         self.assertEqual(self.motif.score_match("GAATTCGATACG"), 0.0)
         self.assertEqual(self.motif.score_match("GAATTCCTTAAG"), 0.0)
         self.assertEqual(self.motif.score_match("CTTAAGCTTAAG"), 0.0)
+
+    def test_shuffle(self):
+
+        npt.assert_array_almost_equal(self.motif.probability_matrix.sum(axis=1), np.ones(len(self.motif)))
+        npt.assert_array_almost_equal(self.motif.probability_matrix, self.master_motif.probability_matrix)
+
+        self.motif.shuffle(random_seed=100)
+
+        npt.assert_array_almost_equal(self.motif.probability_matrix.sum(axis=1), np.ones(len(self.motif)))
+
+        with self.assertRaises(AssertionError):
+            npt.assert_array_almost_equal(self.motif.probability_matrix, self.master_motif.probability_matrix)
+
+        motif_copy = copy.deepcopy(self.master_motif)
+        motif_copy.shuffle(random_seed=100)
+
+        npt.assert_array_almost_equal(self.motif.probability_matrix, motif_copy.probability_matrix)
+        with self.assertRaises(AssertionError):
+            npt.assert_array_almost_equal(motif_copy.probability_matrix, self.master_motif.probability_matrix)
+
+        motif_copy = copy.deepcopy(self.master_motif)
+        shuffle_motifs([motif_copy], 100)
+
+        npt.assert_array_almost_equal(self.motif.probability_matrix, motif_copy.probability_matrix)
+        with self.assertRaises(AssertionError):
+            npt.assert_array_almost_equal(motif_copy.probability_matrix, self.master_motif.probability_matrix)
