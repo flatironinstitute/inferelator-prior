@@ -1,6 +1,7 @@
 from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, select_genes, GTF_CHROMOSOME,
                                              SEQ_START, SEQ_STOP, GTF_STRAND, get_fasta_lengths)
-from inferelator_prior.processor.prior import build_prior_from_motifs, summarize_target_per_regulator, MotifScorer
+from inferelator_prior.processor.prior import (build_prior_from_motifs, summarize_target_per_regulator, MotifScorer,
+                                               PRIOR_TF, PRIOR_GENE)
 from inferelator_prior.motifs.motif_scan import MotifScan
 from inferelator_prior.motifs import (load_motif_file, select_motifs, truncate_motifs, fuzzy_merge_motifs,
                                       shuffle_motifs, MOTIF_COL, MOTIF_NAME_COL, MOTIF_OBJ_COL)
@@ -308,6 +309,11 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
     if output_prefix is not None:
         print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
         (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
+
+    prior_matrix.index.name = PRIOR_GENE
+    pm_melt = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='Filter_Included')
+    pm_melt.index = pd.MultiIndex.from_frame(pm_melt.loc[:, [PRIOR_GENE, PRIOR_TF]])
+    prior_data = prior_data.join(pm_melt.drop([PRIOR_TF, PRIOR_GENE], axis=1), on=[PRIOR_TF, PRIOR_GENE])
 
     return prior_matrix, raw_matrix, prior_data
 
