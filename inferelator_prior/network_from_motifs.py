@@ -177,8 +177,9 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type motif_info: pd.DataFrame
     :param shuffle: Randomly shuffle motif PWMs using this seed. None disables. Defaults to None.
     :type shuffle: None, int
-    :return prior_matrix, raw_matrix:
-    :rtype: pd.DataFrame, pd.DataFrame
+    :return prior_matrix, raw_matrix, prior_data: Filtered connectivity matrix, unfiltered score matrix, and unfiltered
+        long dataframe with scored TF->Gene pairs and genomic locations
+    :rtype: pd.DataFrame, pd.DataFrame, pd.DataFrame
     """
 
     # PROCESS GENE ANNOTATIONS #########################################################################################
