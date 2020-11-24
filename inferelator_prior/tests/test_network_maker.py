@@ -84,13 +84,13 @@ class TestFullStack(unittest.TestCase):
         pdt.assert_frame_equal(minfo, minfo_2)
 
     def test_full_stack_network_build(self):
-        cut, raw = build_motif_prior_from_genes(os.path.join(artifact_path,
-                                                             "test_gal4.meme"),
-                                                os.path.join(artifact_path,
-                                                             "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
-                                                os.path.join(data_path,
-                                                             "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
-                                                window_size=(500, 100))
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                                                "test_gal4.meme"),
+                                                   os.path.join(artifact_path,
+                                                                "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                                                   os.path.join(data_path,
+                                                                "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                                                   window_size=(500, 100))
 
         self.assertEqual(cut.sum().sum(), 3)
         self.assertListEqual(cut[cut["GAL4"]].index.tolist(), ["YBR018C", "YBR019C", "YBR020W"])
