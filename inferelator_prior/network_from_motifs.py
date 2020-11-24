@@ -312,8 +312,7 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
 
     prior_matrix.index.name = PRIOR_GENE
     pm_melt = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='Filter_Included')
-    pm_melt.index = pd.MultiIndex.from_frame(pm_melt.loc[:, [PRIOR_GENE, PRIOR_TF]])
-    prior_data = prior_data.join(pm_melt.drop([PRIOR_TF, PRIOR_GENE], axis=1), on=[PRIOR_TF, PRIOR_GENE])
+    prior_data = pd.merge(prior_data, pm_melt)
 
     return prior_matrix, raw_matrix, prior_data
 
