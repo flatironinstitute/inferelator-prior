@@ -336,7 +336,7 @@ def _gene_gen(genes, motif_peaks, motif_information, debug=False):
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     scores, weights = np.unique(tf_data.values, return_counts=True)
 
-    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 5), eps=1, n_jobs=None)\
+    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=None)\
         .fit_predict(scores.reshape(-1, 1), sample_weight=weights)
 
     # Short circuit if all the labels are outliers
