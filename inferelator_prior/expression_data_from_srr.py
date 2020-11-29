@@ -25,7 +25,7 @@ def main():
     ap.add_argument("-f", "--file", dest="file", help="List of SRR records in a TXT file", metavar="FILE", default=None)
     ap.add_argument("-g", "--genome", dest="genome", help="Reference genome (STAR or Kallisto)", metavar="PATH",
                     required=True)
-    ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", required=True)
+    ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", default=None)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
     ap.add_argument("--gzip", dest="gzip", help="GZIP output file", action='store_const', const=True, default=False)
     ap.add_argument("--cpu", dest="cpu", help="NUM of cores to use", metavar="NUM", type=int, default=4)
@@ -57,7 +57,7 @@ def main():
                star_args=star_args, kallisto=args.kallisto)
 
 
-def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file, gzip_output=False, cores=4, star_jobs=2,
+def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None, gzip_output=False, cores=4, star_jobs=2,
                star_args=None, kallisto=False):
 
     output_path = file_path_abs(output_path)
