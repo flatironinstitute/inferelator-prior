@@ -59,12 +59,12 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
             return srr_file_name
 
         prefetch_call = [PREFETCH_EXECUTABLE_PATH, srr_id, "-o", srr_file_name, *prefetch_options]
-        print(" ".join(prefetch_call))
         process = await asyncio.create_subprocess_exec(*prefetch_call)
         code = await process.wait()
 
         if int(code) != 0:
             print("NCBI Prefetch failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+            print(" ".join(prefetch_call))
             return None
 
         return srr_file_name
@@ -127,8 +127,6 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
         fastq_dump_call = [FASTQDUMP_EXECUTABLE_PATH, "--gzip", "--split-files", "--outdir", target_path,
                            srr_file_name]
 
-        print(" ".join(fastq_dump_call))
-
         # Run fastq-dump and get the files that were created from it
         return_code = 0
         try:
@@ -143,6 +141,7 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
             # If the fastq-dump failed, clean up the files associated with it and then move on
             if int(return_code) != 0:
                 print("NCBI fastq-dump failed for {id} ({file})".format(id=srr_id, file=srr_file_name))
+                print(" ".join(fastq_dump_call))
                 files_created = check_list_of_files_exist(output_file_names)
                 for f in files_created:
                     try:
