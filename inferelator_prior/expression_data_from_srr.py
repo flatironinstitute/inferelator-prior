@@ -34,7 +34,6 @@ def main():
                     const=True, default=False)
 
     args, star_args = ap.parse_known_args()
-    test_requirements_exist()
 
     srr_ids = list()
 
@@ -53,8 +52,8 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    srr_tomat0(srr_ids, args.out, args.genome, args.anno, gzip_output=args.gzip, cores=args.cpu, star_jobs=args.sjob,
-               star_args=star_args, kallisto=args.kallisto)
+    srr_tomat0(srr_ids, args.out, args.genome, annotation_file=args.anno, gzip_output=args.gzip, cores=args.cpu,
+               star_jobs=args.sjob, star_args=star_args, kallisto=args.kallisto)
 
 
 def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None, gzip_output=False, cores=4, star_jobs=2,
