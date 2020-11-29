@@ -10,12 +10,15 @@ SAMTOOLS_EXECUTABLE_PATH = os.path.expanduser("samtools")
 FIMO_EXECUTABLE_PATH = os.path.expanduser("fimo")
 HOMER_EXECUTABLE_PATH = os.path.expanduser("homer2")
 BEDTOOLS_EXECUTABLE_PATH = os.path.expanduser("bedtools")
+KALLISTO_EXECUTABLE_PATH = os.path.expanduser("kallisto")
+
 
 HTSEQ_MODULE_NAME = "HTSeq.scripts.count"
 
 SRR_SUBPATH = "SRR"
 FASTQ_SUBPATH = "FASTQ"
 STAR_ALIGNMENT_SUBPATH = "STAR"
+KALLISTO_ALIGNMENT_SUBPATH = "KALLISTO"
 HTSEQ_ALIGNMENT_SUBPATH = "HTSEQ"
 BAM_SUBPATH = "BAM"
 FIMO_SUBPATH = "FIMO"

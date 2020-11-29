@@ -107,12 +107,12 @@ async def _star_align(srr_id, fastq_file_names, reference_genome, output_path, s
         # Add in any additional options
         star_call.extend(star_options)
 
-        print(" ".join(star_call))
         process = await asyncio.create_subprocess_exec(*star_call)
         code = await process.wait()
 
         if int(code) != 0:
             print("STAR failed for {id} ({files})".format(id=srr_id, files=" ".join(fastq_file_names)))
+            print(" ".join(star_call))
             return None
 
         return output_file
