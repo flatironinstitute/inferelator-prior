@@ -81,25 +81,30 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
         print("Aligning FASTQ files")
         os.makedirs(os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH), exist_ok=True)
         count_file_names = kallisto_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
-                                                 os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
+                                                 os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH),
                                                  num_workers=cores)
 
-        tpm_df = []
-        count_df = []
+        tpm_df = None
+        count_df = None
 
-        for cf in count_file_names:
+        for sid, cf in zip(srr_ids, count_file_names):
 
             if cf is None:
                 continue
 
             counts = pd.read_csv(cf, sep="\t", index_col=0)
 
-            tpm_df.append(counts[[KALLISTO_TPM_COL]])
-            count_df.append(counts[[KALLISTO_COUNT_COL]])
+            if tpm_df is None:
+                tpm_df = pd.DataFrame(index=counts.index)
 
-        count_matrix = pd.concat(tpm_df, axis=1)
-        count_matrix.to_csv(tpm_file_name, sep="\t")
-        pd.concat(count_df, axis=1).to_csv(count_matrix_file_name, sep="\t")
+            if count_df is None:
+                count_df = pd.DataFrame(index=counts.index)
+
+            tpm_df[sid] = counts[KALLISTO_TPM_COL]
+            count_df[sid] = counts[KALLISTO_COUNT_COL]
+
+        tpm_df.T.to_csv(tpm_file_name, sep="\t")
+        count_df.T.to_csv(count_matrix_file_name, sep="\t")
 
     else:
 
