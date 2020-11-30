@@ -85,7 +85,7 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
                                                  num_workers=cores)
 
         tpm_df = None
-        count_df = None
+        count_matrix = None
 
         for sid, cf in zip(srr_ids, count_file_names):
 
@@ -97,14 +97,14 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
             if tpm_df is None:
                 tpm_df = pd.DataFrame(index=counts.index)
 
-            if count_df is None:
-                count_df = pd.DataFrame(index=counts.index)
+            if count_matrix is None:
+                count_matrix = pd.DataFrame(index=counts.index)
 
             tpm_df[sid] = counts[KALLISTO_TPM_COL]
-            count_df[sid] = counts[KALLISTO_COUNT_COL]
+            count_matrix[sid] = counts[KALLISTO_COUNT_COL]
 
         tpm_df.T.to_csv(tpm_file_name, sep="\t")
-        count_df.T.to_csv(count_matrix_file_name, sep="\t")
+        count_matrix.T.to_csv(count_matrix_file_name, sep="\t")
 
     else:
 
