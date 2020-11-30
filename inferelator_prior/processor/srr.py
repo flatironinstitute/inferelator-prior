@@ -11,7 +11,7 @@ POSSIBLE_FASTQ_EXTENSIONS = [".fastq.gz", "_1.fastq.gz", "_2.fastq.gz", "_3.fast
 
 
 # TODO: test this
-def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETCH_OPTIONS):
+def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETCH_OPTIONS, skip=False):
     """
     Take a list of SRR ID strings, download them async with num_workers concurrent jobs, and return a list of the
     paths to the SRR files that have been downloaded.
@@ -28,7 +28,8 @@ def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETC
     sem = asyncio.Semaphore(num_workers)
 
     srr_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), x + SRA_EXTENSION), srr_list))
-    tasks = [_get_srr(sid, sfn, sem, prefetch_options=prefetch_options) for sid, sfn in zip(srr_list, srr_file_names)]
+    tasks = [_get_srr(sid, sfn, sem, prefetch_options=prefetch_options, skip=skip)
+             for sid, sfn in zip(srr_list, srr_file_names)]
 
     try:
         return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
@@ -37,7 +38,7 @@ def get_srr_files(srr_list, target_path, num_workers=5, prefetch_options=PREFETC
 
 
 # TODO: test this
-async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_OPTIONS):
+async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_OPTIONS, skip=False):
     """
     Take a SRR ID string and get the SRR file for it from NCBI.
 
@@ -58,6 +59,9 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
             print("{id} exists in file {file}".format(id=srr_id, file=srr_file_name))
             return srr_file_name
 
+        if skip:
+            return srr_file_name
+
         prefetch_call = [PREFETCH_EXECUTABLE_PATH, srr_id, "-o", srr_file_name, *prefetch_options]
         process = await asyncio.create_subprocess_exec(*prefetch_call)
         code = await process.wait()
@@ -71,7 +75,7 @@ async def _get_srr(srr_id, srr_file_name, semaphore, prefetch_options=PREFETCH_O
 
 
 # TODO: test this
-def unpack_srr_files(srr_ids, srr_file_names, target_path, num_workers=5):
+def unpack_srr_files(srr_ids, srr_file_names, target_path, num_workers=5, skip=False):
     """
     Take an SRR file and unpack it into a set of FASTQ files
 
@@ -89,12 +93,12 @@ def unpack_srr_files(srr_ids, srr_file_names, target_path, num_workers=5):
 
     sem = asyncio.Semaphore(num_workers)
 
-    tasks = [_unpack_srr(sid, sfn, target_path, sem) for sid, sfn in zip(srr_ids, srr_file_names)]
+    tasks = [_unpack_srr(sid, sfn, target_path, sem, skip=skip) for sid, sfn in zip(srr_ids, srr_file_names)]
     return asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
 
 
 # TODO: test this
-async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
+async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore, skip=False):
     """
 
     :param srr_id: str
@@ -116,6 +120,9 @@ async def _unpack_srr(srr_id, srr_file_name, target_path, semaphore):
         output_file_names = list(map(lambda x: os.path.join(file_path_abs(target_path), srr_id + x),
                                      POSSIBLE_FASTQ_EXTENSIONS))
         files_created = check_list_of_files_exist(output_file_names)
+
+        if skip:
+            return files_created
 
         # If the file is already unpacked, don't do anything
         if len(files_created) > 0:

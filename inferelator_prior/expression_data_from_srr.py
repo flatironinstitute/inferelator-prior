@@ -32,6 +32,8 @@ def main():
     ap.add_argument("--star_jobs", dest="sjob", help="NUM of STAR workers to use", metavar="NUM", type=int, default=4)
     ap.add_argument("--kallisto", dest="kallisto", help="Align and quant with Kallisto", action='store_const',
                     const=True, default=False)
+    ap.add_argument("--skip_srr", dest="skip", help="Skip downloading & unpacking SRRs", action='store_const',
+                    const=True, default=False)
 
     args, star_args = ap.parse_known_args()
 
@@ -53,11 +55,11 @@ def main():
         raise ValueError("There is something wrong with this switch")
 
     srr_tomat0(srr_ids, args.out, args.genome, annotation_file=args.anno, gzip_output=args.gzip, cores=args.cpu,
-               star_jobs=args.sjob, star_args=star_args, kallisto=args.kallisto)
+               star_jobs=args.sjob, star_args=star_args, kallisto=args.kallisto, skip=args.skip)
 
 
 def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None, gzip_output=False, cores=4, star_jobs=2,
-               star_args=None, kallisto=False):
+               star_args=None, kallisto=False, skip=False):
 
     output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
@@ -65,13 +67,13 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
     # Download all the SRR files
     print("Downloading SRR files")
     os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
-    srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH), num_workers=cores)
+    srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH), num_workers=cores, skip=skip)
 
     # Unpack all the SRR files into FASTQ files
     print("Unpacking SRR files")
     os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
     fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
-                                        num_workers=cores)
+                                        num_workers=cores, skip=skip)
 
     count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME) + ".gz" if gzip_output else ""
     fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME) + ".gz" if gzip_output else ""
