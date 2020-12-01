@@ -14,10 +14,10 @@ def main():
     ap.add_argument("--indirect", dest="direct", help="Include indirect motifs", action='store_const',
                     const=False, default=True)
     ap.add_argument("--pwm_no_header", dest="pwm_no_header", help="PWM files have no headers", action='store_const',
-                    const=False, default=True)
+                    const=True, default=False)
     ap.add_argument("--pwm_alphabet", dest="alphabet", help="PWM bases (alphabet)", metavar="ALPHABET", default=None)
     ap.add_argument("--pwm_transpose", dest="transpose", help="PWM is Bases x Positions", action='store_const',
-                    const=False, default=True)
+                    const=True, default=False)
 
     args = ap.parse_args()
 
