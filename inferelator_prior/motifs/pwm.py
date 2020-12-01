@@ -8,10 +8,14 @@ TF_NAME_COL = "TF_Name"
 TF_STATUS_COL = "TF_Status"
 
 
-def read(pwm_file_list, info_file, background=None, direct_only=False):
+def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_idx=True, pwm_alphabet=None,
+         transpose=False):
 
     info_df = pd.read_csv(info_file, sep="\t")
     motifs = []
+
+    if not pwm_has_idx and pwm_alphabet is None:
+        raise ValueError("pwm_alphabet is required if pwm_has_idx=False")
 
     for pwm_file in pwm_file_list:
         pwm_id = os.path.splitext(os.path.basename(pwm_file))[0]
@@ -28,12 +32,13 @@ def read(pwm_file_list, info_file, background=None, direct_only=False):
         pwm_name = "/".join(pwm_names)
 
         try:
-            pwm = pd.read_csv(pwm_file, sep="\t", index_col=0)
+            pwm = pd.read_csv(pwm_file, sep="\t", index_col=0) if pwm_has_idx else pd.read_csv(pwm_file, sep="\t")
+            pwm = pwm.T if transpose else pwm
         except pde.ParserError:
             print("Parser error on file {f}".format(f=pwm_name))
             continue
 
-        pwm_alphabet = pwm.columns.tolist()
+        pwm_alphabet = pwm.columns.tolist() if pwm_has_idx else pwm_alphabet
 
         motif = Motif(pwm_id, pwm_name, pwm_alphabet, motif_background=background)
         motif.probability_matrix = pwm.values
