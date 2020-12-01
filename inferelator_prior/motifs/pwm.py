@@ -32,7 +32,11 @@ def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_i
         pwm_name = "/".join(pwm_names)
 
         try:
-            pwm = pd.read_csv(pwm_file, sep="\t", index_col=0) if pwm_has_idx else pd.read_csv(pwm_file, sep="\t")
+            if pwm_has_idx:
+                pwm = pd.read_csv(pwm_file, sep="\t", index_col=0)
+            else:
+                pwm = pd.read_csv(pwm_file, sep="\t", header=None)
+                
             pwm = pwm.T if transpose else pwm
         except pde.ParserError:
             print("Parser error on file {f}".format(f=pwm_name))
