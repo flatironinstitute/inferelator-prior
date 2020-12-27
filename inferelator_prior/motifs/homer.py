@@ -38,7 +38,7 @@ class HOMERScanner(__MotifScanner):
                                                           HOMER_STRAND])
         return motif_peaks
 
-    def _get_motifs(self, fasta_file, motif_file, threshold=None):
+    def _get_motifs(self, fasta_file, motif_file, threshold=None, parse_genomic_coord=False):
         homer_command = [HOMER_EXECUTABLE_PATH, "find", "-i", fasta_file, "-m", motif_file, "-offset", str(0)]
         proc = subprocess.run(homer_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 

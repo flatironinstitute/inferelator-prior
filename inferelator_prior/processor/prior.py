@@ -176,7 +176,8 @@ class MotifScorer:
                              MOTIF_NAME_COL: [overlap_df[MOTIF_NAME_COL].unique()[0]]})
 
 
-def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None, debug=False):
+def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None, debug=False,
+                                   by_chromosome=True):
     """
     Process a large dataframe of motif hits into a dataframe with the best hit for each regulator-target pair
     :param genes: pd.DataFrame [G x n]
@@ -212,13 +213,15 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
 
     motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifScan.chromosome_col)}
 
+    _gen_func = _gene_gen if by_chromosome else _gene_gen_no_chromosome
+
     if num_workers == 1:
-        prior_data = list(map(lambda x: _build_prior_for_gene(*x), _gene_gen(genes, motif_peaks, motif_information)))
+        prior_data = list(map(lambda x: _build_prior_for_gene(*x), _gen_func(genes, motif_peaks, motif_information)))
 
     else:
         with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
             prior_data = pool.starmap(_build_prior_for_gene,
-                                      _gene_gen(genes, motif_peaks, motif_information, debug=debug), chunksize=20)
+                                      _gen_func(genes, motif_peaks, motif_information, debug=debug), chunksize=20)
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data).reset_index(drop=True)
@@ -294,7 +297,31 @@ def _prior_clusterer(i, col_name, col_data, n, debug=False):
     return col_name, keep_idx
 
 
+def _gene_gen_no_chromosome(genes, motif_peaks, motif_information, debug=False):
+    """
+    Yield the peaks for each group by seqname (which should be the gene promoter)
+
+    :param genes:
+    :param motif_peaks:
+    :param motif_information:
+    :param debug:
+    :return:
+    """
+    for i, gene in enumerate(motif_peaks.keys()):
+        gene_loc = {GTF_GENENAME: gene, GTF_CHROMOSOME: None}
+        yield gene_loc, motif_peaks[gene], motif_information, i
+
+
 def _gene_gen(genes, motif_peaks, motif_information, debug=False):
+    """
+    Yield the peaks for each gene
+
+    :param genes:
+    :param motif_peaks:
+    :param motif_information:
+    :param debug:
+    :return:
+    """
     gene_names = genes[GTF_GENENAME].unique().tolist()
     bad_chr = {}
 

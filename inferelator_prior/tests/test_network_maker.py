@@ -4,7 +4,7 @@ import pandas.testing as pdt
 
 from inferelator_prior.motifs import meme, select_motifs, truncate_motifs
 from inferelator_prior.processor import gtf
-from inferelator_prior.network_from_motifs import (network_scan_and_build, load_and_process_motifs,
+from inferelator_prior.network_from_motifs import (network_scan, network_build, load_and_process_motifs,
                                                    build_motif_prior_from_genes)
 from inferelator_prior.motif_information import summarize_motifs
 

@@ -352,7 +352,9 @@ class __MotifScanner:
             elif pro_bed_file is not None:
                 bed_file = pro_bed_file
             else:
-                motif_data = self._scan_extract(motif_files, genome_fasta_file, threshold=threshold)
+                # If there's no BED data, assume the FASTA is promoters and don't parse genomic coords
+                motif_data = self._scan_extract(motif_files, genome_fasta_file, threshold=threshold,
+                                                parse_genomic_coord=False)
                 return self._postprocess(motif_data)
 
             extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
@@ -373,12 +375,13 @@ class __MotifScanner:
                 except FileNotFoundError:
                     pass
 
-    def _scan_extract(self, motif_files, extracted_fasta_file, threshold=None):
+    def _scan_extract(self, motif_files, extracted_fasta_file, threshold=None, parse_genomic_coord=True):
         # If the number of workers is 1, run fimo directly
         if (self.num_workers == 1) or (len(motif_files) == 1):
             assert len(motif_files) == 1
             print("Launching {name} scanner [1 / 1]".format(name=self.scanner_name))
-            return self._get_motifs(extracted_fasta_file, motif_files[0], threshold=threshold)
+            return self._get_motifs(extracted_fasta_file, motif_files[0], threshold=threshold,
+                                    parse_genomic_coord=parse_genomic_coord)
 
         # Otherwise parallelize with a process pool (pathos because dill will do local functions)
         else:
@@ -387,7 +390,8 @@ class __MotifScanner:
 
             def _get_chunk_motifs(i, chunk_file):
                 print("Launching {name} scanner [{i} / {n}]".format(name=self.scanner_name, i=i + 1, n=n))
-                results = self._get_motifs(extracted_fasta_file, chunk_file, threshold=threshold)
+                results = self._get_motifs(extracted_fasta_file, chunk_file, threshold=threshold,
+                                           parse_genomic_coord=parse_genomic_coord)
                 print("Scanning completed [{i} / {n}]".format(i=i + 1, n=n))
                 return results
 
@@ -403,7 +407,7 @@ class __MotifScanner:
     def _postprocess(self, motif_peaks):
         raise NotImplementedError
 
-    def _get_motifs(self, fasta_file, motif_file, threshold=None):
+    def _get_motifs(self, fasta_file, motif_file, threshold=None, parse_genomic_coord=True):
         raise NotImplementedError
 
     def _parse_output(self, output_handle):

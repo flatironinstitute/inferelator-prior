@@ -19,7 +19,7 @@ FIMO_STOP = 'stop'
 FIMO_SCORE = 'p-value'
 FIMO_SEQUENCE = 'matched_sequence'
 
-FIMO_COMMAND = [FIMO_EXECUTABLE_PATH, "--text", "--parse-genomic-coord"]
+FIMO_COMMAND = [FIMO_EXECUTABLE_PATH, "--text"]
 
 
 class FIMOScanner(__MotifScanner):
@@ -37,11 +37,14 @@ class FIMOScanner(__MotifScanner):
                                                           FIMO_STRAND])
         return motif_peaks
 
-    def _get_motifs(self, fasta_file, motif_file, threshold=None):
+    def _get_motifs(self, fasta_file, motif_file, threshold=None, parse_genomic_coord=True):
+
+        fimo_command = FIMO_COMMAND + ["--parse-genomic-coord"] if parse_genomic_coord else FIMO_COMMAND
+
         if threshold is None:
-            fimo_command = FIMO_COMMAND + [motif_file, fasta_file]
+            fimo_command = fimo_command + [motif_file, fasta_file]
         else:
-            fimo_command = FIMO_COMMAND + ["--thresh", str(threshold)] + [motif_file, fasta_file]
+            fimo_command = fimo_command + ["--thresh", str(threshold)] + [motif_file, fasta_file]
 
         proc = subprocess.run(fimo_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 

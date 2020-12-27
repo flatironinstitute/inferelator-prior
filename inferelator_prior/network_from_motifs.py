@@ -8,7 +8,6 @@ from inferelator_prior.motifs import (load_motif_file, select_motifs, truncate_m
 from inferelator_prior.processor.species_constants import SPECIES_MAP, DEFAULT_WINDOW, DEFAULT_TANDEM
 
 import argparse
-import gc
 import os
 import pathlib
 import pandas as pd
@@ -22,9 +21,9 @@ def main():
     ap.add_argument("-m", "--motif", dest="motif", help="Motif file", metavar="PATH", required=True)
     ap.add_argument("-f", "--fasta", dest="fasta", help="Genomic FASTA file", metavar="FILE", required=True)
 
-    # PROMOTER BED ARGUMENTS ###########################################################################################
+    # BED ARGUMENTS ###########################################################################################
 
-    ap.add_argument("-p", "--promoter", dest="promoter", help="Promoter BED file", metavar="FILE", default=None)
+    ap.add_argument("-b", "--bed", dest="constraint", help="Constraint BED file", metavar="FILE", default=None)
 
     # GENE WINDOW ARGUMENTS ############################################################################################
 
@@ -33,44 +32,69 @@ def main():
     ap.add_argument("--no_tss", dest="tss", help="Use gene body for window (not TSS)", action='store_const',
                     const=False, default=True)
 
+    # Process common arguments into values
+    add_common_arguments(ap)
+    args = ap.parse_args()
+    out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo = parse_common_arguments(args)
+
+    _, _, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
+                                                    constraint_bed_file=args.constraint,
+                                                    window_size=_window,
+                                                    num_cores=args.cores,
+                                                    motif_ic=args.min_ic,
+                                                    tandem=_tandem,
+                                                    scanner_type=args.scanner,
+                                                    motif_format=args.motif_format,
+                                                    output_prefix=out_prefix,
+                                                    gene_constraint_list=_gl,
+                                                    regulator_constraint_list=_tfl,
+                                                    debug=args.debug,
+                                                    fuzzy_motif_names=args.fuzzy,
+                                                    motif_info=_minfo,
+                                                    shuffle=args.shuffle)
+
+
+def add_common_arguments(argp):
     # MOTIF ARGUMENTS ##################################################################################################
 
-    ap.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='FIMO', choices=['FIMO', 'HOMER'])
-    ap.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
-                    metavar="BITS", type=float, default=None)
-    ap.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
-                    metavar="BASES", type=int, default=None)
-    ap.add_argument("--motif_format", dest="motif_format", help="Motif file FORMAT (transfac or meme)",
-                    metavar="FORMAT", default="meme")
-    ap.add_argument("--motif_info", dest="motif_info", help="Motif information TSV FILE", metavar="File", default=None)
-    ap.add_argument("--species", dest="species", help="Load settings for a target species. Overrides other settings",
-                    default=None, type=str, choices=list(SPECIES_MAP.keys()) + [None])
+    argp.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='FIMO',
+                      choices=['FIMO', 'HOMER'])
+    argp.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
+                      metavar="BITS", type=float, default=None)
+    argp.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
+                      metavar="BASES", type=int, default=None)
+    argp.add_argument("--motif_format", dest="motif_format", help="Motif file FORMAT (transfac or meme)",
+                      metavar="FORMAT", default="meme")
+    argp.add_argument("--motif_info", dest="motif_info", help="Motif information TSV FILE", metavar="File",
+                      default=None)
+    argp.add_argument("--species", dest="species", help="Load settings for a target species.",
+                      default=None, type=str, choices=list(SPECIES_MAP.keys()) + [None])
 
     # OTHER OPTIONAL ARGUMENTS #########################################################################################
 
-    ap.add_argument("-b", "--bed", dest="constraint", help="Constraint BED file", metavar="FILE", default=None)
-    ap.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", default="./prior")
-    ap.add_argument("--save_location_data", dest="save_locs", help="Save a dataframe with TF->Gene binding locations",
-                    action='store_const', const=True, default=False)
-    ap.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
-    ap.add_argument("--genes", dest="genes", help="A list of genes to build connectivity matrix for. Optional.",
-                    default=None, type=str)
-    ap.add_argument("--tfs", dest="tfs", help="A list of TFs to build connectivity matrix for. Optional.",
-                    default=None, type=str)
-    ap.add_argument("--debug", dest="debug", help="Activate Debug Mode", action='store_const',
-                    const=True, default=False)
-    ap.add_argument("--fuzzy", dest="fuzzy", help="Use fuzzy motif name merging", action='store_const',
-                    const=True, default=False)
-    ap.add_argument("--shuffle", dest="shuffle", help="Shuffle motif PWMs using SEED", metavar="SEED",
-                    const=42, default=None, action='store', nargs='?', type=int)
+    argp.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", default="./prior")
+    argp.add_argument("--save_location_data", dest="save_locs", help="Save a dataframe with TF->Gene binding locations",
+                      action='store_const', const=True, default=False)
+    argp.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
+    argp.add_argument("--genes", dest="genes", help="A list of genes to build connectivity matrix for. Optional.",
+                      default=None, type=str)
+    argp.add_argument("--tfs", dest="tfs", help="A list of TFs to build connectivity matrix for. Optional.",
+                      default=None, type=str)
+    argp.add_argument("--debug", dest="debug", help="Activate Debug Mode", action='store_const',
+                      const=True, default=False)
+    argp.add_argument("--fuzzy", dest="fuzzy", help="Use fuzzy motif name merging", action='store_const',
+                      const=True, default=False)
+    argp.add_argument("--shuffle", dest="shuffle", help="Shuffle motif PWMs using SEED", metavar="SEED",
+                      const=42, default=None, action='store', nargs='?', type=int)
 
-    args = ap.parse_args()
+
+def parse_common_arguments(args):
     out_prefix = os.path.abspath(os.path.expanduser(args.out))
 
     # Create output path if necessary
     out_path = os.path.join(*pathlib.PurePath(out_prefix).parts[:-1])
     if not os.path.exists(out_path):
-        os.makedirs(out_prefix)
+        os.makedirs(out_path)
 
     # Get default values for a species if provided
     _species = args.species.lower() if args.species is not None else None
@@ -99,38 +123,7 @@ def main():
     else:
         _minfo = None
 
-    # Decide which function to call
-    _do_genes, _do_promoters = args.annotation is not None, args.promoter is not None
-
-    if _do_genes and _do_promoters:
-        raise ValueError("Providing both a GTF file to -g and a promoter BED file to -p is not supported")
-
-    elif _do_genes:
-        _, _, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
-                                                        constraint_bed_file=args.constraint,
-                                                        window_size=_window,
-                                                        num_cores=args.cores,
-                                                        motif_ic=args.min_ic,
-                                                        tandem=_tandem,
-                                                        scanner_type=args.scanner,
-                                                        motif_format=args.motif_format,
-                                                        output_prefix=out_prefix,
-                                                        gene_constraint_list=_gl,
-                                                        regulator_constraint_list=_tfl,
-                                                        debug=args.debug,
-                                                        fuzzy_motif_names=args.fuzzy,
-                                                        motif_info=_minfo,
-                                                        shuffle=args.shuffle)
-
-        if args.save_locs:
-            print("Writing output file {o}".format(o=out_prefix + "_genomic_locations.tsv.gz"))
-            prior_data.to_csv(out_prefix + "_genomic_locations.tsv.gz", sep="\t", index=False)
-
-    elif _do_promoters:
-        raise ValueError("Gene promoter location is not supported yet")
-
-    else:
-        raise ValueError("Provide a GTF file to -g or a promoter BED file to -p")
+    return out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo
 
 
 def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file, constraint_bed_file=None,
@@ -211,7 +204,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                                         fuzzy=fuzzy_motif_names, motif_constraint_info=motif_info,
                                                         shuffle=shuffle)
 
-    # SCAN CHROMATIN FOR MOTIFS ########################################################################################
+    # SCAN CHROMATIN FOR MOTIFS AND SCORE HITS #########################################################################
 
     # Load and scan target chromatin peaks
     print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=constraint_bed_file, f_m=motif_file))
@@ -220,10 +213,14 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     gene_locs = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]].copy()
     gene_locs[[SEQ_START, SEQ_STOP]] = gene_locs[[SEQ_START, SEQ_STOP]].astype(int)
 
-    return network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
-                                  constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
-                                  scanner_type=scanner_type, scanner_thresh=scanner_thresh, num_cores=num_cores,
-                                  motif_ic=motif_ic, tandem=tandem, output_prefix=output_prefix, debug=debug)
+    raw_matrix, prior_data = network_scan(motifs, motif_information, genes, genomic_fasta_file,
+                                          constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
+                                          scanner_type=scanner_type, scanner_thresh=scanner_thresh, num_cores=num_cores,
+                                          motif_ic=motif_ic, tandem=tandem, debug=debug)
+
+    # PROCESS SCORES INTO NETWORK ######################################################################################
+
+    return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug)
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,
@@ -265,9 +262,9 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=
     return motifs, motif_information
 
 
-def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file, constraint_bed_file=None,
-                           promoter_bed_file=None, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                           scanner_thresh="1e-4", output_prefix=None, debug=False):
+def network_scan(motifs, motif_information, genes, genomic_fasta_file, constraint_bed_file=None,
+                 promoter_bed_file=None, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
+                 scanner_thresh="1e-4", debug=False):
     # Load and scan target chromatin peaks
     MotifScan.set_type(scanner_type)
 
@@ -293,9 +290,10 @@ def network_scan_and_build(motifs, motif_information, genes, genomic_fasta_file,
     raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
                                                             num_workers=num_cores, debug=debug)
 
-    # Nuke a bunch of dataframes and force a cyclic check
-    del motif_peaks
-    gc.collect()
+    return raw_matrix, prior_data
+
+
+def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug=False):
     print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
 
     if output_prefix is not None:
