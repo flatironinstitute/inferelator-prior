@@ -261,8 +261,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                 ra_ma, pr_da = summarize_target_per_regulator(genes, motif_peaks, tf_mi_df, num_workers=1, debug=debug,
                                                               silent=True)
             else:
-                ra_ma = pd.DataFrame(0, index=genes[GTF_GENENAME],
-                                     columns=[tf_mi_df[MOTIF_NAME_COL].unique().tolist()])
+                ra_ma = pd.DataFrame(0.0, index=genes[GTF_GENENAME],
+                                     columns=tf_mi_df[MOTIF_NAME_COL].unique().tolist())
                 pr_da = None
 
             return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
@@ -367,8 +367,8 @@ def network_scan(motifs, motif_information, genes, genomic_fasta_file, constrain
         raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
                                                                 num_workers=num_cores, debug=debug, silent=silent)
     else:
-        raw_matrix = pd.DataFrame(0, index=genes[GTF_GENENAME],
-                                  columns=[motif_information[MOTIF_NAME_COL].unique().tolist()])
+        raw_matrix = pd.DataFrame(0.0, index=genes[GTF_GENENAME],
+                                  columns=motif_information[MOTIF_NAME_COL].unique().tolist())
         prior_data = None
 
     return raw_matrix, prior_data
