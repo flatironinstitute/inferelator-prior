@@ -177,7 +177,7 @@ class MotifScorer:
 
 
 def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None, debug=False,
-                                   by_chromosome=True):
+                                   by_chromosome=True, silent=False):
     """
     Process a large dataframe of motif hits into a dataframe with the best hit for each regulator-target pair
     :param genes: pd.DataFrame [G x n]
@@ -191,13 +191,15 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
         A information matrix connecting genes and regulators
     """
 
+    pfunc = print if not silent else lambda *x: None
+
     motif_ids = motif_information[MOTIF_COL].unique()
     motif_names = motif_information[MOTIF_NAME_COL].unique()
-    print("Building prior from {g} genes and {k} Motifs ({t} TFs)".format(g=genes.shape[0], k=len(motif_ids),
+    pfunc("Building prior from {g} genes and {k} Motifs ({t} TFs)".format(g=genes.shape[0], k=len(motif_ids),
                                                                           t=len(motif_names)))
 
     motif_peaks, motif_information = MotifScorer.preprocess_motifs(motif_peaks, motif_information)
-    print("Preliminary search identified {n} binding sites".format(n=motif_peaks.shape[0]))
+    pfunc("Preliminary search identified {n} binding sites".format(n=motif_peaks.shape[0]))
 
     # Trim down the motif dataframe and put it into a dict by chromosome
     motif_peaks = motif_peaks.reindex([MotifScan.name_col, MotifScan.chromosome_col, MotifScan.start_col,
@@ -216,12 +218,14 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     _gen_func = _gene_gen if by_chromosome else _gene_gen_no_chromosome
 
     if num_workers == 1:
-        prior_data = list(map(lambda x: _build_prior_for_gene(*x), _gen_func(genes, motif_peaks, motif_information)))
+        prior_data = list(map(lambda x: _build_prior_for_gene(*x),
+                              _gen_func(genes, motif_peaks, motif_information, debug=debug, silent=silent)))
 
     else:
         with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
             prior_data = pool.starmap(_build_prior_for_gene,
-                                      _gen_func(genes, motif_peaks, motif_information, debug=debug), chunksize=20)
+                                      _gen_func(genes, motif_peaks, motif_information, debug=debug, silent=silent),
+                                      chunksize=20)
 
     # Combine priors for all genes
     prior_data = pd.concat(prior_data).reset_index(drop=True)
@@ -236,7 +240,7 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     return summarized_data, prior_data
 
 
-def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True, debug=False):
+def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True, debug=False, silent=False):
     """
     Construct a prior [G x K] interaction matrix
     :param raw_matrix: pd.DataFrame [G x K]
@@ -252,52 +256,57 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
     """
 
     np.random.seed(seed)
+    pfunc = print if not silent else lambda *x: None
 
     if do_threshold:
         # Threshold per-TF using DBSCAN
-        print("Selecting edges to retain with DBSCAN")
+        pfunc("Selecting edges to retain with DBSCAN")
         prior_matrix = pd.DataFrame(False, index=raw_matrix.index, columns=raw_matrix.columns)
 
         if num_workers == 1:
-            prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x), _prior_gen(raw_matrix)))
+            prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x),
+                                        _prior_gen(raw_matrix, debug=debug, silent=silent)))
 
         else:
             with multiprocessing.Pool(num_workers, maxtasksperchild=1) as pool:
-                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix, debug=debug), chunksize=1)
+                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix, debug=debug, silent=silent),
+                                                chunksize=1)
 
-        print("Completed edge selection with DBSCAN")
+        pfunc("Completed edge selection with DBSCAN")
         for reg, reg_idx in prior_matrix_idx:
             prior_matrix.loc[reg_idx, reg] = True
 
         return prior_matrix
 
     else:
-        print("Retaining all edges")
+        pfunc("Retaining all edges")
         return raw_matrix != 0
 
 
-def _prior_gen(prior_matrix, debug=False):
+def _prior_gen(prior_matrix, debug=False, silent=False):
 
     n = len(prior_matrix.columns)
 
     for i, col_name in enumerate(prior_matrix.columns):
-        yield i, col_name, prior_matrix[col_name], n, debug
+        yield i, col_name, prior_matrix[col_name], n, debug, silent
 
 
-def _prior_clusterer(i, col_name, col_data, n, debug=False):
+def _prior_clusterer(i, col_name, col_data, n, debug=False, silent=False):
+
+    pfunc = print if not silent else lambda *x: None
 
     if not debug and (i % 50 == 0):
-        print("Clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
+        pfunc("Clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
 
     keep_idx = _find_outliers_dbscan(col_data)
 
     if debug:
-        print("Keeping {ed} edges for gene {col} [{i} / {n}]".format(ed=keep_idx.sum(), i=i, n=n, col=col_name))
+        pfunc("Keeping {ed} edges for gene {col} [{i} / {n}]".format(ed=keep_idx.sum(), i=i, n=n, col=col_name))
 
     return col_name, keep_idx
 
 
-def _gene_gen_no_chromosome(genes, motif_peaks, motif_information, debug=False):
+def _gene_gen_no_chromosome(genes, motif_peaks, motif_information, debug=False, silent=False):
     """
     Yield the peaks for each group by seqname (which should be the gene promoter)
 
@@ -309,10 +318,14 @@ def _gene_gen_no_chromosome(genes, motif_peaks, motif_information, debug=False):
     """
     for i, gene in enumerate(motif_peaks.keys()):
         gene_loc = {GTF_GENENAME: gene, GTF_CHROMOSOME: None}
-        yield gene_loc, motif_peaks[gene], motif_information, i
+
+        if i % 100 == 0 and not silent:
+            print("Processing gene {i} [{gn}]".format(i=i, gn=gene))
+
+        yield gene_loc, motif_peaks[gene], motif_information
 
 
-def _gene_gen(genes, motif_peaks, motif_information, debug=False):
+def _gene_gen(genes, motif_peaks, motif_information, debug=False, silent=False):
     """
     Yield the peaks for each gene
 
@@ -325,9 +338,14 @@ def _gene_gen(genes, motif_peaks, motif_information, debug=False):
     gene_names = genes[GTF_GENENAME].unique().tolist()
     bad_chr = {}
 
+    pfunc = print if not silent else lambda *x: None
+
     for i, gene in enumerate(gene_names):
         gene_data = genes.loc[genes[GTF_GENENAME] == gene, :]
         gene_loc = {GTF_GENENAME: gene, GTF_CHROMOSOME: gene_data.iloc[0, :][GTF_CHROMOSOME]}
+
+        if i % 100 == 0:
+            pfunc("Processing gene {i} [{gn}]".format(i=i, gn=gene))
 
         gene_motifs = []
         for _, row in gene_data.iterrows():
@@ -337,7 +355,7 @@ def _gene_gen(genes, motif_peaks, motif_information, debug=False):
                 motif_data = motif_peaks[gene_chr]
             except KeyError:
                 # If this chromosome is some weird scaffold or not in the genome, skip it
-                print("Chromosome {c} not found; skipping gene {g}".format(c=gene_chr, g=gene)) if debug else None
+                pfunc("Chromosome {c} not found; skipping gene {g}".format(c=gene_chr, g=gene)) if debug else None
 
                 if gene_chr not in bad_chr.keys():
                     bad_chr[gene_chr] = 1
@@ -354,10 +372,10 @@ def _gene_gen(genes, motif_peaks, motif_information, debug=False):
             continue
 
         gene_motifs = pd.concat(gene_motifs)
-        yield gene_loc, gene_motifs, motif_information, i
+        yield gene_loc, gene_motifs, motif_information
 
     for chromosome, bad_genes in bad_chr.items():
-        print("{n} genes annotated to chromosome {c} have been skipped".format(n=bad_genes, c=chromosome))
+        pfunc("{n} genes annotated to chromosome {c} have been skipped".format(n=bad_genes, c=chromosome))
 
 
 def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
@@ -389,7 +407,7 @@ def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
         return pd.Series(np.isin(tf_data.values, keep_outlier_values), index=tf_data.index)
 
 
-def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteration):
+def _build_prior_for_gene(gene_info, motif_data, motif_information):
     """
     Takes motifs identified by scan near a single gene and turns them into TF-gene scores
 
@@ -399,8 +417,6 @@ def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteratio
     :type motif_data: pd.DataFrame
     :param motif_information: Motif information
     :type motif_information: pd.DataFrame
-    :param num_iteration: Number of genes which have been processed
-    :type num_iteration: int
     :return prior_edges: pd.DataFrame [N x 5]
         'regulator': tf name
         'target': gene name
@@ -413,9 +429,6 @@ def _build_prior_for_gene(gene_info, motif_data, motif_information, num_iteratio
     """
 
     gene_name, gene_chr = gene_info[GTF_GENENAME], gene_info[GTF_CHROMOSOME]
-
-    if num_iteration % 100 == 0:
-        print("Processing gene {i} [{gn}]".format(i=num_iteration, gn=gene_name))
 
     if min(motif_data.shape) == 0:
         return pd.DataFrame(columns=PRIOR_COLS)

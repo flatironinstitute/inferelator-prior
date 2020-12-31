@@ -6,7 +6,7 @@ import pandas.errors as pde
 
 from inferelator_prior import FIMO_EXECUTABLE_PATH
 from inferelator_prior.motifs import meme, chunk_motifs, SCAN_SCORE_COL, SCORE_PER_BASE
-from inferelator_prior.motifs._motif import __MotifScanner
+from inferelator_prior.motifs._motif import MotifScanner
 
 FIMO_DATA_SUFFIX = ".fimo.tsv"
 
@@ -22,7 +22,7 @@ FIMO_SEQUENCE = 'matched_sequence'
 FIMO_COMMAND = [FIMO_EXECUTABLE_PATH, "--text"]
 
 
-class FIMOScanner(__MotifScanner):
+class FIMOScanner(MotifScanner):
 
     scanner_name = "FIMO"
 
@@ -33,8 +33,9 @@ class FIMOScanner(__MotifScanner):
         return chunk_motifs(meme, self.motifs, num_workers=self.num_workers, min_ic=min_ic)
 
     def _postprocess(self, motif_peaks):
-        motif_peaks = motif_peaks.drop_duplicates(subset=[FIMO_MOTIF, FIMO_START, FIMO_STOP, FIMO_CHROMOSOME,
-                                                          FIMO_STRAND])
+        if motif_peaks is not None:
+            motif_peaks = motif_peaks.drop_duplicates(subset=[FIMO_MOTIF, FIMO_START, FIMO_STOP, FIMO_CHROMOSOME,
+                                                              FIMO_STRAND])
         return motif_peaks
 
     def _get_motifs(self, fasta_file, motif_file, threshold=None, parse_genomic_coord=True):
@@ -46,9 +47,10 @@ class FIMOScanner(__MotifScanner):
         else:
             fimo_command = fimo_command + ["--thresh", str(threshold)] + [motif_file, fasta_file]
 
-        proc = subprocess.run(fimo_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        proc = subprocess.run(fimo_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         if int(proc.returncode) != 0:
+            print(proc.stderr.decode("utf-8"))
             print("fimo motif scan failed for {meme}, {fa} ({cmd})".format(meme=motif_file,
                                                                            fa=fasta_file,
                                                                            cmd=" ".join(fimo_command)))

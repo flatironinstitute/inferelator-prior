@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 from inferelator_prior.motifs import chunk_motifs, homer_motif, SCAN_SCORE_COL, SCORE_PER_BASE
-from inferelator_prior.motifs._motif import __MotifScanner
+from inferelator_prior.motifs._motif import MotifScanner
 from inferelator_prior import HOMER_EXECUTABLE_PATH
 
 HOMER_DATA_SUFFIX = ".homer.tsv"
@@ -23,7 +23,7 @@ HOMER2_FIND_COLS = [HOMER_SEQ_ID, HOMER_OFFSET, HOMER_MATCH, HOMER_MOTIF, HOMER_
 HOMER2_EXPAND_STR_COLS = [HOMER_CHROMOSOME, HOMER_START, HOMER_STOP]
 
 
-class HOMERScanner(__MotifScanner):
+class HOMERScanner(MotifScanner):
 
     scanner_name = "HOMER"
 

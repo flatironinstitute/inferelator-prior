@@ -26,7 +26,7 @@ def load_bed_to_dataframe(bed_file_path, **kwargs):
 
 def extract_bed_sequence(bed_file, genome_fasta, output_path=None):
     output_path = tempfile.gettempdir() if output_path is None else output_path
-    output_file = os.path.join(output_path, os.path.split(genome_fasta)[1] + BEDTOOLS_EXTRACT_SUFFIX)
+    output_fh, output_file = tempfile.mkstemp(prefix="genome", suffix=BEDTOOLS_EXTRACT_SUFFIX, dir=output_path)
 
     if not isinstance(bed_file, pybedtools.BedTool):
         bed_file = pybedtools.BedTool(bed_file)

@@ -1,5 +1,5 @@
 from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, select_genes, GTF_CHROMOSOME,
-                                             SEQ_START, SEQ_STOP, GTF_STRAND, get_fasta_lengths)
+                                             SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME, get_fasta_lengths)
 from inferelator_prior.processor.prior import (build_prior_from_motifs, summarize_target_per_regulator, MotifScorer,
                                                PRIOR_TF, PRIOR_GENE)
 from inferelator_prior.motifs.motif_scan import MotifScan
@@ -10,7 +10,11 @@ from inferelator_prior.processor.species_constants import SPECIES_MAP, DEFAULT_W
 import argparse
 import os
 import pathlib
+import pathos
 import pandas as pd
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def main():
@@ -37,21 +41,24 @@ def main():
     args = ap.parse_args()
     out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo = parse_common_arguments(args)
 
-    _, _, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
-                                                    constraint_bed_file=args.constraint,
-                                                    window_size=_window,
-                                                    num_cores=args.cores,
-                                                    motif_ic=args.min_ic,
-                                                    tandem=_tandem,
-                                                    scanner_type=args.scanner,
-                                                    motif_format=args.motif_format,
-                                                    output_prefix=out_prefix,
-                                                    gene_constraint_list=_gl,
-                                                    regulator_constraint_list=_tfl,
-                                                    debug=args.debug,
-                                                    fuzzy_motif_names=args.fuzzy,
-                                                    motif_info=_minfo,
-                                                    shuffle=args.shuffle)
+    prior_matrix, raw_matrix, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
+                                                                        constraint_bed_file=args.constraint,
+                                                                        window_size=_window,
+                                                                        num_cores=args.cores,
+                                                                        motif_ic=args.min_ic,
+                                                                        tandem=_tandem,
+                                                                        scanner_type=args.scanner,
+                                                                        motif_format=args.motif_format,
+                                                                        output_prefix=out_prefix,
+                                                                        gene_constraint_list=_gl,
+                                                                        regulator_constraint_list=_tfl,
+                                                                        debug=args.debug,
+                                                                        fuzzy_motif_names=args.fuzzy,
+                                                                        motif_info=_minfo,
+                                                                        shuffle=args.shuffle,
+                                                                        lowmem=args.lowmem)
+
+    print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
 
 
 def add_common_arguments(argp):
@@ -86,6 +93,8 @@ def add_common_arguments(argp):
                       const=True, default=False)
     argp.add_argument("--shuffle", dest="shuffle", help="Shuffle motif PWMs using SEED", metavar="SEED",
                       const=42, default=None, action='store', nargs='?', type=int)
+    argp.add_argument("--lowmem", dest="lowmem", help="Run in low memory mode", action='store_const',
+                      const=True, default=False)
 
 
 def parse_common_arguments(args):
@@ -131,7 +140,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None):
+                                 shuffle=None, lowmem=False):
     """
     Build a motif-based prior from windows around annotated genes.
     
@@ -177,6 +186,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type motif_info: pd.DataFrame
     :param shuffle: Randomly shuffle motif PWMs using this seed. None disables. Defaults to None.
     :type shuffle: None, int
+    :param lowmem: Process TFs individually instead of all at once to minimize memory footprint
+    :type lowmem: bool
     :return prior_matrix, raw_matrix, prior_data: Filtered connectivity matrix, unfiltered score matrix, and unfiltered
         long dataframe with scored TF->Gene pairs and genomic locations
     :rtype: pd.DataFrame, pd.DataFrame, pd.DataFrame
@@ -213,14 +224,79 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     gene_locs = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]].copy()
     gene_locs[[SEQ_START, SEQ_STOP]] = gene_locs[[SEQ_START, SEQ_STOP]].astype(int)
 
-    raw_matrix, prior_data = network_scan(motifs, motif_information, genes, genomic_fasta_file,
-                                          constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
-                                          scanner_type=scanner_type, scanner_thresh=scanner_thresh, num_cores=num_cores,
-                                          motif_ic=motif_ic, tandem=tandem, debug=debug)
+    if not lowmem:
+        raw_matrix, prior_data = network_scan(motifs, motif_information, genes, genomic_fasta_file,
+                                              constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
+                                              scanner_type=scanner_type, scanner_thresh=scanner_thresh,
+                                              num_cores=num_cores, motif_ic=motif_ic, tandem=tandem, debug=debug)
 
-    # PROCESS SCORES INTO NETWORK ######################################################################################
+        # PROCESS SCORES INTO NETWORK ##################################################################################
+        print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
 
-    return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug)
+        return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug)
+
+    else:
+        MotifScan.set_type(scanner_type)
+
+        # EXTRACT GENOMIC SEQUENCES ONLY ONCE ##########################################################################
+        extract_fasta = MotifScan.scanner.extract_genome(genomic_fasta_file,
+                                                         constraint_bed_file=constraint_bed_file,
+                                                         promoter_bed=gene_locs,
+                                                         debug=debug)
+
+        # BUILD PER-TF DATA FUNCTION ###################################################################################
+        def network_scan_build_single_tf(tf_mi_df):
+
+            tf_motifs = tf_mi_df[MOTIF_OBJ_COL].tolist()
+
+            motif_peaks = MotifScan.scanner(motifs=tf_motifs, num_workers=1).scan(None,
+                                                                                  extracted_genome=extract_fasta,
+                                                                                  min_ic=motif_ic,
+                                                                                  threshold=scanner_thresh)
+
+            # Process into an information score matrix
+            MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
+
+            if motif_peaks is not None:
+                ra_ma, pr_da = summarize_target_per_regulator(genes, motif_peaks, tf_mi_df, num_workers=1, debug=debug,
+                                                              silent=True)
+            else:
+                ra_ma = pd.DataFrame(0, index=genes[GTF_GENENAME],
+                                     columns=[tf_mi_df[MOTIF_NAME_COL].unique().tolist()])
+                pr_da = None
+
+            return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
+
+        # MULTIPROCESS PER-TF ##########################################################################################
+        prior_matrix, raw_matrix, prior_data = [], [], []
+
+        with pathos.multiprocessing.Pool(processes=num_cores, maxtasksperchild=50) as pool:
+            motif_information = [df for _, df in motif_information.groupby(MOTIF_NAME_COL)]
+            for i, (p_m, r_m, p_d) in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
+                print("Processed TF {i}/{n}".format(i=i, n=len(motif_information)))
+                prior_matrix.append(p_m)
+                raw_matrix.append(r_m)
+                prior_data.append(p_d)
+
+        # CONCAT FINAL DATA ############################################################################################
+        prior_matrix = pd.concat(prior_matrix, axis=1)
+        raw_matrix = pd.concat(raw_matrix, axis=1)
+        prior_data = pd.concat(prior_data, axis=0)
+
+        try:
+            os.remove(extract_fasta)
+        except FileNotFoundError:
+            pass
+
+        if output_prefix is not None:
+            print("Writing output file {o}".format(o=output_prefix + "_unfiltered_matrix.tsv.gz"))
+            raw_matrix.to_csv(output_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
+
+        if output_prefix is not None:
+            print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
+            (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
+
+        return prior_matrix, raw_matrix, prior_data
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,
@@ -264,7 +340,7 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=
 
 def network_scan(motifs, motif_information, genes, genomic_fasta_file, constraint_bed_file=None,
                  promoter_bed_file=None, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                 scanner_thresh="1e-4", debug=False):
+                 scanner_thresh="1e-4", debug=False, silent=False):
     # Load and scan target chromatin peaks
     MotifScan.set_type(scanner_type)
 
@@ -285,32 +361,36 @@ def network_scan(motifs, motif_information, genes, genomic_fasta_file, constrain
     # PROCESS CHROMATIN PEAKS INTO NETWORK MATRIX ######################################################################
 
     # Process into an information score matrix
-    print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-    raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
-                                                            num_workers=num_cores, debug=debug)
+
+    if motif_peaks is not None:
+        raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
+                                                                num_workers=num_cores, debug=debug, silent=silent)
+    else:
+        raw_matrix = pd.DataFrame(0, index=genes[GTF_GENENAME],
+                                  columns=[motif_information[MOTIF_NAME_COL].unique().tolist()])
+        prior_data = None
 
     return raw_matrix, prior_data
 
 
-def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug=False):
-    print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
+def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug=False, silent=False):
 
     if output_prefix is not None:
         print("Writing output file {o}".format(o=output_prefix + "_unfiltered_matrix.tsv.gz"))
         raw_matrix.to_csv(output_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
 
     # Choose edges to keep
-    prior_matrix = build_prior_from_motifs(raw_matrix, num_workers=num_cores, debug=debug)
-    print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
+    prior_matrix = build_prior_from_motifs(raw_matrix, num_workers=num_cores, debug=debug, silent=silent)
 
     if output_prefix is not None:
         print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
         (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
 
-    prior_matrix.index.name = PRIOR_GENE
-    pm_melt = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='Filter_Included')
-    prior_data = pd.merge(prior_data, pm_melt)
+    if prior_data is not None:
+        prior_matrix.index.name = PRIOR_GENE
+        pm_melt = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='Filter_Included')
+        prior_data = pd.merge(prior_data, pm_melt)
 
     return prior_matrix, raw_matrix, prior_data
 

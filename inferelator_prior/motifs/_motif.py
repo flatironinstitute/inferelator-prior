@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import warnings
 import os
+import shutil
 import tempfile
 import itertools
 import pathos
@@ -301,7 +302,7 @@ class Motif:
             np.random.default_rng(random_seed).shuffle(self.probability_matrix.T)
 
 
-class __MotifScanner:
+class MotifScanner:
     scanner_name = None
 
     def __init__(self, motif_file=None, motifs=None, num_workers=4):
@@ -313,14 +314,10 @@ class __MotifScanner:
         self.motifs = motifs
         self.num_workers = num_workers
 
-    def scan(self, genome_fasta_file, constraint_bed_file=None, promoter_bed=None, min_ic=None, threshold=None,
-             valid_fasta_chromosomes=None, debug=False):
+    def scan(self, genome_fasta_file=None, constraint_bed_file=None, promoter_bed=None, min_ic=None, threshold=None,
+             valid_fasta_chromosomes=None, debug=False, extracted_genome=None):
         """
         """
-
-        if valid_fasta_chromosomes is None:
-            _chr_lens = get_fasta_lengths(genome_fasta_file)
-            valid_fasta_chromosomes = list(_chr_lens.keys())
 
         # Preprocess motifs into a list of temp chunk files
         motif_files = self._preprocess(min_ic=min_ic)
@@ -328,45 +325,22 @@ class __MotifScanner:
         self.motifs = {mot.motif_id: mot for mot in self.motifs}
 
         try:
-            con_bed_file = load_bed_to_bedtools(constraint_bed_file) if constraint_bed_file is not None else None
-            pro_bed_file = load_bed_to_bedtools(promoter_bed) if promoter_bed is not None else None
+            if extracted_genome is None:
 
-            if con_bed_file is not None and valid_fasta_chromosomes is not None:
-                check_chromosomes_match(con_bed_file.to_dataframe(), valid_fasta_chromosomes,
-                                        chromosome_column=BED_CHROMOSOME, file_name=constraint_bed_file)
-
-                if debug:
-                    self._print_bed_summary(con_bed_file, constraint_bed_file)
-
-            if pro_bed_file is not None and valid_fasta_chromosomes is not None:
-                check_chromosomes_match(pro_bed_file.to_dataframe(), valid_fasta_chromosomes,
-                                        chromosome_column=BED_CHROMOSOME, file_name=pro_bed_file)
-
-                if debug:
-                    self._print_bed_summary(pro_bed_file, promoter_bed)
-
-            if con_bed_file is not None and pro_bed_file is not None:
-                bed_file = intersect_bed(load_bed_to_bedtools(constraint_bed_file), load_bed_to_bedtools(promoter_bed))
-            elif con_bed_file is not None:
-                bed_file = con_bed_file
-            elif pro_bed_file is not None:
-                bed_file = pro_bed_file
-            else:
-                # If there's no BED data, assume the FASTA is promoters and don't parse genomic coords
-                motif_data = self._scan_extract(motif_files, genome_fasta_file, threshold=threshold,
-                                                parse_genomic_coord=False)
-                return self._postprocess(motif_data)
-
-            extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
-
-            try:
-                motif_data = self._scan_extract(motif_files, extracted_fasta_file, threshold=threshold)
-                return self._postprocess(motif_data)
-            finally:
+                extracted_fasta_file = self.extract_genome(genome_fasta_file, constraint_bed_file, promoter_bed,
+                                                           valid_fasta_chromosomes, debug)
                 try:
-                    os.remove(extracted_fasta_file)
-                except FileNotFoundError:
-                    pass
+                    motif_data = self._scan_extract(motif_files, extracted_fasta_file, threshold=threshold)
+                    return self._postprocess(motif_data)
+                finally:
+                    try:
+                        os.remove(extracted_fasta_file)
+                    except FileNotFoundError:
+                        pass
+
+            else:
+                motif_data = self._scan_extract(motif_files, extracted_genome, threshold=threshold)
+                return self._postprocess(motif_data)
 
         finally:
             for file in motif_files:
@@ -375,11 +349,49 @@ class __MotifScanner:
                 except FileNotFoundError:
                     pass
 
+    @staticmethod
+    def extract_genome(genome_fasta_file, constraint_bed_file=None, promoter_bed=None,
+                       valid_fasta_chromosomes=None, debug=False):
+
+        if valid_fasta_chromosomes is None:
+            _chr_lens = get_fasta_lengths(genome_fasta_file)
+            valid_fasta_chromosomes = list(_chr_lens.keys())
+
+        con_bed_file = load_bed_to_bedtools(constraint_bed_file) if constraint_bed_file is not None else None
+        pro_bed_file = load_bed_to_bedtools(promoter_bed) if promoter_bed is not None else None
+
+        if con_bed_file is not None and valid_fasta_chromosomes is not None:
+            check_chromosomes_match(con_bed_file.to_dataframe(), valid_fasta_chromosomes,
+                                    chromosome_column=BED_CHROMOSOME, file_name=constraint_bed_file)
+
+            if debug:
+                MotifScanner._print_bed_summary(con_bed_file, constraint_bed_file)
+
+        if pro_bed_file is not None and valid_fasta_chromosomes is not None:
+            check_chromosomes_match(pro_bed_file.to_dataframe(), valid_fasta_chromosomes,
+                                    chromosome_column=BED_CHROMOSOME, file_name=pro_bed_file)
+
+            if debug:
+                MotifScanner._print_bed_summary(pro_bed_file, promoter_bed)
+
+        if con_bed_file is not None and pro_bed_file is not None:
+            bed_file = intersect_bed(load_bed_to_bedtools(constraint_bed_file), load_bed_to_bedtools(promoter_bed))
+        elif con_bed_file is not None:
+            bed_file = con_bed_file
+        elif pro_bed_file is not None:
+            bed_file = pro_bed_file
+        else:
+            extracted_fasta_file = tempfile.mkstemp(suffix=".fasta")[1]
+            shutil.copy2(genome_fasta_file, extracted_fasta_file)
+            return extracted_fasta_file
+
+        extracted_fasta_file = extract_bed_sequence(bed_file, genome_fasta_file)
+        return extracted_fasta_file
+
     def _scan_extract(self, motif_files, extracted_fasta_file, threshold=None, parse_genomic_coord=True):
         # If the number of workers is 1, run fimo directly
         if (self.num_workers == 1) or (len(motif_files) == 1):
             assert len(motif_files) == 1
-            print("Launching {name} scanner [1 / 1]".format(name=self.scanner_name))
             return self._get_motifs(extracted_fasta_file, motif_files[0], threshold=threshold,
                                     parse_genomic_coord=parse_genomic_coord)
 
@@ -566,8 +578,9 @@ def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
         motifs = list(itertools.compress(motifs, [m.information_content >= min_ic for m in motifs]))
 
     if num_workers == 1:
-        file_name = os.path.join(temp_dir, "chunk1.mchunk")
-        file_type.write(file_name, motifs)
+        tf_h, file_name = tempfile.mkstemp(prefix='1', suffix=".mchunk", dir=temp_dir)
+        with os.fdopen(tf_h, "w", 1) as tf_fh:
+            file_type.write(tf_fh, motifs)
         return [file_name]
 
     num_workers = len(motifs) if num_workers > len(motifs) else num_workers
@@ -577,8 +590,9 @@ def chunk_motifs(file_type, motifs, num_workers=4, min_ic=None):
     files = []
 
     for i in range(num_workers):
-        file_name = os.path.join(temp_dir, "chunk" + str(i) + ".mchunk")
-        file_type.write(file_name, [m for m, b in zip(motifs, (chunk_index == i)) if b])
+        tf_h, file_name = tempfile.mkstemp(prefix=str(i), suffix=".mchunk", dir=temp_dir)
+        with os.fdopen(tf_h, "w", 1) as tf_fh:
+            file_type.write(tf_fh, [m for m, b in zip(motifs, (chunk_index == i)) if b])
         files.append(file_name)
 
     return files
