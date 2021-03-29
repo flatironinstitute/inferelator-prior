@@ -2,7 +2,7 @@ import numpy as _np
 from scipy.sparse import issparse as _is_sparse
 
 
-def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors):
+def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors, wrap_time=120):
     """
     Calculate local RNA velocity
 
@@ -16,11 +16,12 @@ def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors):
     n_gen = _find_local(expr, neighbor_graph, n_neighbors)
     return _np.vstack([_calc_local_velocity(expr[n_idx, :].copy(),
                                             time_axis[n_idx].copy(),
-                                            (n_idx == i).nonzero()[0][0])
+                                            (n_idx == i).nonzero()[0][0],
+                                            wrap_time=wrap_time)
                        for i, n_idx in n_gen])
 
 
-def _calc_local_velocity(expr, time_axis, center_index):
+def _calc_local_velocity(expr, time_axis, center_index, wrap_time=120):
     """
     Calculate a local rate of change
 
@@ -32,11 +33,13 @@ def _calc_local_velocity(expr, time_axis, center_index):
 
     n, m = expr.shape
 
+    wtime_l, wtime_r = wrap_time * 0.25, wrap_time * 0.75
+
     # Calculate change in time relative to the centerpoint
-    if time_axis[center_index] > 90:
-        time_axis[time_axis < 30] = time_axis[time_axis < 30] + 120
-    elif time_axis[center_index] < 30:
-        time_axis[time_axis > 90] = time_axis[time_axis > 90] - 120
+    if time_axis[center_index] > wtime_r:
+        time_axis[time_axis < wtime_l] = time_axis[time_axis < wtime_l] + wrap_time
+    elif time_axis[center_index] < wtime_l:
+        time_axis[time_axis > wtime_r] = time_axis[time_axis > wtime_r] - wrap_time
 
     time_axis = (time_axis - time_axis[center_index]).reshape(-1, 1)
 
