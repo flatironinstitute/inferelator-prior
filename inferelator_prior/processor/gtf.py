@@ -14,6 +14,9 @@ SEQ_START = 'start'
 SEQ_STOP = 'end'
 SEQ_TSS = 'TSS'
 
+WINDOW_UP = "Window_Start"
+WINDOW_DOWN = "Window_End"
+
 GTF_COLUMNS = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attributes"]
 
 
@@ -70,17 +73,21 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
     return _add_TSS(annotations)
 
 
-def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_lengths=None):
+def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_lengths=None,
+                constrain_to_intergenic=False):
     """
     This needs to adjust the start and stop in the annotation dataframe with window sizes
+
     :param annotation_dataframe: pd.DataFrame
     :param window_size: int
     :param use_tss: bool
     :param fasta_record_lengths:
     :return window_annotate: pd.DataFrame
     """
+    
     window_annotate = annotation_dataframe.copy()
-
+    window_annotate[WINDOW_UP], window_annotate[WINDOW_DOWN] = pd.NA, pd.NA
+    
     try:
         if len(window_size) == 1:
             w_up, w_down = window_size[0], window_size[0]
@@ -92,17 +99,17 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
         w_up, w_down = window_size, window_size
 
     if use_tss:
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_START] = window_annotate[SEQ_TSS] - w_up
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_STOP] = window_annotate[SEQ_TSS] + w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_START] = window_annotate[SEQ_TSS] - w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_STOP] = window_annotate[SEQ_TSS] + w_up
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_UP] = window_annotate[SEQ_TSS] - w_up
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_DOWN] = window_annotate[SEQ_TSS] + w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_UP] = window_annotate[SEQ_TSS] - w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_DOWN] = window_annotate[SEQ_TSS] + w_up
     else:
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_START] = window_annotate[SEQ_START] - w_up
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", SEQ_STOP] = window_annotate[SEQ_STOP] + w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_START] = window_annotate[SEQ_START] - w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", SEQ_STOP] = window_annotate[SEQ_STOP] + w_up
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_UP] = window_annotate[SEQ_START] - w_up
+        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_DOWN] = window_annotate[SEQ_STOP] + w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_UP] = window_annotate[SEQ_START] - w_down
+        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_DOWN] = window_annotate[SEQ_STOP] + w_up
 
-    window_annotate.loc[window_annotate[SEQ_START] < 1, SEQ_START] = 1
+    window_annotate.loc[window_annotate[WINDOW_UP] < 1, WINDOW_UP] = 1
 
     if fasta_record_lengths is not None:
 
@@ -111,10 +118,41 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
         for chromosome in _gtf_fasta_match:
             _chrlen = fasta_record_lengths[chromosome]
             _idx = window_annotate[GTF_CHROMOSOME] == chromosome
-            window_annotate.loc[_idx & (window_annotate[SEQ_STOP] > _chrlen), SEQ_STOP] = _chrlen
-            window_annotate.loc[_idx & (window_annotate[SEQ_START] > _chrlen), SEQ_START] = _chrlen
+            window_annotate.loc[_idx & (window_annotate[WINDOW_UP] > _chrlen), WINDOW_UP] = _chrlen
+            window_annotate.loc[_idx & (window_annotate[WINDOW_DOWN] > _chrlen), WINDOW_DOWN] = _chrlen       
+
+    if constrain_to_intergenic:
+        window_annotate = window_annotate.groupby(GTF_CHROMOSOME).apply(fix_overlap)
+        window_annotate.reset_index(level=GTF_CHROMOSOME, inplace=True, drop=True)
+
+    window_annotate[SEQ_START] = window_annotate[WINDOW_UP]
+    window_annotate[SEQ_STOP] = window_annotate[WINDOW_DOWN]
+    window_annotate.drop([WINDOW_UP, WINDOW_DOWN], axis=1, inplace=True)
 
     return window_annotate
+
+def fix_overlap(dataframe):
+    """
+    Apply function that sets window start and stop positions so that they do not overlap with features
+
+    :param dataframe: pd.DataFrame
+    :return dataframe: pd.DataFrame
+    """
+    
+    dataframe = dataframe.sort_values(by=SEQ_START)
+    windows = dataframe[[WINDOW_UP, WINDOW_DOWN]].copy()
+    
+    start_idx = dataframe[WINDOW_UP] < dataframe[SEQ_STOP].shift(1)
+    dataframe.loc[start_idx, WINDOW_UP] = dataframe[SEQ_STOP].shift(1).loc[start_idx].astype(int)
+
+    stop_idx = dataframe[WINDOW_DOWN] > dataframe[SEQ_START].shift(-1)
+    dataframe.loc[stop_idx, WINDOW_DOWN] = dataframe[SEQ_START].shift(-1).loc[stop_idx].astype(int)
+
+    # Undo checking for intergenic when there's a problem - usually it means overlapping genes, which I can't deal with
+    bad_idx = dataframe[WINDOW_UP] >= dataframe[WINDOW_DOWN]
+    dataframe.loc[bad_idx, [WINDOW_UP, WINDOW_DOWN]] = windows.loc[bad_idx, [WINDOW_UP, WINDOW_DOWN]]
+
+    return dataframe
 
 
 def get_fasta_lengths(fasta_file):
@@ -130,7 +168,7 @@ def get_fasta_lengths(fasta_file):
 
     _opener = gzip.open if fasta_file.endswith(".gz") else open
 
-    with _opener(fasta_file, mode="r") as fasta_fh:
+    with _opener(fasta_file, mode="rt") as fasta_fh:
         current_record = None
         for line in fasta_fh:
             if line.startswith(">"):

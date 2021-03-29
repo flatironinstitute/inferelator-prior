@@ -39,7 +39,7 @@ def main():
     # Process common arguments into values
     add_common_arguments(ap)
     args = ap.parse_args()
-    out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo = parse_common_arguments(args)
+    out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo, _intergenic = parse_common_arguments(args)
 
     prior_matrix, raw_matrix, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
                                                                         constraint_bed_file=args.constraint,
@@ -48,6 +48,7 @@ def main():
                                                                         motif_ic=args.min_ic,
                                                                         tandem=_tandem,
                                                                         scanner_type=args.scanner,
+                                                                        scanner_thresh=args.scan_thresh,
                                                                         motif_format=args.motif_format,
                                                                         output_prefix=out_prefix,
                                                                         gene_constraint_list=_gl,
@@ -56,7 +57,8 @@ def main():
                                                                         fuzzy_motif_names=args.fuzzy,
                                                                         motif_info=_minfo,
                                                                         shuffle=args.shuffle,
-                                                                        lowmem=args.lowmem)
+                                                                        lowmem=args.lowmem,
+                                                                        intergenic_only=_intergenic)
 
     print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
 
@@ -66,10 +68,13 @@ def add_common_arguments(argp):
 
     argp.add_argument("--scan", dest="scanner", help="FIMO or HOMER", type=str, default='FIMO',
                       choices=['FIMO', 'HOMER'])
+    argp.add_argument("--scan-threshold", dest="scan_thresh", help="Scanner score threshold", type=str, default="1e-4")
     argp.add_argument("--motif_preprocessing_ic", dest="min_ic", help="Minimum information content",
                       metavar="BITS", type=float, default=None)
     argp.add_argument("--tandem_window", dest="tandem", help="Bases between TF bindings to consider an array",
                       metavar="BASES", type=int, default=None)
+    argp.add_argument("--intergenic", dest="intergenic", help="Only consider intergenic regions", action='store_const',
+                      const=True, default=None)
     argp.add_argument("--motif_format", dest="motif_format", help="Motif file FORMAT (transfac or meme)",
                       metavar="FORMAT", default="meme")
     argp.add_argument("--motif_info", dest="motif_info", help="Motif information TSV FILE", metavar="File",
@@ -108,6 +113,8 @@ def parse_common_arguments(args):
     # Get default values for a species if provided
     _species = args.species.lower() if args.species is not None else None
 
+    _intergenic = args.intergenic if args.intergenic is not None else False
+
     if _species is None:
         _window = args.window_size if args.window_size is not None else DEFAULT_WINDOW
         _tandem = args.tandem if args.tandem is not None else DEFAULT_TANDEM
@@ -132,7 +139,7 @@ def parse_common_arguments(args):
     else:
         _minfo = None
 
-    return out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo
+    return out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo, _intergenic
 
 
 def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file, constraint_bed_file=None,
@@ -140,7 +147,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, lowmem=False):
+                                 shuffle=None, lowmem=False, intergenic_only=True):
     """
     Build a motif-based prior from windows around annotated genes.
     
@@ -188,6 +195,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type shuffle: None, int
     :param lowmem: Process TFs individually instead of all at once to minimize memory footprint
     :type lowmem: bool
+    :param intergenic_only: Only scan intergenic regions for regulatory motifs
+    :type intergenic_only: bool
     :return prior_matrix, raw_matrix, prior_data: Filtered connectivity matrix, unfiltered score matrix, and unfiltered
         long dataframe with scored TF->Gene pairs and genomic locations
     :rtype: pd.DataFrame, pd.DataFrame, pd.DataFrame
@@ -205,8 +214,12 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     if gene_constraint_list is not None:
         genes = select_genes(genes, gene_constraint_list)
 
-    genes = open_window(genes, window_size=window_size, use_tss=use_tss, fasta_record_lengths=fasta_gene_len)
-    print("Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene"))
+    genes = open_window(genes, window_size=window_size, use_tss=use_tss, fasta_record_lengths=fasta_gene_len,
+                        constrain_to_intergenic=intergenic_only)
+
+    _msg = "Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene")
+    _msg += " [Intergenic]" if intergenic_only else ""
+    print(_msg)
 
     # PROCESS MOTIF PWMS ###############################################################################################
 
