@@ -75,10 +75,12 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
     fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
                                         num_workers=cores, skip=skip)
 
-    count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME) + ".gz" if gzip_output else ""
-    fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME) + ".gz" if gzip_output else ""
-    tpm_file_name = os.path.join(output_path, OUTPUT_TPM_FILE_NAME) + ".gz" if gzip_output else ""
+    gz_extension = ".gz" if gzip_output else ""
 
+    count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME) + gz_extension
+    fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME) + gz_extension
+    tpm_file_name = os.path.join(output_path, OUTPUT_TPM_FILE_NAME) + gz_extension
+    
     if kallisto:
         print("Aligning FASTQ files")
         os.makedirs(os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH), exist_ok=True)
