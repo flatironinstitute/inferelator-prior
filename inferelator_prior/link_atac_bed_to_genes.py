@@ -32,7 +32,7 @@ def main():
 
     # Create a fake bed file with the gene promoter
     genes_window = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME]].copy()
-    genes_window[[SEQ_START, SEQ_STOP]] = genes_window.loc[[SEQ_START, SEQ_STOP]].astype(int)
+    genes_window[[SEQ_START, SEQ_STOP]] = genes_window[[SEQ_START, SEQ_STOP]].astype(int)
     genes_window = genes_window.sort_values(by=[GTF_CHROMOSOME, SEQ_START])
 
     gene_bed = load_bed_to_bedtools(genes_window)
