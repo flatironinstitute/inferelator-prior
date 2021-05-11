@@ -74,7 +74,7 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
 
 
 def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_lengths=None,
-                constrain_to_intergenic=False):
+                constrain_to_intergenic=False, include_entire_gene_body=False):
     """
     This needs to adjust the start and stop in the annotation dataframe with window sizes
 
@@ -110,6 +110,13 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
         window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_DOWN] = window_annotate[SEQ_STOP] + w_up
 
     window_annotate.loc[window_annotate[WINDOW_UP] < 1, WINDOW_UP] = 1
+
+    if include_entire_gene_body:
+        to_fix_pos = (window_annotate[GTF_STRAND] == "+") & (window_annotate[WINDOW_DOWN] < window_annotate[SEQ_STOP])
+        to_fix_neg = (window_annotate[GTF_STRAND] == "-") & (window_annotate[WINDOW_UP] > window_annotate[SEQ_STOP])
+
+        window_annotate.loc[to_fix_pos, WINDOW_DOWN] = window_annotate.loc[to_fix_pos, SEQ_STOP]
+        window_annotate.loc[to_fix_neg, WINDOW_UP] = window_annotate.loc[to_fix_neg, SEQ_START]
 
     if fasta_record_lengths is not None:
 

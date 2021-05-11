@@ -116,13 +116,22 @@ def parse_common_arguments(args):
     _intergenic = args.intergenic if args.intergenic is not None else False
 
     if _species is None:
-        _window = args.window_size if args.window_size is not None else DEFAULT_WINDOW
+        try:
+            _window = args.window_size if args.window_size is not None else DEFAULT_WINDOW
+            _use_tss = args.tss
+        except AttributeError:
+            _window, _use_tss = None, None
+
         _tandem = args.tandem if args.tandem is not None else DEFAULT_TANDEM
-        _use_tss = args.tss
     else:
-        _window = SPECIES_MAP[_species]['window'] if args.window_size is None else args.window_size
+        try:
+            _window = SPECIES_MAP[_species]['window'] if args.window_size is None else args.window_size
+            _use_tss = SPECIES_MAP[_species]['use_tss'] if args.tss else args.tss
+        except AttributeError:
+            _window, _use_tss = None, None
+
         _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
-        _use_tss = SPECIES_MAP[_species]['use_tss'] if args.tss else args.tss
+
 
     # Load gene and regulator lists
     _gl = pd.read_csv(args.genes, index_col=None, header=None)[0].tolist() if args.genes is not None else None
@@ -150,7 +159,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  shuffle=None, lowmem=False, intergenic_only=True):
     """
     Build a motif-based prior from windows around annotated genes.
-    
+
     :param motif_file: Path to motif file (meme or transfac format)
     :type motif_file: str
     :param annotation_file: Path to GTF file containing gene annotations
