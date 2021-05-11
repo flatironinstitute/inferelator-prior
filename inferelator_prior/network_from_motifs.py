@@ -121,6 +121,7 @@ def parse_common_arguments(args):
             _use_tss = args.tss
         except AttributeError:
             _window, _use_tss = None, None
+
         _tandem = args.tandem if args.tandem is not None else DEFAULT_TANDEM
     else:
         try:
@@ -128,6 +129,7 @@ def parse_common_arguments(args):
             _use_tss = SPECIES_MAP[_species]['use_tss'] if args.tss else args.tss
         except AttributeError:
             _window, _use_tss = None, None
+
         _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
 
 
@@ -157,7 +159,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  shuffle=None, lowmem=False, intergenic_only=True):
     """
     Build a motif-based prior from windows around annotated genes.
-    
+
     :param motif_file: Path to motif file (meme or transfac format)
     :type motif_file: str
     :param annotation_file: Path to GTF file containing gene annotations
