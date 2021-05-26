@@ -17,18 +17,21 @@ def main():
 
 
     args = ap.parse_args()
-    _use_tss = args.tss
+    link_bed_to_genes(args.bed, args.annotation, args.out, use_tss=args.tss, window_size=args.window_size)
 
-    print("Loading genes from file ({f})".format(f=args.annotation))
+
+def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000):
+
+    print("Loading genes from file ({f})".format(f=gene_annotation_file))
     # Load genes and open a window
-    genes = load_gtf_to_dataframe(args.annotation)
+    genes = load_gtf_to_dataframe(gene_annotation_file)
     print("{n} genes loaded".format(n=genes.shape[0]))
 
 
-    _msg = "Promoter regions defined with window {w} around {g}".format(w=args.window_size, g="TSS" if _use_tss else "gene")
+    _msg = "Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene")
     print(_msg)
 
-    genes_window = open_window(genes, window_size=args.window_size, use_tss=_use_tss, include_entire_gene_body=True)
+    genes_window = open_window(genes, window_size=window_size, use_tss=use_tss, include_entire_gene_body=True)
 
     # Create a fake bed file with the gene promoter
     genes_window = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME]].copy()
@@ -36,11 +39,11 @@ def main():
     genes_window = genes_window.sort_values(by=[GTF_CHROMOSOME, SEQ_START])
 
     gene_bed = load_bed_to_bedtools(genes_window)
-    bed_locs = load_bed_to_bedtools(args.bed)
+    bed_locs = load_bed_to_bedtools(bed_file)
 
     intersect_assign = intersect_bed(gene_bed, bed_locs).to_dataframe()
     intersect_assign.rename({'score': 'gene'}, axis=1, inplace=True)
-    intersect_assign.to_csv(args.out, sep="\t", index=False, header=False)
+    intersect_assign.to_csv(out_file, sep="\t", index=False, header=False)
 
 
 if __name__ == '__main__':
