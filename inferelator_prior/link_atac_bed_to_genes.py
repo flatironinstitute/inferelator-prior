@@ -45,6 +45,7 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     intersect_assign.rename({'score': 'gene'}, axis=1, inplace=True)
     intersect_assign.to_csv(out_file, sep="\t", index=False, header=False)
 
+    return bed_locs.count(), len(intersect_assign)
 
 if __name__ == '__main__':
     main()
