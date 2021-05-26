@@ -20,16 +20,16 @@ def main():
     link_bed_to_genes(args.bed, args.annotation, args.out, use_tss=args.tss, window_size=args.window_size)
 
 
-def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000):
+def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000, dprint=print):
 
-    print("Loading genes from file ({f})".format(f=gene_annotation_file))
+    dprint("Loading genes from file ({f})".format(f=gene_annotation_file))
     # Load genes and open a window
     genes = load_gtf_to_dataframe(gene_annotation_file)
-    print("{n} genes loaded".format(n=genes.shape[0]))
+    dprint("{n} genes loaded".format(n=genes.shape[0]))
 
 
     _msg = "Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene")
-    print(_msg)
+    dprint(_msg)
 
     genes_window = open_window(genes, window_size=window_size, use_tss=use_tss, include_entire_gene_body=True)
 
