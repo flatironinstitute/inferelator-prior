@@ -20,7 +20,30 @@ def main():
     link_bed_to_genes(args.bed, args.annotation, args.out, use_tss=args.tss, window_size=args.window_size)
 
 
-def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000, dprint=print):
+def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000, dprint=print,
+                      non_gene_key="Intergenic"):
+    """
+    Link a BED file (of arbitraty origin) to a set of genes from a GTF file based on proximity
+
+    :param bed_file: Path to the BED file
+    :type bed_file: str
+    :param gene_annotation_file: Path to the genome annotation file (GTF)
+    :type gene_annotation_file: str
+    :param out_file: Path to the output file
+    :type out_file: str
+    :param use_tss: Base gene proximity on the TSS, not the gene body; defaults to True
+    :type use_tss: bool, optional
+    :param window_size: Window size (N, M) for proximity, where N is upstream of the gene and M is downstream. 
+        If given as an integer K, interpreted as (K, K); defaults to 1000
+    :type window_size: int, tuple, optional
+    :param dprint: Debug message function (can be overridden to silence), defaults to print
+    :type dprint: callable, optional
+    :param non_gene_key: Name for BED peaks that aren't in the genome feature windows.
+        Set to None to drop peaks that aren't in the genome feature windows; defaults to "Intergenic"
+    :type non_gene_key: str, optional
+    :return: Number of peaks before mapping, number of peaks after mapping, dataframe of peaks
+    :rtype: int, int, pd.DataFrame
+    """
 
     dprint("Loading genes from file ({f})".format(f=gene_annotation_file))
     # Load genes and open a window
@@ -43,9 +66,35 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
 
     intersect_assign = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
     intersect_assign.rename({'score': 'gene'}, axis=1, inplace=True)
+
+    # Rebuild an A/B bed file with unique peak names
+    intersect_assign.columns = ['a_chrom', 'a_start', 'a_end', 'a_strand', 'gene', 'b_chrom', 'b_start', 'b_end']
+    intersect_assign = intersect_assign[['b_chrom', 'b_start', 'b_end', 'gene']]
+    intersect_assign.columns = ['chrom', 'start', 'end', 'gene']
+
+    if non_gene_key is not None:
+        intersect_assign = intersect_assign.merge(bed_locs.to_dataframe(), how="outer", on=['chrom', 'start', 'end'])
+        intersect_assign['gene'] = intersect_assign['gene'].fillna(non_gene_key)
+    
+    intersect_assign['peak'] = ""
+    intersect_assign = intersect_assign.groupby('gene').transform(unique_peaks_from_genes_transformer)
     intersect_assign.to_csv(out_file, sep="\t", index=False, header=False)
 
-    return bed_locs.count(), len(intersect_assign)
+    return bed_locs.count(), len(intersect_assign), intersect_assign
+
+
+def unique_peaks_from_genes_transformer(grouped_dataframe):
+
+    grouped_dataframe = grouped_dataframe.copy()
+
+    if len(grouped_dataframe) == 1:
+        grouped_dataframe['peak'] = grouped_dataframe['gene'].iloc[0] + "_0"
+
+    else:
+        grouped_dataframe['peak'] = grouped_dataframe['gene'].str.cat(map(str, range(len(grouped_dataframe))))
+
+    return grouped_dataframe
+
 
 if __name__ == '__main__':
     main()
