@@ -84,6 +84,9 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     ).transform(
         lambda x: pd.Series(map(lambda y: "_" + str(y), range(len(x))), index=x.index)
     )
+    
+    ia['peak'] = ia['gene'].str.cat(ia['peak'])
+    ia = ia.sort_values(by=['chrom', 'start'])
 
     ia.to_csv(out_file, sep="\t", index=False, header=False)
 
