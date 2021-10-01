@@ -3,6 +3,7 @@ from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window,
 from inferelator_prior.processor.bedtools import load_bed_to_bedtools, intersect_bed
 
 import argparse
+import pandas as pd
 
 
 def main():
@@ -64,23 +65,29 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     gene_bed = load_bed_to_bedtools(genes_window)
     bed_locs = load_bed_to_bedtools(bed_file)
 
-    intersect_assign = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
-    intersect_assign.rename({'score': 'gene'}, axis=1, inplace=True)
+    ia = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
+    ia.rename({'score': 'gene'}, axis=1, inplace=True)
 
-    # Rebuild an A/B bed file with unique peak names
-    intersect_assign.columns = ['a_chrom', 'a_start', 'a_end', 'a_strand', 'gene', 'b_chrom', 'b_start', 'b_end']
-    intersect_assign = intersect_assign[['b_chrom', 'b_start', 'b_end', 'gene']]
-    intersect_assign.columns = ['chrom', 'start', 'end', 'gene']
+    # Rebuild an A/B bed file
+    ia.columns = ['a_chrom', 'a_start', 'a_end', 'a_strand', 'gene', 'b_chrom', 'b_start', 'b_end']
+    ia = ia[['b_chrom', 'b_start', 'b_end', 'gene']]
+    ia.columns = ['chrom', 'start', 'end', 'gene']
 
+    # Add an intergenic key if set; otherwise peaks that don't overlap will be dropped
     if non_gene_key is not None:
-        intersect_assign = intersect_assign.merge(bed_locs.to_dataframe(), how="outer", on=['chrom', 'start', 'end'])
-        intersect_assign['gene'] = intersect_assign['gene'].fillna(non_gene_key)
+        ia = ia.merge(bed_locs.to_dataframe(), how="outer", on=['chrom', 'start', 'end'])
+        ia['gene'] = ia['gene'].fillna(non_gene_key)
     
-    intersect_assign['peak'] = ""
-    intersect_assign = intersect_assign.groupby('gene').transform(unique_peaks_from_genes_transformer)
-    intersect_assign.to_csv(out_file, sep="\t", index=False, header=False)
+    # Make unique peak IDs based on gene
+    ia['peak'] = ia['gene'].groupby(
+        ia['gene']
+    ).transform(
+        lambda x: pd.Series(map(lambda y: "_" + str(y), range(x)), index=x.index)
+    )
 
-    return bed_locs.count(), len(intersect_assign), intersect_assign
+    ia.to_csv(out_file, sep="\t", index=False, header=False)
+
+    return bed_locs.count(), len(ia), ia
 
 
 def unique_peaks_from_genes_transformer(grouped_dataframe):
@@ -98,3 +105,4 @@ def unique_peaks_from_genes_transformer(grouped_dataframe):
 
 if __name__ == '__main__':
     main()
+ia
