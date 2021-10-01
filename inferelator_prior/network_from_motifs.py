@@ -132,7 +132,6 @@ def parse_common_arguments(args):
 
         _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
 
-
     # Load gene and regulator lists
     _gl = pd.read_csv(args.genes, index_col=None, header=None)[0].tolist() if args.genes is not None else None
     _tfl = pd.read_csv(args.tfs, index_col=None, header=None)[0].tolist() if args.tfs is not None else None

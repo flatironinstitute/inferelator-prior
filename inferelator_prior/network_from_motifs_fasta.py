@@ -15,14 +15,17 @@ def main():
 
     ap.add_argument("-m", "--motif", dest="motif", help="Motif file", metavar="PATH", required=True)
     ap.add_argument("-f", "--fasta", dest="fasta", help="Promoter FASTA file", metavar="FILE", required=True)
+    #ap.add_argument("--scan-threshold", dest="scan_threshold", default="1e-4", help="Threshold for FIMO")
 
     # Process common arguments into values
     add_common_arguments(ap)
     args = ap.parse_args()
-    #out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo = parse_common_arguments(args)
+
     out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo, _ = parse_common_arguments(args)
+
     _, _, prior_data = build_motif_prior_from_fasta(args.motif, args.fasta,
                                                     num_cores=args.cores,
+                                                    scanner_thresh=args.scan_thresh,
                                                     motif_ic=args.min_ic,
                                                     tandem=_tandem,
                                                     scanner_type=args.scanner,
