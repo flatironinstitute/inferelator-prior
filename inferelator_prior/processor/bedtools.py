@@ -45,10 +45,10 @@ def load_bed_to_bedtools(bed):
         return pybedtools.BedTool(bed)
 
 
-def intersect_bed(*beds):
+def intersect_bed(*beds, wa=False, wb=False):
 
     if len(beds) == 1:
         return beds[0]
 
     beds = [b.sort() for b in beds]
-    return beds[0].intersect(beds[1:], sorted=True)
+    return beds[0].intersect(beds[1:], sorted=True, wa=wa, wb=wb)
