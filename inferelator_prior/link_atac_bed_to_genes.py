@@ -90,19 +90,5 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     return bed_locs.count(), len(ia), ia
 
 
-def unique_peaks_from_genes_transformer(grouped_dataframe):
-
-    grouped_dataframe = grouped_dataframe.copy()
-
-    if len(grouped_dataframe) == 1:
-        grouped_dataframe['peak'] = grouped_dataframe['gene'].iloc[0] + "_0"
-
-    else:
-        grouped_dataframe['peak'] = grouped_dataframe['gene'].str.cat(map(str, range(len(grouped_dataframe))))
-
-    return grouped_dataframe
-
-
 if __name__ == '__main__':
     main()
-ia
