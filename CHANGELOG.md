@@ -1,6 +1,10 @@
-### Version 0.3.0
+### Version 0.3.1
 
 * Added `link_atac_bed_to_genes` module to link specific peaks from a BED file to nearby genes 
+
+### Version 0.3.0
+
+* Finalized model for prior matrix thresholding
 
 ### Version 0.2.3
 
