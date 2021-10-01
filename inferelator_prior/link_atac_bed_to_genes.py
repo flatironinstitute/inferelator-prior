@@ -70,8 +70,8 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
 
     # Rebuild an A/B bed file
     ia.columns = ['a_chrom', 'a_start', 'a_end', 'a_strand', 'gene', 'b_chrom', 'b_start', 'b_end']
-    ia = ia[['b_chrom', 'b_start', 'b_end', 'gene']]
-    ia.columns = ['chrom', 'start', 'end', 'gene']
+    ia = ia[['b_chrom', 'b_start', 'b_end', 'a_strand', 'gene']]
+    ia.columns = ['chrom', 'start', 'end', 'strand', 'gene']
 
     # Add an intergenic key if set; otherwise peaks that don't overlap will be dropped
     if non_gene_key is not None:
@@ -84,10 +84,10 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     ).transform(
         lambda x: pd.Series(map(lambda y: "_" + str(y), range(len(x))), index=x.index)
     )
-    
     ia['peak'] = ia['gene'].str.cat(ia['peak'])
-    ia = ia.sort_values(by=['chrom', 'start'])
 
+    # Sort for output
+    ia = ia.sort_values(by=['chrom', 'start'])
     ia.to_csv(out_file, sep="\t", index=False, header=False)
 
     return bed_locs.count(), len(ia), ia
