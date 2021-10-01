@@ -14,11 +14,14 @@ def main():
     ap.add_argument("-b", "--bed", dest="bed", help="Peak BED file", default=None)
     ap.add_argument("--no_tss", dest="tss", help="Use gene body for window (not TSS)", action='store_const',
                     const=False, default=True)
+    ap.add_argument("--no_intergenic", dest="no_intergenic", help="Drop peaks not linked to a gene", action='store_const',
+                    const=True, default=False)
     ap.add_argument("-o", "--out", dest="out", help="Output BED", metavar="FILE", default="./peaks_to_genes.bed")
 
 
     args = ap.parse_args()
-    link_bed_to_genes(args.bed, args.annotation, args.out, use_tss=args.tss, window_size=args.window_size)
+    link_bed_to_genes(args.bed, args.annotation, args.out, use_tss=args.tss, window_size=args.window_size,
+                      non_gene_key=None if args.no_intergenic else "Intergenic")
 
 
 def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000, dprint=print,
@@ -84,7 +87,7 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     ).transform(
         lambda x: pd.Series(map(lambda y: "_" + str(y), range(len(x))), index=x.index)
     )
-    ia['peak'] = ia['gene'].str.cat(ia['peak'])
+    ia['peak'] = ia['gene'].str.cat(ia['peak']) 
 
     # Sort for output
     ia = ia.sort_values(by=['chrom', 'start'])
