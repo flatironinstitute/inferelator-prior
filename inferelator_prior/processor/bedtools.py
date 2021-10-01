@@ -1,8 +1,5 @@
-from inferelator_prior.processor.gtf import GTF_CHROMOSOME, GTF_GENENAME, SEQ_START, SEQ_STOP, GTF_STRAND
 import pandas as pd
 import pybedtools
-import os
-import subprocess
 import tempfile
 
 BEDTOOLS_EXTRACT_SUFFIX = ".extract.fasta"
@@ -48,12 +45,10 @@ def load_bed_to_bedtools(bed):
         return pybedtools.BedTool(bed)
 
 
-def intersect_bed(*beds):
+def intersect_bed(*beds, wa=False, wb=False):
 
     if len(beds) == 1:
         return beds[0]
 
     beds = [b.sort() for b in beds]
-    return beds[0].intersect(beds[1:], sorted=True)
-
-
+    return beds[0].intersect(beds[1:], sorted=True, wa=wa, wb=wb)

@@ -20,6 +20,7 @@ def main():
     # Process common arguments into values
     add_common_arguments(ap)
     args = ap.parse_args()
+
     out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo, _ = parse_common_arguments(args)
 
     _, _, prior_data = build_motif_prior_from_fasta(args.motif, args.fasta,

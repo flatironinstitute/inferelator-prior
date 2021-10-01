@@ -132,8 +132,6 @@ def parse_common_arguments(args):
 
         _tandem = SPECIES_MAP[_species]['tandem'] if args.tandem is None else args.tandem
 
-
-
     # Load gene and regulator lists
     _gl = pd.read_csv(args.genes, index_col=None, header=None)[0].tolist() if args.genes is not None else None
     _tfl = pd.read_csv(args.tfs, index_col=None, header=None)[0].tolist() if args.tfs is not None else None
@@ -160,7 +158,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  shuffle=None, lowmem=False, intergenic_only=True):
     """
     Build a motif-based prior from windows around annotated genes.
-    
+
     :param motif_file: Path to motif file (meme or transfac format)
     :type motif_file: str
     :param annotation_file: Path to GTF file containing gene annotations
