@@ -1,3 +1,7 @@
+### Version 0.3.0
+
+* Added `link_atac_bed_to_genes` module to link specific peaks from a BED file to nearby genes 
+
 ### Version 0.2.3
 
 * Added additional messaging and a `--debug` mode
