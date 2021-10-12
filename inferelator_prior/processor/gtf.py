@@ -43,7 +43,7 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
         _gregex = GTF_GENE_ID_REGEX
 
     # Load annotations into a dataframe with pybedtools
-    annotations = pd.read_csv(gtf_path, sep="\t", names=GTF_COLUMNS, comment="#")
+    annotations = pd.read_csv(gtf_path, sep="\t", names=GTF_COLUMNS, comment="#", low_memory=False)
 
     if len(annotations) == 0:
         raise ValueError("No records present in {f}".format(f=gtf_path))
