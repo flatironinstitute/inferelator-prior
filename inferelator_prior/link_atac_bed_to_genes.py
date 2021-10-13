@@ -1,14 +1,14 @@
 from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, GTF_CHROMOSOME,
                                              SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME)
-from inferelator_prior.processor.bedtools import load_bed_to_bedtools, intersect_bed, load_bed_to_dataframe
+from inferelator_prior.processor.bedtools import (load_bed_to_bedtools, intersect_bed, load_bed_to_dataframe,
+                                                  BED_CHROMOSOME)
 
 import argparse
-import glob
 import pathlib
-import os
 import pandas as pd
-import pandas.api.types as pat
 
+GENE_COL = "gene"
+PEAK_COL = "peak"
 
 def main():
     ap = argparse.ArgumentParser(description="Link ATAC peaks in a BED file to genes in a GTF file")
@@ -88,32 +88,45 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     genes_window = genes_window.sort_values(by=[GTF_CHROMOSOME, SEQ_START])
 
     gene_bed = load_bed_to_bedtools(genes_window)
-    bed_locs = load_bed_to_bedtools(bed_file)
+
+    # Load BED-type file to a dataframe
+    # Explicitly cast chromosomes into strings (edge condition when chromosomes are just 1, 2, 3, Mt, etc)
+    bed_df = load_bed_to_dataframe(bed_file)
+    bed_df[BED_CHROMOSOME] = bed_df[BED_CHROMOSOME].astype(str)
+
+    bed_locs = load_bed_to_bedtools(bed_df[[BED_CHROMOSOME, SEQ_START, SEQ_STOP]])
 
     ia = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
-    ia.rename({'score': 'gene'}, axis=1, inplace=True)
+    ia.rename({'score': GENE_COL}, axis=1, inplace=True)
 
     # Rebuild an A/B bed file
-    ia.columns = ['a_chrom', 'a_start', 'a_end', 'a_strand', 'gene', 'b_chrom', 'b_start', 'b_end']
-    ia = ia[['b_chrom', 'b_start', 'b_end', 'a_strand', 'gene']]
-    ia.columns = ['chrom', 'start', 'end', 'strand', 'gene']
+    ia.columns = ['a_chrom', 'a_start', 'a_end', GTF_STRAND, GENE_COL, BED_CHROMOSOME, SEQ_START, SEQ_STOP]
+    ia = ia[[BED_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND, GENE_COL]].copy()
 
     # Add an intergenic key if set; otherwise peaks that don't overlap will be dropped
     if non_gene_key is not None:
-        ia = ia.merge(bed_locs.to_dataframe(), how="outer", on=['chrom', 'start', 'end'])
-        ia['gene'] = ia['gene'].fillna(non_gene_key)
+        ia = ia.merge(bed_df, how="outer", on=[BED_CHROMOSOME, SEQ_START, SEQ_STOP])
+        ia[GENE_COL] = ia[GENE_COL].fillna(non_gene_key)
+        ia[GTF_STRAND] = ia[GTF_STRAND].fillna("")
     
     # Make unique peak IDs based on gene
-    ia['peak'] = ia['gene'].groupby(
-        ia['gene']
+    ia[PEAK_COL] = ia[GENE_COL].groupby(
+        ia[GENE_COL]
     ).transform(
         lambda x: pd.Series(map(lambda y: "_" + str(y), range(len(x))), index=x.index)
     )
-    ia['peak'] = ia['gene'].str.cat(ia['peak']) 
+    ia[PEAK_COL] = ia[GENE_COL].str.cat(ia[PEAK_COL]) 
+
+    peaks = ia[PEAK_COL].copy()
+    ia.drop(PEAK_COL, inplace=True, axis=1)
+    ia.insert(5, PEAK_COL, peaks)
 
     # Sort for output
-    ia = ia.sort_values(by=['chrom', 'start'])
-    ia.to_csv(out_file, sep="\t", index=False, header=False)
+    ia = ia.sort_values(by=[BED_CHROMOSOME, SEQ_START]).reset_index(drop=True)
+
+
+    if out_file is not None:
+        ia.to_csv(out_file, sep="\t", index=False, header=False)
 
     return bed_locs.count(), len(ia), ia
 
