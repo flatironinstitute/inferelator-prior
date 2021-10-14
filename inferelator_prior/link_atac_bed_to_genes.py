@@ -23,6 +23,8 @@ def main():
     ap.add_argument("-o", "--out", dest="out", help="Output BED", metavar="FILE", default="./peaks_to_genes.bed")
     ap.add_argument("-op", "--out_prefix", dest="op", help="Prefix for output file (if more than one is processed",
                     metavar="PREFIX", default="joined_")
+    ap.add_argument("--no_out_header", dest="out_header", help="Omit BEAD header in output file", action='store_const',
+                    const=False, default=True)
 
     args = ap.parse_args()
 
@@ -30,7 +32,7 @@ def main():
 
     if len(bed_files_for_linking) == 1:
         link_bed_to_genes(args.bed, args.annotation, args.out, use_tss=args.tss, window_size=args.window_size,
-                        non_gene_key=None if args.no_intergenic else "Intergenic")
+                        non_gene_key=None if args.no_intergenic else "Intergenic", out_header=args.out_header)
     else:
         genes = load_gtf_to_dataframe(args.annotation)
         print("{n} genes loaded".format(n=genes.shape[0]))
@@ -40,11 +42,11 @@ def main():
             new_out = new_out.parent.joinpath(args.op + str(new_out.name))
             print("Processing {f} (saving as {nf})".format(f=bf, nf=new_out))
             link_bed_to_genes(bf, genes, new_out, use_tss=args.tss, window_size=args.window_size,
-                              non_gene_key=None if args.no_intergenic else "Intergenic")
+                              non_gene_key=None if args.no_intergenic else "Intergenic", out_header=args.out_header)
 
 
 def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, window_size=1000, dprint=print,
-                      non_gene_key="Intergenic"):
+                      non_gene_key="Intergenic", out_header=False):
     """
     Link a BED file (of arbitraty origin) to a set of genes from a GTF file based on proximity
 
@@ -126,7 +128,7 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
 
 
     if out_file is not None:
-        ia.to_csv(out_file, sep="\t", index=False, header=False)
+        ia.to_csv(out_file, sep="\t", index=False, header=out_header)
 
     return bed_locs.count(), len(ia), ia
 
