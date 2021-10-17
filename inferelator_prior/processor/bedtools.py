@@ -2,6 +2,8 @@ import pandas as pd
 import pybedtools
 import tempfile
 
+from inferelator_prior.processor.gtf import SEQ_START, SEQ_STOP, GTF_STRAND
+
 BEDTOOLS_EXTRACT_SUFFIX = ".extract.fasta"
 
 # Column names
@@ -18,7 +20,25 @@ def load_bed_to_dataframe(bed_file_path, **kwargs):
     :return: pd.DataFrame
     """
 
-    return pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs)
+    _colnames = [BED_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]
+
+    # Check and see if there are headers
+    first_2_cols = pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs, nrows=2)
+
+    # Use the file headers if they exist    
+    if all(first_2_cols.iloc[0, :].apply(lambda x: isinstance(x, str))):
+
+        # Warn if they're weird
+        if not all(first_2_cols.iloc[0, 0:4].tolist() == _colnames):
+            print("Nonstandard BED header: [{r}]".format(r=", ".join(first_2_cols.iloc[0, :])))
+        
+        return pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs)
+
+    # If not, use the standard headers
+    if first_2_cols.shape[1] > 4:
+        _colnames = _colnames + list(map(lambda x: str(x), range(0, first_2_cols.shape[1] - 4)))
+
+    return pd.read_csv(bed_file_path, sep="\t", index_col=None, names=_colnames[0:first_2_cols.shape[1]], **kwargs)
 
 
 def extract_bed_sequence(bed_file, genome_fasta, output_path=None):
