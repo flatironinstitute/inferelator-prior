@@ -103,6 +103,8 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
     except:
         print("Gene BED file:")
         print(gene_bed.to_dataframe().head())
+        print("Target BED dataframe:")
+        print(bed_df.head())
         print("Target BED file:")
         print(bed_locs.to_dataframe().head())
         raise
