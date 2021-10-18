@@ -29,8 +29,8 @@ def load_bed_to_dataframe(bed_file_path, **kwargs):
     if any([x in first_2_cols.columns for x in _colnames]):
 
         # Warn if they're weird
-        if not first_2_cols.columns.tolist() == _colnames:
-            print("Nonstandard BED header: {r}".format(r=first_2_cols.columns.tolist()))
+        if not first_2_cols.columns.tolist()[0:3] == _colnames[0:3]:
+            print("Nonstandard BED heade for file {f}: {r}".format(f=bed_file_path, r=first_2_cols.columns.tolist()))
         
         return pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs)
 
