@@ -29,7 +29,7 @@ def load_bed_to_dataframe(bed_file_path, **kwargs):
     if any([x in first_2_cols.columns for x in _colnames]):
 
         # Warn if they're weird
-        if not all(first_2_cols.iloc[0, 0:4].tolist() == _colnames):
+        if not first_2_cols.iloc[0, 0:4].tolist() == _colnames:
             print("Nonstandard BED header: [{r}]".format(r=", ".join(first_2_cols.iloc[0, :])))
         
         return pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs)
