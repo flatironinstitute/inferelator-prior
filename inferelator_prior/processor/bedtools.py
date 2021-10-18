@@ -26,7 +26,7 @@ def load_bed_to_dataframe(bed_file_path, **kwargs):
     first_2_cols = pd.read_csv(bed_file_path, sep="\t", index_col=None, **kwargs, nrows=2)
 
     # Use the file headers if they exist    
-    if all(first_2_cols.iloc[0, :].apply(lambda x: isinstance(x, str))):
+    if any([x in first_2_cols.columns for x in _colnames]):
 
         # Warn if they're weird
         if not all(first_2_cols.iloc[0, 0:4].tolist() == _colnames):
