@@ -98,7 +98,15 @@ def link_bed_to_genes(bed_file, gene_annotation_file, out_file, use_tss=True, wi
 
     bed_locs = load_bed_to_bedtools(bed_df[[BED_CHROMOSOME, SEQ_START, SEQ_STOP]])
 
-    ia = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
+    try:
+        ia = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
+    except:
+        print("Gene BED file:")
+        print(gene_bed.to_dataframe().head())
+        print("Target BED file:")
+        print(bed_locs.to_dataframe().head())
+        raise
+
     ia.rename({'score': GENE_COL}, axis=1, inplace=True)
 
     # Rebuild an A/B bed file
