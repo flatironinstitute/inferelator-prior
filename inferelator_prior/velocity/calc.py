@@ -14,6 +14,7 @@ def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors, wrap_time=120):
     """
 
     n_gen = _find_local(expr, neighbor_graph, n_neighbors)
+
     return _np.vstack([_calc_local_velocity(expr[n_idx, :].copy(),
                                             time_axis[n_idx].copy(),
                                             (n_idx == i).nonzero()[0][0],
@@ -74,7 +75,7 @@ def _find_local(expr, neighbor_graph, n_neighbors):
             else:
                 keepers = n_slice.indices
         else:
-            keepers = _np.argsort(n_slice)[-1 * n_neighbors:]
+            keepers = _np.argsort(n_slice)[-1 * min(_np.sum(n_slice > 0), n_neighbors):]
 
         if i % 100 == 0:
             print("Extracted {n} neighbors for sample {i} / {t}".format(n=len(keepers), i=i, t=n))
