@@ -1,6 +1,6 @@
 import numpy as _np
 from scipy.sparse import issparse as _is_sparse
-
+from tqdm import trange
 
 def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors, wrap_time=120):
     """
@@ -68,7 +68,7 @@ def _find_local(expr, neighbor_graph, n_neighbors):
     n, m = expr.shape
     neighbor_sparse = _is_sparse(neighbor_graph)
 
-    for i in range(n):
+    for i in trange(n):
         n_slice = neighbor_graph[i, :]
         if neighbor_sparse:
             if n_slice.data.shape[0] > n_neighbors:
@@ -77,8 +77,5 @@ def _find_local(expr, neighbor_graph, n_neighbors):
                 keepers = n_slice.indices
         else:
             keepers = _np.argsort(n_slice)[-1 * n_neighbors:]
-
-        if i % 100 == 0:
-            print("Extracted {n} neighbors for sample {i} / {t}".format(n=len(keepers), i=i, t=n))
 
         yield i, _np.insert(keepers, 0, i)
