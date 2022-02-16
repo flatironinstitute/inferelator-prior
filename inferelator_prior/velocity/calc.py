@@ -45,7 +45,7 @@ def _calc_local_velocity(expr, time_axis, center_index, wrap_time=120):
 
     time_axis = (time_axis - time_axis[center_index]).reshape(-1, 1)
 
-    # Calculate (XT * X)^-1 * X
+    # Calculate (XT * X)^-1 * XT
     x_for_hat = _np.dot(_np.linalg.inv(_np.dot(time_axis.T, time_axis)), time_axis.T)
 
     # Calculate change in expression relative to the centerpoint
