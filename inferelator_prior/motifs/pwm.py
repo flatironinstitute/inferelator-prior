@@ -23,19 +23,20 @@ def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_i
 
     for pwm_file in pwm_file_list:
         pwm_id = os.path.splitext(os.path.basename(pwm_file))[0]
+        match_id = info_df[MOTIF_COL] == pwm_id
 
-        if pwm_id not in info_df[MOTIF_COL]:
+        if (match_id).sum() == 0:
             pwm_not_present.append(pwm_id)
             continue
 
         if direct_only:
-            direct = info_df.loc[info_df[MOTIF_COL] == pwm_id, TF_STATUS_COL].str.contains("D")
+            direct = info_df.loc[match_id, TF_STATUS_COL].str.contains("D")
             if not direct.any():
                 continue
             else:
-                pwm_names = info_df.loc[(info_df[MOTIF_COL] == pwm_id) & (info_df[TF_STATUS_COL] == "D"), TF_NAME_COL]
+                pwm_names = info_df.loc[match_id & (info_df[TF_STATUS_COL] == "D"), TF_NAME_COL]
         else:
-            pwm_names = info_df.loc[info_df[MOTIF_COL] == pwm_id, TF_NAME_COL]
+            pwm_names = info_df.loc[match_id, TF_NAME_COL]
 
         pwm_name = "/".join(pwm_names)
 
@@ -63,8 +64,8 @@ def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_i
         motifs.append(motif)
 
     if len(pwm_not_present) > 0:
-        print("{pwm} PWM files not found in in {c} of {cf}".format(pwm=len(pwm_not_present), c=MOTIF_COL, cf=info_file))
+        print(f"{len(pwm_not_present)} PWM files not found in in {MOTIF_COL} of {info_file}")
     if len(pwm_malformed) > 0:
-        print("{pwm} PWM files malformed and improperly parsed".format(pwm=len(pwm_malformed)))
+        print(f"{len(pwm_malformed)} PWM files malformed and improperly parsed")
 
     return motifs

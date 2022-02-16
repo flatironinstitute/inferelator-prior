@@ -1,3 +1,7 @@
+### Version 0.3.2
+
+* Corrected a parsing error when reading CisBP PWM files 
+
 ### Version 0.3.1
 
 * Added `link_atac_bed_to_genes` module to link specific peaks from a BED file to nearby genes 

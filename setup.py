@@ -1,9 +1,9 @@
 import os
 from setuptools import setup, find_packages
 
-install_requires = ["numpy", "pandas>=1.0", "HTSeq", "pybedtools", "scipy", "pathos", "sklearn"]
+install_requires = ["numpy", "pandas>=1.0", "HTSeq", "pybedtools", "scipy", "pathos", "sklearn", "tqdm"]
 tests_require = ["coverage", "nose", "pysam"]
-version = "0.3.1"
+version = "0.3.2"
 
 # Description from README.md
 base_dir = os.path.dirname(os.path.abspath(__file__))
