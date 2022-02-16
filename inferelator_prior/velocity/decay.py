@@ -44,7 +44,7 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
     # Find the observations which should not be included for decay constant model
     keep_observations = np.greater_equal(ratio_data, ratio_cuts[0, :][None, :])
-    keep_observations |= np.less_equal(ratio_data, ratio_cuts[1, :][None, :])
+    keep_observations &= np.less_equal(ratio_data, ratio_cuts[1, :][None, :])
 
     # Estimate the maximum velocity
     if include_alpha:
