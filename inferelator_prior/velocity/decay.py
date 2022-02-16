@@ -43,8 +43,8 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     ratio_cuts = np.nanquantile(ratio_data, decay_quantiles, axis=0)
 
     # Find the observations which should not be included for decay constant model
-    discard_observations = np.less_equal(ratio_data, ratio_cuts[0, :][None, :])
-    discard_observations |= np.greater_equal(ratio_data, ratio_cuts[1, :][None, :])
+    keep_observations = np.greater_equal(ratio_data, ratio_cuts[0, :][None, :])
+    keep_observations |= np.less_equal(ratio_data, ratio_cuts[1, :][None, :])
 
     # Estimate the maximum velocity
     if include_alpha:
@@ -63,25 +63,23 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
 
     expr = np.array(expression_data.T, copy=True)
-    discard_observations = np.array(discard_observations.T, order="C")
-
-    # Set unwanted datapoints to zero
-    velo[discard_observations] = 0
-    expr[discard_observations] = 0
+    keep_observations = np.array(keep_observations.T, order="C")
 
     def _lstsq(x, y):
         sl, ssr, rank, s = np.linalg.lstsq(x, y, rcond=None)
         return sl
 
     # Estimate lambda_hat via OLS slope and enforce positive lambda
-    decay_est = np.array([_lstsq(expr[i, :].reshape(-1, 1),
-                                 velo[i, :].reshape(-1, 1))
+    decay_est = np.array([_lstsq(expr[i, keep_observations[i, :]].reshape(-1, 1),
+                                 velo[i, keep_observations[i, :]].reshape(-1, 1))
                           for i in trange(m)])
     decay_est *= -1
     np.minimum(decay_est, 0, out=decay_est)
 
     # Estimate standard error of lambda_hat
-    se_est = np.array([_calc_se(expr[i, :], velo[i, :], decay_est[i])
+    se_est = np.array([_calc_se(expr[i, keep_observations[i, :]],
+                                velo[i, keep_observations[i, :]],
+                                decay_est[i])
                        for i in trange(m)])
 
     return decay_est, se_est, alpha_est
