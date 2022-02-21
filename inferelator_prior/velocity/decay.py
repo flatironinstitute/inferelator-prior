@@ -67,7 +67,7 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
     def _lstsq(x, y):
         sl, ssr, rank, s = np.linalg.lstsq(x, y, rcond=None)
-        return sl
+        return sl[0]
 
     # Estimate lambda_hat via OLS slope and enforce positive lambda
     decay_est = np.array([_lstsq(expr[i, keep_observations[i, :]].reshape(-1, 1),
@@ -84,10 +84,14 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
     return decay_est, se_est, alpha_est
 
+
 def _calc_se(x, y, slope):
 
     mse_x = np.sum(np.square(x - np.mean(x)))
-    if slope == 0:
+    if mse_x == 0:
+        return 0
+
+    elif slope == 0:
         return np.mean(np.square(y - np.mean(y))) / mse_x
 
     else:
