@@ -77,8 +77,8 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     np.maximum(decay_est, 0, out=decay_est)
 
     # Estimate standard error of lambda_hat
-    se_est = np.array([_calc_se(expr[i, keep_observations[i, :]],
-                                velo[i, keep_observations[i, :]],
+    se_est = np.array([_calc_se(expr[i, keep_observations[i, :]].reshape(-1, 1),
+                                velo[i, keep_observations[i, :]].reshape(-1, 1),
                                 decay_est[i])
                        for i in trange(m)])
 
