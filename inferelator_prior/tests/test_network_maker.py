@@ -90,7 +90,8 @@ class TestFullStack(unittest.TestCase):
                                                                 "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
                                                    os.path.join(data_path,
                                                                 "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
-                                                   window_size=(500, 100))
+                                                   window_size=(500, 100),
+                                                   intergenic_only=False)
 
         self.assertEqual(cut.sum().sum(), 3)
         self.assertListEqual(cut[cut["GAL4"]].index.tolist(), ["YBR018C", "YBR019C", "YBR020W"])
