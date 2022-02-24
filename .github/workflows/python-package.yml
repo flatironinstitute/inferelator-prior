@@ -19,9 +19,8 @@ jobs:
     - name: Set up Conda Python ${{ matrix.python-version }}
       uses: conda-incubator/setup-miniconda@v2
       with:
-        auto-update-conda: true
-        python-version: ${{ matrix.python-version }}
         activate-environment: test_inferelator_prior
+        python-version: ${{ matrix.python-version }}
         environment-file: test-environment.yml
         auto-activate-base: false
     - name: Conda Info
