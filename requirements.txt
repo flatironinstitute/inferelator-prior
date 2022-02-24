@@ -1,0 +1,8 @@
+"numpy" 
+"pandas>=1.0"
+"HTSeq"
+"pybedtools"
+"scipy"
+"pathos"
+"sklearn"
+"tqdm"

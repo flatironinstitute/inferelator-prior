@@ -1,6 +1,6 @@
 # inferelator-prior
 [![PyPI version](https://badge.fury.io/py/inferelator-prior.svg)](https://badge.fury.io/py/inferelator-prior)
-[![Travis](https://travis-ci.org/flatironinstitute/inferelator-prior.svg?branch=release)](https://travis-ci.org/flatironinstitute/inferelator-prior)
+[![CI](https://github.com/flatironinstitute/inferelator-prior/actions/workflows/python-package.yml/badge.svg)](https://github.com/flatironinstitute/inferelator-prior/actions/workflows/python-package.yml/)
 [![codecov](https://codecov.io/gh/flatironinstitute/inferelator-prior/branch/release/graph/badge.svg)](https://codecov.io/gh/flatironinstitute/inferelator-prior)
 
 
