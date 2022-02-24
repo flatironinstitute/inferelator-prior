@@ -6,6 +6,8 @@ channels:
 dependencies:
   - bedtools=2.30.0
   - ghostscript=9.18
+  - homer=4.11
+  - htslib=1.14
   - meme=5.4.1
   - ncbi-ngs-sdk=2.11.2
   - perl=5.32.1
