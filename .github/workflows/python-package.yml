@@ -21,11 +21,9 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         environment-file: test-environment.yml
-        auto-activate-base: false
         activate-environment: test_inferelator_prior
     - name: Conda Info
       run: |
-        conda activate test_inferelator_prior
         conda info
         conda list
     - name: Install dependencies
