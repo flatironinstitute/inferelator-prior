@@ -19,10 +19,10 @@ jobs:
     - name: Set up Conda Python ${{ matrix.python-version }}
       uses: conda-incubator/setup-miniconda@v2
       with:
-        activate-environment: test_inferelator_prior
         python-version: ${{ matrix.python-version }}
         environment-file: test-environment.yml
         auto-activate-base: false
+        activate-environment: test_inferelator_prior
     - name: Conda Info
       run: |
         conda info
