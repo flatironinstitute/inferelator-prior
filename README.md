@@ -4,8 +4,8 @@
 [![codecov](https://codecov.io/gh/flatironinstitute/inferelator-prior/branch/release/graph/badge.svg)](https://codecov.io/gh/flatironinstitute/inferelator-prior)
 
 
-This is a set of pipelines to create expression and prior matrices for network inference. They are designed to create
-data that is compatible with the [inferelator](https://github.com/flatironinstitute/inferelator) package. 
+This is a set of pipelines to create expression, dynamic response, and prior matrices for network inference. 
+They are designed to create data that is compatible with the [inferelator](https://github.com/flatironinstitute/inferelator) package. 
 
 ### Usage
 
