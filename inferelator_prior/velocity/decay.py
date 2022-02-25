@@ -2,9 +2,37 @@ import numpy as np
 from tqdm import trange
 
 
+def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, **kwargs):
+
+    n, m = expression_data.shape
+
+    min_time, max_time = np.min(time_data), np.max(time_data)
+
+    half_width = (max_time - min_time) / (2 * n_windows + 1)
+    centers = np.linspace(min_time + half_width, max_time - half_width, num=n_windows)
+
+    def _calc_window_decay(center):
+        lowend, highend = center - half_width, center + half_width
+
+        print(lowend)
+        print(highend)
+
+        keep_idx = (time_data >= lowend) & (time_data <= highend)
+
+        print(np.sum(keep_idx))
+
+        return calc_decay(expression_data[keep_idx, :],
+                          velocity_data[keep_idx, :],
+                          lstatus=False,
+                          **kwargs)
+
+    results = [_calc_window_decay(x) for x in centers]
+    return [x[0] for x in results], [x[1] for x in results], [x[2] for x in results]
+
+
 def calc_decay(expression_data, velocity_data, include_alpha=True,
                decay_quantiles=(0.00, 0.025), alpha_quantile=0.975,
-               add_pseudocount=False, log_expression=False):
+               add_pseudocount=False, log_expression=False, lstatus=True):
     """
     Estimate decay constant lambda and for dX/dt = -lambda X + alpha
 
@@ -24,12 +52,16 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     :param log_expression: Log expression for ratio calculation,
         defaults to False
     :type log_expression: bool, optional
+    :param lstatus: Display status bar, defaults to True
+    :type lstatus: bool, optional
     :raises ValueError: Raises a ValueError if arguments are invalid
     :return: Returns estimates for lambda [M,],
         standard error of lambda estimate [M,],
         and estimates of alpha [M,]
     :rtype: np.ndarray, np.ndarray, np.ndarray
     """
+
+    lstatus = trange if lstatus else range
 
     if expression_data.shape != velocity_data.shape:
         raise ValueError(f"Expression data {expression_data.shape} ",
@@ -88,7 +120,7 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     # Estimate lambda_hat via OLS slope and enforce positive lambda
     decay_est = np.array([_lstsq(expr[i, keep_observations[i, :]].reshape(-1, 1),
                                  velo[i, keep_observations[i, :]].reshape(-1, 1))
-                          for i in trange(m)])
+                          for i in lstatus(m)])
 
     np.minimum(decay_est, 0, out=decay_est)
 
@@ -96,7 +128,7 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     se_est = np.array([_calc_se(expr[i, keep_observations[i, :]].reshape(-1, 1),
                                 velo[i, keep_observations[i, :]].reshape(-1, 1),
                                 decay_est[i])
-                       for i in trange(m)])
+                       for i in lstatus(m)])
 
     return decay_est * -1, se_est, alpha_est
 

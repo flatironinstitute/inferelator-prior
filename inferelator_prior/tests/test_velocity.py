@@ -4,7 +4,7 @@ import numpy as np
 import numpy.testing as npt
 
 from inferelator_prior.velocity.calc import calc_velocity
-from inferelator_prior.velocity.decay import calc_decay
+from inferelator_prior.velocity.decay import calc_decay, calc_decay_sliding_windows
 
 N = 10
 
@@ -70,3 +70,18 @@ class TestVelocity(unittest.TestCase):
         npt.assert_array_almost_equal(alpha_est, correct_alpha)
         npt.assert_array_almost_equal(decays, correct_decays)
         npt.assert_array_almost_equal(decay_se, correct_ses)
+
+    def test_calc_decay_window(self):
+
+        d, se, al = calc_decay_sliding_windows(V_EXPRESSION, VELOCITY, TIME,
+                                               decay_quantiles=(0, 1),
+                                               include_alpha=False,
+                                               n_windows=5, add_pseudocount=True)
+
+        self.assertEqual(len(d), 5)
+        self.assertEqual(len(d[0]), 4)
+
+        correct_decays = np.maximum(V_SLOPES * -1, np.zeros_like(V_SLOPES))
+
+        for d_win in d:
+            npt.assert_array_almost_equal(d_win, correct_decays)
