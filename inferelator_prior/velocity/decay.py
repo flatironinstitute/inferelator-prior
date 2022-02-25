@@ -1,5 +1,5 @@
 import numpy as np
-from tqdm import trange
+from tqdm import trange, tqdm
 
 
 def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, **kwargs):
@@ -14,19 +14,14 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
     def _calc_window_decay(center):
         lowend, highend = center - half_width, center + half_width
 
-        print(lowend)
-        print(highend)
-
         keep_idx = (time_data >= lowend) & (time_data <= highend)
-
-        print(np.sum(keep_idx))
 
         return calc_decay(expression_data[keep_idx, :],
                           velocity_data[keep_idx, :],
                           lstatus=False,
                           **kwargs)
 
-    results = [_calc_window_decay(x) for x in centers]
+    results = [_calc_window_decay(x) for x in tqdm(centers)]
     return [x[0] for x in results], [x[1] for x in results], [x[2] for x in results]
 
 
