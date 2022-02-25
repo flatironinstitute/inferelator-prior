@@ -4,7 +4,7 @@ from tqdm import trange
 
 def calc_decay(expression_data, velocity_data, include_alpha=True,
                decay_quantiles=(0.00, 0.025), alpha_quantile=0.975,
-               add_pseudocount=False):
+               add_pseudocount=False, log_expression=False):
     """
     Estimate decay constant lambda and for dX/dt = -lambda X + alpha
 
@@ -18,9 +18,12 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     :param alpha_quantile: The quantile of observations to estimate alpha,
         defaults to 0.975
     :type alpha_quantile: float, optional
-    :param add_pseudocount: Add a pseudocount to expression for ratio 
+    :param add_pseudocount: Add a pseudocount to expression for ratio
         calculation, defaults to False
     :type add_pseudocount: bool, optional
+    :param log_expression: Log expression for ratio calculation,
+        defaults to False
+    :type log_expression: bool, optional
     :raises ValueError: Raises a ValueError if arguments are invalid
     :return: Returns estimates for lambda [M,],
         standard error of lambda estimate [M,],
@@ -39,13 +42,16 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     n, m = expression_data.shape
 
     # Get the velocity / expression ratio
-    # Set to 0 where expression is zero
-
-    if add_pseudocount:
+    # add_pseudocount and square_expression influence this only
+    # not decay calculations later
+    if add_pseudocount and log_expression:
+        ratio_data = np.divide(velocity_data, np.log1p(expression_data))
+    elif add_pseudocount:
         ratio_data = np.divide(velocity_data, expression_data + 1)
     else:
         ratio_data = np.full_like(velocity_data, np.nan, dtype=float)
-        np.divide(velocity_data, expression_data, out=ratio_data, where=expression_data != 0)
+        np.divide(velocity_data, np.log(expression_data) if log_expression else expression_data,
+                  out=ratio_data, where=expression_data != 0)
 
     # Find the quantile cutoffs for decay curve fitting
     ratio_cuts = np.nanquantile(ratio_data, decay_quantiles, axis=0)
