@@ -36,7 +36,7 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
     # Get the velocity / expression ratio
     # Set to 0 where expression is zero
-    ratio_data = np.zeros_like(velocity_data, dtype=float)
+    ratio_data = np.full_like(velocity_data, np.nan, dtype=float)
     np.divide(velocity_data, expression_data, out=ratio_data, where=expression_data != 0)
 
     # Find the quantile cutoffs for decay curve fitting
