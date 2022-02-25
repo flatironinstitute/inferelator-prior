@@ -42,10 +42,12 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     n, m = expression_data.shape
 
     # Get the velocity / expression ratio
-    # add_pseudocount and square_expression influence this only
+    # add_pseudocount and log_expression influence this only
     # not decay calculations later
     if add_pseudocount and log_expression:
-        ratio_data = np.divide(velocity_data, np.log1p(expression_data))
+        ratio_data = np.full_like(velocity_data, np.nan, dtype=float)
+        ratio_data = np.divide(velocity_data, np.log1p(expression_data),
+                               out=ratio_data, where=expression_data != 0)
     elif add_pseudocount:
         ratio_data = np.divide(velocity_data, expression_data + 1)
     else:
