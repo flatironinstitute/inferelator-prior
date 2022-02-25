@@ -22,7 +22,7 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
                           **kwargs)
 
     results = [_calc_window_decay(x) for x in tqdm(centers)]
-    return [x[0] for x in results], [x[1] for x in results], [x[2] for x in results]
+    return [x[0] for x in results], [x[1] for x in results], [x[2] for x in results], centers
 
 
 def calc_decay(expression_data, velocity_data, include_alpha=True,

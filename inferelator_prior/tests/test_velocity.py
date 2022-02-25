@@ -73,10 +73,10 @@ class TestVelocity(unittest.TestCase):
 
     def test_calc_decay_window(self):
 
-        d, se, al = calc_decay_sliding_windows(V_EXPRESSION, VELOCITY, TIME,
-                                               decay_quantiles=(0, 1),
-                                               include_alpha=False,
-                                               n_windows=5, add_pseudocount=True)
+        d, s, a, c = calc_decay_sliding_windows(V_EXPRESSION, VELOCITY, TIME,
+                                                decay_quantiles=(0, 1),
+                                                include_alpha=False,
+                                                n_windows=5, add_pseudocount=True)
 
         self.assertEqual(len(d), 5)
         self.assertEqual(len(d[0]), 4)
