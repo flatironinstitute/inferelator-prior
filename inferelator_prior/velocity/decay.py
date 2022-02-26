@@ -133,12 +133,12 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
 def _calc_se(x, y, slope):
 
-    mse_x = np.sum(np.square(x - np.mean(x)))
+    mse_x = np.sum(np.square(x - np.nanmean(x)))
     if mse_x == 0:
         return 0
 
     elif slope == 0:
-        return np.mean(np.square(y - np.mean(y))) / mse_x
+        return np.mean(np.square(y - np.nanmean(y))) / mse_x
 
     else:
         mse_y = np.sum(np.square(y - np.dot(x, slope)))
