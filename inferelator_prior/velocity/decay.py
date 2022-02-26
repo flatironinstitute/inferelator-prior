@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import trange, tqdm
 
 
-def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, include_alpha=True, **kwargs):
+def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, **kwargs):
 
     n, m = expression_data.shape
 
@@ -17,12 +17,11 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
         keep_idx = (time_data >= lowend) & (time_data <= highend)
 
         if np.sum(keep_idx) < 2:
-            return np.nan, np.nan, np.nan if include_alpha else None
+            return np.nan, np.nan, np.nan
 
         return calc_decay(expression_data[keep_idx, :],
                           velocity_data[keep_idx, :],
                           lstatus=False,
-                          include_alpha=include_alpha,
                           **kwargs)
 
     results = [_calc_window_decay(x) for x in tqdm(centers)]
