@@ -37,14 +37,15 @@ def main():
                                                     fuzzy_motif_names=args.fuzzy,
                                                     motif_info=_minfo,
                                                     shuffle=args.shuffle,
-                                                    save_locs=args.save_locs)
+                                                    save_locs=args.save_locs,
+                                                    save_locs_filtered=args.save_locs_filtered)
 
 
 def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='fimo', num_cores=1, motif_ic=6,
                                  tandem=100, truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, save_locs=False):
+                                 shuffle=None, save_locs=False, save_locs_filtered=False):
     """
     Build a motif-based prior from promoter sequences extracted into a FASTA.
 
@@ -114,6 +115,9 @@ def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='
         save_locs = output_prefix + "_tf_binding_locs.tsv"
         motif_peaks.to_csv(save_locs, sep="\t")
 
+    if save_locs_filtered:
+        save_locs_filtered = output_prefix + "_tf_binding_locs_filtered.tsv"
+
     # PROCESS SCORES INTO NETWORK ######################################################################################
     print("Processing TF binding sites into prior")
     MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
@@ -121,7 +125,8 @@ def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='
     raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
                                                             num_workers=num_cores, debug=debug, by_chromosome=False)
 
-    return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug)
+    return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug,
+                         save_locs_filtered=save_locs_filtered)
 
 
 if __name__ == '__main__':
