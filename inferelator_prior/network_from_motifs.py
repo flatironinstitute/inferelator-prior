@@ -59,7 +59,8 @@ def main():
                                                                         shuffle=args.shuffle,
                                                                         lowmem=not args.highmem,
                                                                         intergenic_only=_intergenic,
-                                                                        save_locs=args.save_locs)
+                                                                        save_locs=args.save_locs,
+                                                                        save_locs_filtered=args.save_locs_filtered)
 
     print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
 
@@ -87,6 +88,9 @@ def add_common_arguments(argp):
 
     argp.add_argument("-o", "--out", dest="out", help="Output PATH prefix", metavar="PATH", default="./prior")
     argp.add_argument("--save_location_data", dest="save_locs", help="Save a dataframe with TF->Gene binding locations",
+                      action='store_const', const=True, default=False)
+    argp.add_argument("--save_filtered_location_data", dest="save_locs_filtered",
+                      help="Save a dataframe with post-filter TF->Gene binding locations",
                       action='store_const', const=True, default=False)
     argp.add_argument("-c", "--cpu", dest="cores", help="Number of cores", metavar="CORES", type=int, default=None)
     argp.add_argument("--genes", dest="genes", help="A list of genes to build connectivity matrix for. Optional.",
@@ -158,7 +162,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, lowmem=False, intergenic_only=True, save_locs=False):
+                                 shuffle=None, lowmem=False, intergenic_only=True, save_locs=False, 
+                                 save_locs_filtered=False):
     """
     Build a motif-based prior from windows around annotated genes.
 
@@ -210,13 +215,18 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type intergenic_only: bool
     :param save_locs: Save motif mapping positions to a file, Defaults to False
     :type save_locs: bool
+    :param save_locs_filtered: Save filtered TF -> Gene mapping locations to a file, Defaults to False
+    :type save_locs_filtered: bool
     :return prior_matrix, raw_matrix, prior_data: Filtered connectivity matrix, unfiltered score matrix, and unfiltered
         long dataframe with scored TF->Gene pairs and genomic locations
     :rtype: pd.DataFrame, pd.DataFrame, pd.DataFrame
     """
 
-    if save_locs:
+    if save_locs and output_prefix is not None:
         save_locs = output_prefix + "_tf_binding_locs.tsv"
+
+    if save_locs_filtered and output_prefix is not None:
+        save_locs_filtered = output_prefix + "_tf_binding_locs_filtered.tsv"
 
     # PROCESS GENE ANNOTATIONS #########################################################################################
 
@@ -263,7 +273,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
         # PROCESS SCORES INTO NETWORK ##################################################################################
         print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
 
-        return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug)
+        return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug,
+                             save_locs_filtered=save_locs_filtered)
 
     else:
         MotifScan.set_type(scanner_type)
@@ -296,10 +307,10 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                      columns=tf_mi_df[MOTIF_NAME_COL].unique().tolist())
                 pr_da = None
 
-            if save_locs:
-                return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True), motif_peaks
-            else:
-                return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
+            raw_loc = motif_peaks if save_locs else None
+            net_results = network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
+
+            return net_results, raw_loc
 
         # MULTIPROCESS PER-TF ##########################################################################################
         prior_matrix, raw_matrix, prior_data = [], [], []
@@ -310,9 +321,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
                 if save_locs:
                     res[1].to_csv(save_locs, sep="\t", mode="w" if i == 0 else "a", header=i == 0)
-                    res = res[0]
                 
-                p_m, r_m, p_d = res
+                p_m, r_m, p_d = res[0]
 
                 print("Processed TF {i}/{n}".format(i=i, n=len(motif_information)))
                 prior_matrix.append(p_m)
@@ -336,6 +346,9 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
         if output_prefix is not None:
             print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
             (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
+
+        if save_locs_filtered:
+            prior_data.to_csv(save_locs_filtered, sep="\t")
 
         return prior_matrix, raw_matrix, prior_data
 
@@ -419,7 +432,8 @@ def network_scan(motifs, motif_information, genes, genomic_fasta_file, constrain
     return raw_matrix, prior_data
 
 
-def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug=False, silent=False):
+def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug=False, silent=False,
+                  save_locs_filtered=False):
 
     if output_prefix is not None:
         print("Writing output file {o}".format(o=output_prefix + "_unfiltered_matrix.tsv.gz"))
@@ -436,6 +450,10 @@ def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug
         prior_matrix.index.name = PRIOR_GENE
         pm_melt = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='Filter_Included')
         prior_data = pd.merge(prior_data, pm_melt)
+
+    if save_locs_filtered and output_prefix is not None:
+        print(f"Writing output file {save_locs_filtered}")
+        prior_data.to_csv(save_locs_filtered, sep="\t")
 
     return prior_matrix, raw_matrix, prior_data
 

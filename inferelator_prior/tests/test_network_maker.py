@@ -114,6 +114,7 @@ class TestFullStack(unittest.TestCase):
         self.assertTrue(os.path.exists(temp_path_prefix + "_unfiltered_matrix.tsv.gz"))
         self.assertTrue(os.path.exists(temp_path_prefix + "_edge_matrix.tsv.gz"))
         self.assertFalse(os.path.exists(temp_path_prefix + "_tf_binding_locs.tsv"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "_tf_binding_locs_filtered.tsv"))
 
         cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
                                                 "test_gal4.meme"),
@@ -145,3 +146,71 @@ class TestFullStack(unittest.TestCase):
         self.assertTrue(os.path.exists(temp_path_prefix + "c_unfiltered_matrix.tsv.gz"))
         self.assertTrue(os.path.exists(temp_path_prefix + "c_edge_matrix.tsv.gz"))
         self.assertTrue(os.path.exists(temp_path_prefix + "c_tf_binding_locs.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                        "test_gal4.meme"),
+                            os.path.join(artifact_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                            os.path.join(data_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                            window_size=(500, 100),
+                            intergenic_only=False,
+                            output_prefix=temp_path_prefix + "d",
+                            save_locs_filtered=True,
+                            lowmem=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "d_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "d_edge_matrix.tsv.gz"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "d_tf_binding_locs.tsv"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "d_tf_binding_locs_filtered.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                        "test_gal4.meme"),
+                            os.path.join(artifact_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                            os.path.join(data_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                            window_size=(500, 100),
+                            intergenic_only=False,
+                            output_prefix=temp_path_prefix + "e",
+                            save_locs_filtered=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "e_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "e_edge_matrix.tsv.gz"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "e_tf_binding_locs.tsv"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "e_tf_binding_locs_filtered.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                "test_gal4.meme"),
+                            os.path.join(artifact_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                            os.path.join(data_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                            window_size=(500, 100),
+                            intergenic_only=False,
+                            output_prefix=temp_path_prefix + "f",
+                            save_locs_filtered=True,
+                            save_locs=True,
+                            lowmem=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_edge_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_tf_binding_locs.tsv"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_tf_binding_locs_filtered.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                "test_gal4.meme"),
+                            os.path.join(artifact_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                            os.path.join(data_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                            window_size=(500, 100),
+                            intergenic_only=False,
+                            output_prefix=temp_path_prefix + "g",
+                            save_locs_filtered=True,
+                            save_locs=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "g_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "g_edge_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "g_tf_binding_locs.tsv"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "g_tf_binding_locs_filtered.tsv"))

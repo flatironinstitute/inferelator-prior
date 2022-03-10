@@ -1,5 +1,9 @@
 ### Version 0.3.3
 
+* Produce a filtered TF binding table when `--save_filtered_location_data` is set.
+
+### Version 0.3.3
+
 * Correctly produced a TF binding table when `--save_location_data` is set.
 
 ### Version 0.3.2
