@@ -103,3 +103,23 @@ class TestTimes(unittest.TestCase):
                                          time_thresholds=time_thresholds,
                                          time_quantiles=None)
         npt.assert_array_almost_equal(np.array([ 0.,  2.5,  5.,  7.5, 10., 10., 20., 30., 40., 50.]), n)
+
+    def test_group_time_quantile(self):
+
+        times = np.arange(100)
+        time_labels = np.array([0] * 50 + [1] * 50)
+        time_thresholds = [(0, 0, 10), (1, 10, 50)]
+
+        correct_times = np.concatenate((np.linspace(0, 10, 50), np.linspace(10, 50, 50)))
+
+        n = assign_times_from_pseudotime(times, time_group_labels=time_labels,
+                                         time_thresholds=time_thresholds,
+                                         time_quantiles=None)
+        npt.assert_array_almost_equal(correct_times, n)
+
+        correct_times_quantiles = np.concatenate((np.linspace(-5, 15, 50), np.linspace(-10, 70, 50)))
+
+        n = assign_times_from_pseudotime(times, time_group_labels=time_labels,
+                                         time_thresholds=time_thresholds,
+                                         time_quantiles=(0.25, 0.75))
+        npt.assert_array_almost_equal(correct_times_quantiles, n)

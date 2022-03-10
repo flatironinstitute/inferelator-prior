@@ -22,6 +22,7 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
     :type time_quantiles: tuple(float, float), optional
     """
 
+    ### CHECK ARGUMENTS ###
     if total_time is None and time_thresholds is None:
         raise ValueError("total_time or time_threshold must be provided")
 
@@ -33,10 +34,14 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
 
     if time_thresholds is not None and time_group_labels is None:
         raise ValueError("time_group_labels must be provided if time_thresholds is set")
-   
-    if total_time is not None:
-        return _quantile_shift(_interval_normalize(pseudotimes), time_quantiles) * total_time
 
+    pseudotimes = _interval_normalize(pseudotimes)
+
+    ### DO TOTAL TIME IF THAT'S SET ###    
+    if total_time is not None:
+        return _quantile_shift(pseudotimes, time_quantiles) * total_time
+
+    ### WARN IF GROUPS AREN'T IN ALIGNMENT ###
     time_groups = set(np.unique(time_group_labels))
     time_threshold_groups = set(x[0] for x in time_thresholds)
 
@@ -48,19 +53,18 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
     if len(_diff_in_labels) > 0:
         warnings.warn(f"Labels {list(_diff_in_labels)} in time labels are not found in time_threshold")
 
+    ### DO GROUPWISE TIME ASSIGNMENT ###
     real_times = np.full_like(pseudotimes, np.nan, dtype=float)
-    pseudotimes = _interval_normalize(pseudotimes)
-    
+
     for group, rt_start, rt_stop in time_thresholds:
         group_idx = time_group_labels == group
 
         if group_idx.sum() == 0:
-            raise ValueError(f"No {group} found in time_group_labels {np.unique(time_group_labels)}")
+            continue
 
         rt_interval = rt_stop - rt_start
-        group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) 
-
-        real_times[group_idx] = group_pts * rt_interval + rt_start
+        group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
+        real_times[group_idx] = group_pts 
 
     return real_times
 
@@ -77,13 +81,15 @@ def _quantile_shift(arr, quantiles):
     :rtype: np.ndarray
     """
 
+    arr = _interval_normalize(arr)
+
     if quantiles is None:
         return arr
 
     lq, rq = np.nanquantile(arr, quantiles)
 
     if lq != rq:
-        arr = arr - lq / (rq - lq)
+        arr = (arr - lq) / (rq - lq)
 
     return arr
 
