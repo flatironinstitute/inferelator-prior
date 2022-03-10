@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats 
 from tqdm import trange, tqdm
 
 
@@ -31,11 +32,60 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
     return [x[0] for x in results], [x[1] for x in results], [x[2] for x in results], centers
 
 
+def calc_decay_bootstraps(expression_data, velocity_data, n_bootstraps=15, bootstrap_ratio=1.0,
+                          random_seed=8675309, lstatus=True, confidence_interval = 0.95, 
+                          **kwargs):
+    """
+    Estimate decay constant lambda for dX/dt = -lambda X + alpha and calculate
+    confidence intervals by bootstrapping.
+
+    :param expression_data: Gene expression data [N Observations x M Genes]
+    :type expression_data: np.ndarray (float)
+    :param velocity_data: Gene velocity data [N Observations x M Genes]
+    :type velocity_data: np.ndarray (float)
+    :param n_bootstraps: Number of bootstraps, defaults to 15
+    :type n_bootstraps: int, optional
+    :param bootstrap_ratio: Fraction of samples to select for each bootstrap,
+        defaults to 1.0
+    :type bootstrap_ratio: float, optional
+    :param random_seed: Seed for bootstrapping RNG, defaults to 8675309
+    :type random_seed: int, optional
+    :param lstatus: Display status bar, defaults to True
+    :type lstatus: bool, optional
+    :param confidence_interval: Confidence interval between 0 and 1, defaults to 0.95
+    :type confidence_interval: float, optional
+    """
+
+    if n_bootstraps < 2:
+        raise ValueError(f'n_bootstraps must be > 1, {n_bootstraps} provided')
+
+    lstatus = trange if lstatus else range
+    rng = np.random.RandomState(seed=random_seed)
+
+    # Number to select per bootstrap
+    # Minimum of 1
+    n_to_choose = max(1, int(bootstrap_ratio * expression_data.shape[0]))
+
+    def _calc_boot():
+        pick_idx = rng.choice(np.arange(expression_data.shape[0]), size=n_to_choose)
+        return calc_decay(expression_data[pick_idx, :],
+                          velocity_data[pick_idx, :],
+                          lstatus=False, **kwargs)
+
+    bootstrap_results = [_calc_boot() for _ in range(n_bootstraps)]
+    decays = np.vstack([x[0] for x in bootstrap_results])
+    alphas = np.vstack([x[2] for x in bootstrap_results]) if bootstrap_results[0][2] is not None else None
+
+    t = scipy.stats.t.ppf((1 + confidence_interval) / 2, n_bootstraps - 1)
+    ci = t * np.std(decays, axis=0) / np.sqrt(n_bootstraps)
+
+    return np.mean(decays, axis=0), ci, alphas
+
 def calc_decay(expression_data, velocity_data, include_alpha=True,
                decay_quantiles=(0.00, 0.025), alpha_quantile=0.975,
                add_pseudocount=False, log_expression=False, lstatus=True):
     """
-    Estimate decay constant lambda and for dX/dt = -lambda X + alpha
+    Estimate decay constant lambda for dX/dt = -lambda X + alpha
 
     :param expression_data: Gene expression data [N Observations x M Genes]
     :type expression_data: np.ndarray (float)
@@ -115,6 +165,8 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
     keep_observations = np.array(keep_observations.T, order="C")
 
     def _lstsq(x, y):
+        if x.shape[0] == 0:
+            return 0
         sl, ssr, rank, s = np.linalg.lstsq(x, y, rcond=None)
         return sl[0][0]
 
@@ -135,6 +187,9 @@ def calc_decay(expression_data, velocity_data, include_alpha=True,
 
 
 def _calc_se(x, y, slope):
+
+    if x.shape[0] == 0:
+        return 0
 
     mse_x = np.sum(np.square(x - np.nanmean(x)))
     if mse_x == 0:

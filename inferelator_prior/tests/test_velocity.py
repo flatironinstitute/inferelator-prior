@@ -5,6 +5,7 @@ import numpy.testing as npt
 
 from inferelator_prior.velocity.calc import calc_velocity
 from inferelator_prior.velocity.decay import calc_decay, calc_decay_sliding_windows
+from inferelator_prior.velocity.times import assign_times_from_pseudotime
 
 N = 10
 
@@ -85,3 +86,20 @@ class TestVelocity(unittest.TestCase):
 
         for d_win in d:
             npt.assert_array_almost_equal(d_win, correct_decays)
+
+class TestTimes(unittest.TestCase):
+
+    def test_total_time(self):
+
+        n = assign_times_from_pseudotime(TIME, total_time=72, time_quantiles=None)
+        npt.assert_array_almost_equal(TIME * 8., n)
+
+    def test_group_time(self):
+
+        time_labels = np.array([0] * 5 + [1] * 5)
+        time_thresholds = [(0, 0, 10), (1, 10, 50)]
+
+        n = assign_times_from_pseudotime(TIME, time_group_labels=time_labels,
+                                         time_thresholds=time_thresholds,
+                                         time_quantiles=None)
+        npt.assert_array_almost_equal(np.array([ 0.,  2.5,  5.,  7.5, 10., 10., 20., 30., 40., 50.]), n)

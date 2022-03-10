@@ -162,7 +162,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, lowmem=False, intergenic_only=True, save_locs=False, 
+                                 shuffle=None, lowmem=True, intergenic_only=True, save_locs=False, 
                                  save_locs_filtered=False):
     """
     Build a motif-based prior from windows around annotated genes.
