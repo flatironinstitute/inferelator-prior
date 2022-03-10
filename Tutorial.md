@@ -31,7 +31,27 @@ Build Network
 Change to the example data directory in the github repository ``cd data``, 
 or download example data from the [github inferelator-prior repo](https://github.com/flatironinstitute/inferelator-prior/tree/release/data).
 
-First, create a summary of the motif MEME file obtained from [CIS-BP](http://cisbp.ccbr.utoronto.ca/bulk.php):
+First, create a MEME file from the PWMs available at [CIS-BP](http://cisbp.ccbr.utoronto.ca/bulk.php):
+
+As an example, select the `Saccharomyces cerevisiae` species, and select the `TF info` and `PWMs` options.
+Then download and uncompress the `Saccharomyces_cerevisiae_XXX.zip` file.
+
+```ls -l
+drwxr-xr-x 2 57344  pwms_all_motifs
+-rw-r--r-- 1 4536   README.txt
+-rw-r--r-- 1 447070 TF_Information_all_motifs_plus.txt
+-rw-r--r-- 1 205424 TF_Information_all_motifs.txt
+-rw-r--r-- 1 194684 TF_Information.txt
+```
+
+These loose PWM files can be formatted into a MEME file and info file with the following command:
+
+```
+python -m inferelator_prior.pwm_to_meme --motif pwms_all_motifs/* --info TF_Information_all_motifs_plus.txt --out Scer.cisbp.meme
+```
+
+The motif information can then be summarized from the created MEME file
+
 ```
 python -m inferelator_prior.motif_information --motif Scer.cisbp.meme --out Scer.cisbp.info.tsv
 ```
