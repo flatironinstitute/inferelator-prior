@@ -1,5 +1,5 @@
 import numpy as np
-
+import warnings
 
 def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thresholds=None, total_time=None,
                                  time_quantiles=(0.05, 0.95)):
@@ -42,14 +42,15 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
 
     _diff_in_thresholds = time_threshold_groups.difference(time_groups)
     if len(_diff_in_thresholds) > 0:
-        raise ValueError(f"Labels {list(_diff_in_thresholds)} in time_threshold are not found in time labels")
+        warnings.warn(f"Labels {list(_diff_in_thresholds)} in time_threshold are not found in time labels")
 
     _diff_in_labels = time_groups.difference(time_threshold_groups)
     if len(_diff_in_labels) > 0:
-        raise ValueError(f"Labels {list(_diff_in_labels)} in time labels are not found in time_threshold")
+        warnings.warn(f"Labels {list(_diff_in_labels)} in time labels are not found in time_threshold")
 
     real_times = np.full_like(pseudotimes, np.nan, dtype=float)
-
+    pseudotimes = _interval_normalize(pseudotimes)
+    
     for group, rt_start, rt_stop in time_thresholds:
         group_idx = time_group_labels == group
 
@@ -57,7 +58,7 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
             raise ValueError(f"No {group} found in time_group_labels {np.unique(time_group_labels)}")
 
         rt_interval = rt_stop - rt_start
-        group_pts = _quantile_shift(_interval_normalize(pseudotimes[group_idx]), time_quantiles) 
+        group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) 
 
         real_times[group_idx] = group_pts * rt_interval + rt_start
 
