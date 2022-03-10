@@ -57,8 +57,9 @@ def main():
                                                                         fuzzy_motif_names=args.fuzzy,
                                                                         motif_info=_minfo,
                                                                         shuffle=args.shuffle,
-                                                                        lowmem=args.lowmem,
-                                                                        intergenic_only=_intergenic)
+                                                                        lowmem=not args.highmem,
+                                                                        intergenic_only=_intergenic,
+                                                                        save_locs=args.save_locs)
 
     print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
 
@@ -98,8 +99,10 @@ def add_common_arguments(argp):
                       const=True, default=False)
     argp.add_argument("--shuffle", dest="shuffle", help="Shuffle motif PWMs using SEED", metavar="SEED",
                       const=42, default=None, action='store', nargs='?', type=int)
-    argp.add_argument("--lowmem", dest="lowmem", help="Run in low memory mode", action='store_const',
-                      const=True, default=False)
+    argp.add_argument("--lowmem", dest="lowmem", help="DEPRECATED: Run in low memory mode (replaced by --highmem)",
+                      action='store_const', const=True, default=False)
+    argp.add_argument("--highmem", dest="highmem", help="Run in high memory mode (no performance benefits)",
+                      action='store_const', const=True, default=False)
 
 
 def parse_common_arguments(args):
@@ -155,7 +158,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, lowmem=False, intergenic_only=True):
+                                 shuffle=None, lowmem=False, intergenic_only=True, save_locs=False):
     """
     Build a motif-based prior from windows around annotated genes.
 
@@ -205,10 +208,15 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     :type lowmem: bool
     :param intergenic_only: Only scan intergenic regions for regulatory motifs
     :type intergenic_only: bool
+    :param save_locs: Save motif mapping positions to a file, Defaults to False
+    :type save_locs: bool
     :return prior_matrix, raw_matrix, prior_data: Filtered connectivity matrix, unfiltered score matrix, and unfiltered
         long dataframe with scored TF->Gene pairs and genomic locations
     :rtype: pd.DataFrame, pd.DataFrame, pd.DataFrame
     """
+
+    if save_locs:
+        save_locs = output_prefix + "_tf_binding_locs.tsv"
 
     # PROCESS GENE ANNOTATIONS #########################################################################################
 
@@ -249,7 +257,8 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
         raw_matrix, prior_data = network_scan(motifs, motif_information, genes, genomic_fasta_file,
                                               constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
                                               scanner_type=scanner_type, scanner_thresh=scanner_thresh,
-                                              num_cores=num_cores, motif_ic=motif_ic, tandem=tandem, debug=debug)
+                                              num_cores=num_cores, motif_ic=motif_ic, tandem=tandem, debug=debug,
+                                              save_locs=save_locs)
 
         # PROCESS SCORES INTO NETWORK ##################################################################################
         print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
@@ -281,19 +290,30 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
             if motif_peaks is not None:
                 ra_ma, pr_da = summarize_target_per_regulator(genes, motif_peaks, tf_mi_df, num_workers=1, debug=debug,
                                                               silent=True)
+
             else:
                 ra_ma = pd.DataFrame(0.0, index=genes[GTF_GENENAME],
                                      columns=tf_mi_df[MOTIF_NAME_COL].unique().tolist())
                 pr_da = None
 
-            return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
+            if save_locs:
+                return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True), motif_peaks
+            else:
+                return network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
 
         # MULTIPROCESS PER-TF ##########################################################################################
         prior_matrix, raw_matrix, prior_data = [], [], []
 
         with pathos.multiprocessing.Pool(processes=num_cores, maxtasksperchild=50) as pool:
             motif_information = [df for _, df in motif_information.groupby(MOTIF_NAME_COL)]
-            for i, (p_m, r_m, p_d) in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
+            for i, res in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
+
+                if save_locs:
+                    res[1].to_csv(save_locs, sep="\t", mode="w" if i == 0 else "a", header=i == 0)
+                    res = res[0]
+                
+                p_m, r_m, p_d = res
+
                 print("Processed TF {i}/{n}".format(i=i, n=len(motif_information)))
                 prior_matrix.append(p_m)
                 raw_matrix.append(r_m)
@@ -361,7 +381,7 @@ def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=
 
 def network_scan(motifs, motif_information, genes, genomic_fasta_file, constraint_bed_file=None,
                  promoter_bed_file=None, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                 scanner_thresh="1e-4", debug=False, silent=False):
+                 scanner_thresh="1e-4", debug=False, silent=False, save_locs=False):
     # Load and scan target chromatin peaks
     MotifScan.set_type(scanner_type)
 
@@ -378,6 +398,10 @@ def network_scan(motifs, motif_information, genes, genomic_fasta_file, constrain
     if debug:
         for chromosome, df in motif_peaks[MotifScan.chromosome_col].value_counts().iteritems():
             print("Chromosome {c}: {n} motif hits".format(c=chromosome, n=df))
+
+    if save_locs:
+        print(f"Writing output file {save_locs}")
+        motif_peaks.to_csv(save_locs, sep="\t")
 
     # PROCESS CHROMATIN PEAKS INTO NETWORK MATRIX ######################################################################
 

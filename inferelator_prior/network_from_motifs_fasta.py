@@ -1,7 +1,7 @@
 from inferelator_prior.network_from_motifs import (add_common_arguments, parse_common_arguments,
                                                    load_and_process_motifs, network_build)
-from inferelator_prior.processor.gtf import GTF_CHROMOSOME, GTF_GENENAME, get_fasta_lengths, select_genes
-from inferelator_prior.processor.prior import summarize_target_per_regulator, MotifScorer, PRIOR_TF, PRIOR_GENE
+from inferelator_prior.processor.gtf import GTF_GENENAME, get_fasta_lengths, select_genes
+from inferelator_prior.processor.prior import summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 
 import argparse
@@ -36,14 +36,15 @@ def main():
                                                     debug=args.debug,
                                                     fuzzy_motif_names=args.fuzzy,
                                                     motif_info=_minfo,
-                                                    shuffle=args.shuffle)
+                                                    shuffle=args.shuffle,
+                                                    save_locs=args.save_locs)
 
 
 def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='fimo', num_cores=1, motif_ic=6,
                                  tandem=100, truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None):
+                                 shuffle=None, save_locs=False):
     """
     Build a motif-based prior from promoter sequences extracted into a FASTA.
 
@@ -108,6 +109,10 @@ def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='
     if gene_constraint_list is not None:
         genes = select_genes(genes, gene_constraint_list)
         motif_peaks = motif_peaks.loc[motif_peaks[MotifScan.chromosome_col].isin(genes[GTF_GENENAME]), :]
+
+    if save_locs:
+        save_locs = output_prefix + "_tf_binding_locs.tsv"
+        motif_peaks.to_csv(save_locs, sep="\t")
 
     # PROCESS SCORES INTO NETWORK ######################################################################################
     print("Processing TF binding sites into prior")

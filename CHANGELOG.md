@@ -1,3 +1,7 @@
+### Version 0.3.3
+
+* Correctly produced a TF binding table when `--save_location_data` is set.
+
 ### Version 0.3.2
 
 * Corrected a parsing error when reading CisBP PWM files 

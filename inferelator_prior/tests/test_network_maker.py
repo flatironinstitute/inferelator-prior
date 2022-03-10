@@ -1,6 +1,7 @@
 import os
 import unittest
 import pandas.testing as pdt
+import tempfile
 
 from inferelator_prior.motifs import meme, select_motifs, truncate_motifs
 from inferelator_prior.processor import gtf
@@ -10,7 +11,8 @@ from inferelator_prior.motif_information import summarize_motifs
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
 data_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "../../data/")
-
+temppath = tempfile.TemporaryDirectory(prefix="ip_test_")
+temp_path_prefix = os.path.join(temppath.name, "prior")
 
 class TestConstraints(unittest.TestCase):
 
@@ -91,8 +93,55 @@ class TestFullStack(unittest.TestCase):
                                                    os.path.join(data_path,
                                                                 "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
                                                    window_size=(500, 100),
-                                                   intergenic_only=False)
+                                                   intergenic_only=False,
+                                                   output_prefix=None)
 
         self.assertEqual(cut.sum().sum(), 3)
         self.assertListEqual(cut[cut["GAL4"]].index.tolist(), ["YBR018C", "YBR019C", "YBR020W"])
         self.assertEqual((raw > 0).sum().sum(), 3)
+
+    def test_file_output(self):
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                                        "test_gal4.meme"),
+                                            os.path.join(artifact_path,
+                                                        "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                                            os.path.join(data_path,
+                                                        "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                                            window_size=(500, 100),
+                                            intergenic_only=False,
+                                            output_prefix=temp_path_prefix)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "_edge_matrix.tsv.gz"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "_tf_binding_locs.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                                "test_gal4.meme"),
+                                    os.path.join(artifact_path,
+                                                "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                                    os.path.join(data_path,
+                                                "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                                    window_size=(500, 100),
+                                    intergenic_only=False,
+                                    output_prefix=temp_path_prefix + "b",
+                                    save_locs=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "b_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "b_edge_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "b_tf_binding_locs.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                        "test_gal4.meme"),
+                            os.path.join(artifact_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                            os.path.join(data_path,
+                                        "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                            window_size=(500, 100),
+                            intergenic_only=False,
+                            output_prefix=temp_path_prefix + "c",
+                            save_locs=True,
+                            lowmem=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "c_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "c_edge_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "c_tf_binding_locs.tsv"))
