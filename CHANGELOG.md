@@ -1,3 +1,7 @@
+### Version 0.3.5
+
+* Fix bug when no regulators are found and saving locations is set.
+
 ### Version 0.3.4
 
 * Produce a filtered TF binding table when `--save_filtered_location_data` is set.

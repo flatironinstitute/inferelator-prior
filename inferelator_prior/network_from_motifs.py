@@ -319,7 +319,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
             motif_information = [df for _, df in motif_information.groupby(MOTIF_NAME_COL)]
             for i, res in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
 
-                if save_locs:
+                if save_locs and res[1] is not None:
                     res[1].to_csv(save_locs, sep="\t", mode="w" if i == 0 else "a", header=i == 0)
                 
                 p_m, r_m, p_d = res[0]
@@ -347,7 +347,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
             print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
             (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
 
-        if save_locs_filtered:
+        if save_locs_filtered and prior_data is not None:
             prior_data.to_csv(save_locs_filtered, sep="\t")
 
         return prior_matrix, raw_matrix, prior_data
@@ -412,7 +412,7 @@ def network_scan(motifs, motif_information, genes, genomic_fasta_file, constrain
         for chromosome, df in motif_peaks[MotifScan.chromosome_col].value_counts().iteritems():
             print("Chromosome {c}: {n} motif hits".format(c=chromosome, n=df))
 
-    if save_locs:
+    if save_locs and motif_peaks is not None:
         print(f"Writing output file {save_locs}")
         motif_peaks.to_csv(save_locs, sep="\t")
 
@@ -451,7 +451,7 @@ def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug
         pm_melt = prior_matrix.reset_index().melt(id_vars=PRIOR_GENE, var_name=PRIOR_TF, value_name='Filter_Included')
         prior_data = pd.merge(prior_data, pm_melt)
 
-    if save_locs_filtered and output_prefix is not None:
+    if save_locs_filtered and output_prefix is not None and prior_data is not None:
         print(f"Writing output file {save_locs_filtered}")
         prior_data.to_csv(save_locs_filtered, sep="\t")
 
