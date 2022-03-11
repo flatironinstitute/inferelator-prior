@@ -1,3 +1,7 @@
+### Version 0.3.6
+
+* Fix bug in saved location output
+
 ### Version 0.3.5
 
 * Fix bug when no regulators are found and saving locations is set.

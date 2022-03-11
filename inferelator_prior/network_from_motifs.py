@@ -315,12 +315,15 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
         # MULTIPROCESS PER-TF ##########################################################################################
         prior_matrix, raw_matrix, prior_data = [], [], []
 
-        with pathos.multiprocessing.Pool(processes=num_cores, maxtasksperchild=50) as pool:
+        with pathos.multiprocessing.Pool(processes=num_cores, maxtasksperchild=10) as pool:
             motif_information = [df for _, df in motif_information.groupby(MOTIF_NAME_COL)]
+            _is_first = True
             for i, res in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
 
                 if save_locs and res[1] is not None:
-                    res[1].to_csv(save_locs, sep="\t", mode="w" if i == 0 else "a", header=i == 0)
+                    res[1].iloc[:, 0:-1].to_csv(save_locs, sep="\t", mode="w" if _is_first else "a",
+                                                header=_is_first, index=False)
+                    _is_first = False
                 
                 p_m, r_m, p_d = res[0]
 
@@ -348,7 +351,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
             (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
 
         if save_locs_filtered and prior_data is not None:
-            prior_data.to_csv(save_locs_filtered, sep="\t")
+            prior_data.to_csv(save_locs_filtered, sep="\t", index=False)
 
         return prior_matrix, raw_matrix, prior_data
 
@@ -414,7 +417,7 @@ def network_scan(motifs, motif_information, genes, genomic_fasta_file, constrain
 
     if save_locs and motif_peaks is not None:
         print(f"Writing output file {save_locs}")
-        motif_peaks.to_csv(save_locs, sep="\t")
+        motif_peaks.iloc[:, 0:-1].to_csv(save_locs, sep="\t", index=False)
 
     # PROCESS CHROMATIN PEAKS INTO NETWORK MATRIX ######################################################################
 
@@ -453,7 +456,7 @@ def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug
 
     if save_locs_filtered and output_prefix is not None and prior_data is not None:
         print(f"Writing output file {save_locs_filtered}")
-        prior_data.to_csv(save_locs_filtered, sep="\t")
+        prior_data.to_csv(save_locs_filtered, sep="\t", index=False)
 
     return prior_matrix, raw_matrix, prior_data
 

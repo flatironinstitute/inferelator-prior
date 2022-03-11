@@ -113,7 +113,7 @@ def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='
 
     if save_locs:
         save_locs = output_prefix + "_tf_binding_locs.tsv"
-        motif_peaks.to_csv(save_locs, sep="\t")
+        motif_peaks.to_csv(save_locs, sep="\t", index=False)
 
     if save_locs_filtered:
         save_locs_filtered = output_prefix + "_tf_binding_locs_filtered.tsv"
