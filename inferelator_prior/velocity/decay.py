@@ -3,7 +3,8 @@ import scipy.stats
 from tqdm import trange, tqdm
 
 
-def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, include_alpha=True, **kwargs):
+def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, include_alpha=True,
+                               bootstrap_estimates=False, **kwargs):
 
     n, m = expression_data.shape
 
@@ -22,7 +23,9 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
                     np.full(expression_data.shape[1], np.nan),
                     np.full(expression_data.shape[1], np.nan) if include_alpha else None)
 
-        return calc_decay(expression_data[keep_idx, :],
+        decay_func = calc_decay_bootstraps if bootstrap_estimates else calc_decay
+
+        return decay_func(expression_data[keep_idx, :],
                           velocity_data[keep_idx, :],
                           lstatus=False,
                           include_alpha=include_alpha,
@@ -33,7 +36,7 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
 
 
 def calc_decay_bootstraps(expression_data, velocity_data, n_bootstraps=15, bootstrap_ratio=1.0,
-                          random_seed=8675309, lstatus=True, confidence_interval = 0.95, 
+                          random_seed=8675309, lstatus=True, confidence_interval = 0.95,
                           **kwargs):
     """
     Estimate decay constant lambda for dX/dt = -lambda X + alpha and calculate
