@@ -48,7 +48,7 @@ def _calc_local_velocity(expr, time_axis, center_index, wrap_time=None):
 
     # Calculate change in expression and time relative to the centerpoint
     y_diff = _np.subtract(expr, expr[center_index, :])
-    time_axis = (time_axis - time_axis[center_index]).reshape(-1, 1)
+    time_axis = (time_axis - time_axis[center_index])
 
     _time_nan = _np.isnan(time_axis)
 
@@ -60,9 +60,10 @@ def _calc_local_velocity(expr, time_axis, center_index, wrap_time=None):
             return _np.full(m, _np.nan)
 
         time_axis = time_axis[~_time_nan]
-        expr = expr[~_time_nan, :]
+        y_diff = y_diff[~_time_nan, :]
 
     # Calculate (XT * X)^-1 * XT
+    time_axis = time_axis.reshape(-1, 1)
     x_for_hat = _np.dot(_np.linalg.inv(_np.dot(time_axis.T, time_axis)), time_axis.T)
 
     # Return the slope for each gene as velocity
