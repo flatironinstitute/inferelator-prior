@@ -2,7 +2,7 @@ import numpy as _np
 from scipy.sparse import issparse as _is_sparse
 from tqdm import trange
 
-def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors, wrap_time=120):
+def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors, wrap_time=None):
     """
     Calculate local RNA velocity
 
@@ -21,7 +21,7 @@ def calc_velocity(expr, time_axis, neighbor_graph, n_neighbors, wrap_time=120):
                        for i, n_idx in n_gen])
 
 
-def _calc_local_velocity(expr, time_axis, center_index, wrap_time=120):
+def _calc_local_velocity(expr, time_axis, center_index, wrap_time=None):
     """
     Calculate a local rate of change
 
@@ -33,6 +33,9 @@ def _calc_local_velocity(expr, time_axis, center_index, wrap_time=120):
 
     n, m = expr.shape
 
+    if _np.isnan(time_axis[center_index]):
+        return _np.full(m, _np.nan)
+
     if wrap_time is not None:
 
         wtime_l, wtime_r = wrap_time * 0.25, wrap_time * 0.75
@@ -43,13 +46,24 @@ def _calc_local_velocity(expr, time_axis, center_index, wrap_time=120):
         elif time_axis[center_index] < wtime_l:
             time_axis[time_axis > wtime_r] = time_axis[time_axis > wtime_r] - wrap_time
 
+    # Calculate change in expression and time relative to the centerpoint
+    y_diff = _np.subtract(expr, expr[center_index, :])
     time_axis = (time_axis - time_axis[center_index]).reshape(-1, 1)
+
+    _time_nan = _np.isnan(time_axis)
+
+    # Remove any data where the time value is NaN
+    if _np.sum(_time_nan) > 0:
+
+        # If there's only 3 or fewer data points remaining, return NaN
+        if _np.sum(~_time_nan) < 4:
+            return _np.full(m, _np.nan)
+
+        time_axis = time_axis[~_time_nan]
+        expr = expr[~_time_nan, :]
 
     # Calculate (XT * X)^-1 * XT
     x_for_hat = _np.dot(_np.linalg.inv(_np.dot(time_axis.T, time_axis)), time_axis.T)
-
-    # Calculate change in expression relative to the centerpoint
-    y_diff = _np.subtract(expr, expr[center_index, :])
 
     # Return the slope for each gene as velocity
     return _np.array([_np.dot(x_for_hat, y_diff[:, i])[0] for i in range(m)])
