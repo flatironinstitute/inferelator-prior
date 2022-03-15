@@ -33,7 +33,7 @@ def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_wind
     n, m = expression_data.shape
 
     if n_windows is not None and centers is None and width is None:
-        min_time, max_time = np.min(time_data), np.max(time_data)
+        min_time, max_time = np.nanmin(time_data), np.nanmax(time_data)
 
         half_width = (max_time - min_time) / (2 * n_windows + 1)
         centers = np.linspace(min_time + half_width, max_time - half_width, num=n_windows)
