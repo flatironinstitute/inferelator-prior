@@ -3,20 +3,51 @@ import scipy.stats
 from tqdm import trange, tqdm
 
 
-def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=100, include_alpha=True,
-                               bootstrap_estimates=False, **kwargs):
+def calc_decay_sliding_windows(expression_data, velocity_data, time_data, n_windows=None, centers=None, width=None,
+                               include_alpha=True, bootstrap_estimates=False, **kwargs):
+    """
+    Calculate decay constants in a sliding window across a time axis
+
+    :param expression_data: Gene expression data [N Observations x M Genes]
+    :type expression_data: np.ndarray (float)
+    :param velocity_data: Gene velocity data [N Observations x M Genes]
+    :type velocity_data: np.ndarray (float)
+    :param time_data: Time data [N Observations, ]
+    :type time_data: np.ndarray (float)
+    :param n_windows: Number of windows on the time_data axis, defaults to None.
+        Either this or centers & width must be set
+    :type n_windows: integer, optional
+    :param centers: Center points for the windows, defaults to None
+    :type centers: np.ndarray, optional
+    :param width: Width of the windows, defaults to None
+    :type width: float, optional
+    :param include_alpha: Include estimates of alpha parameter, defaults to True
+    :type include_alpha: bool, optional
+    :param bootstrap_estimates: Bootstrap estimates of decay & confidence interval, defaults to False
+    :type bootstrap_estimates: bool, optional
+    :raises ValueError: Raises ValueError when the wrong combination of kwargs is set
+    :return: Returns 
+    :rtype: _type_
+    """
 
     n, m = expression_data.shape
 
-    min_time, max_time = np.min(time_data), np.max(time_data)
+    if n_windows is not None and centers is None and width is None:
+        min_time, max_time = np.min(time_data), np.max(time_data)
 
-    half_width = (max_time - min_time) / (2 * n_windows + 1)
-    centers = np.linspace(min_time + half_width, max_time - half_width, num=n_windows)
+        half_width = (max_time - min_time) / (2 * n_windows + 1)
+        centers = np.linspace(min_time + half_width, max_time - half_width, num=n_windows)
+
+    elif centers is not None and width is not None:
+        half_width = width / 2
+
+    else:
+        raise ValueError("Pass n_windows or pass both centers and width")
 
     def _calc_window_decay(center):
         lowend, highend = center - half_width, center + half_width
 
-        keep_idx = (time_data >= lowend) & (time_data <= highend)
+        keep_idx = (time_data >= lowend) & (time_data <= highend) & ~np.isnan(time_data)
 
         if np.sum(keep_idx) < 2:
             return (np.full(expression_data.shape[1], np.nan),
@@ -80,9 +111,9 @@ def calc_decay_bootstraps(expression_data, velocity_data, n_bootstraps=15, boots
     alphas = np.vstack([x[2] for x in bootstrap_results]) if bootstrap_results[0][2] is not None else None
 
     t = scipy.stats.t.ppf((1 + confidence_interval) / 2, n_bootstraps - 1)
-    ci = t * np.std(decays, axis=0) / np.sqrt(n_bootstraps)
+    ci = t * np.nanstd(decays, axis=0) / np.sqrt(n_bootstraps)
 
-    return np.mean(decays, axis=0), ci, alphas
+    return np.nanmean(decays, axis=0), ci, alphas
 
 def calc_decay(expression_data, velocity_data, include_alpha=True,
                decay_quantiles=(0.00, 0.025), alpha_quantile=0.975,

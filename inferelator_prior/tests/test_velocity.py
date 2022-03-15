@@ -69,6 +69,24 @@ class TestVelocity(unittest.TestCase):
         npt.assert_array_almost_equal(decays, correct_decays)
         npt.assert_array_almost_equal(decay_se, correct_ses)
 
+    def test_calc_decay_nan(self):
+
+        v = np.vstack((VELOCITY, np.full_like(VELOCITY, np.nan)))
+        e = np.vstack((V_EXPRESSION, np.full_like(V_EXPRESSION, np.nan)))
+
+        decays, decay_se, alpha_est = calc_decay(e, v,
+                                                 decay_quantiles=(0, 1),
+                                                 include_alpha=False)
+
+        correct_ses = np.zeros_like(decay_se)
+        correct_ses[0] = V_SLOPES[0] / N
+
+        correct_decays = np.maximum(V_SLOPES * -1, np.zeros_like(V_SLOPES))
+
+        self.assertIsNone(alpha_est)
+        npt.assert_array_almost_equal(decays, correct_decays)
+        npt.assert_array_almost_equal(decay_se, correct_ses)
+
     def test_calc_decay_alpha(self):
 
         velo = np.vstack((VELOCITY, np.array([1, 0, 0, 0])))
