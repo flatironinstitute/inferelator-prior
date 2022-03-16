@@ -1,5 +1,9 @@
 ### Version 0.3.6
 
+* Improved memory usage for `network_from_motifs_fasta` when a large number of sequences or TFs are used
+
+### Version 0.3.6
+
 * Fix bug in saved location output
 
 ### Version 0.3.5
