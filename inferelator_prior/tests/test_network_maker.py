@@ -3,10 +3,10 @@ import unittest
 import pandas.testing as pdt
 import tempfile
 
-from inferelator_prior.motifs import meme, select_motifs, truncate_motifs
+from inferelator_prior.motifs import meme, select_motifs
 from inferelator_prior.processor import gtf
-from inferelator_prior.network_from_motifs import (network_scan, network_build, load_and_process_motifs,
-                                                   build_motif_prior_from_genes)
+from inferelator_prior.network_from_motifs import load_and_process_motifs, build_motif_prior_from_genes
+from inferelator_prior.network_from_motifs_fasta import build_motif_prior_from_fasta
 from inferelator_prior.motif_information import summarize_motifs
 
 artifact_path = os.path.join(os.path.abspath(os.path.expanduser(os.path.dirname(__file__))), "artifacts")
@@ -99,6 +99,32 @@ class TestFullStack(unittest.TestCase):
         self.assertEqual(cut.sum().sum(), 3)
         self.assertListEqual(cut[cut["GAL4"]].index.tolist(), ["YBR018C", "YBR019C", "YBR020W"])
         self.assertEqual((raw > 0).sum().sum(), 3)
+
+    def test_full_stack_network_build_highmem(self):
+        cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,
+                                                                "test_gal4.meme"),
+                                                   os.path.join(artifact_path,
+                                                                "Saccharomyces_cerevisiae.R64-1-1.GAL_OPERON.gtf"),
+                                                   os.path.join(data_path,
+                                                                "Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa"),
+                                                   window_size=(500, 100),
+                                                   intergenic_only=False,
+                                                   output_prefix=None,
+                                                   lowmem=False)
+
+        self.assertEqual(cut.sum().sum(), 3)
+        self.assertListEqual(cut[cut["GAL4"]].index.tolist(), ["YBR018C", "YBR019C", "YBR020W"])
+        self.assertEqual((raw > 0).sum().sum(), 3)
+
+    def test_full_stack_network_build_fasta(self):
+        cut, raw, _ = build_motif_prior_from_fasta(os.path.join(artifact_path, "test_ecori.meme"),
+                                                   os.path.join(artifact_path, "test_motif_search.fasta"),
+                                                   output_prefix=None,
+                                                   num_cores=1)
+
+        self.assertEqual(cut.sum().sum(), 1)
+        self.assertListEqual(cut[cut["EcoRI"]].index.tolist(), ["seq1"])
+        self.assertEqual((raw > 0).sum().sum(), 1)
 
     def test_file_output(self):
         cut, raw, _ = build_motif_prior_from_genes(os.path.join(artifact_path,

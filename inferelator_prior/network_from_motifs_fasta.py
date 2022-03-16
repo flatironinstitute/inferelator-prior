@@ -1,7 +1,6 @@
 from inferelator_prior.network_from_motifs import (add_common_arguments, parse_common_arguments,
-                                                   load_and_process_motifs, network_build)
+                                                   load_and_process_motifs, scan_and_build_by_tf)
 from inferelator_prior.processor.gtf import GTF_GENENAME, get_fasta_lengths, select_genes
-from inferelator_prior.processor.prior import summarize_target_per_regulator, MotifScorer
 from inferelator_prior.motifs.motif_scan import MotifScan
 
 import argparse
@@ -100,33 +99,18 @@ def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='
     print("Scanning promoter sequences ({f_c}) for motifs ({f_m})".format(f_c=promoter_fasta_file, f_m=motif_file))
 
     MotifScan.set_type(scanner_type)
-    motif_peaks = MotifScan.scanner(motifs=motifs, num_workers=num_cores).scan(promoter_fasta_file,
-                                                                               min_ic=motif_ic,
-                                                                               threshold=scanner_thresh)
 
     promoters = get_fasta_lengths(promoter_fasta_file)
     genes = pd.DataFrame({GTF_GENENAME: list(promoters.keys())})
 
     if gene_constraint_list is not None:
         genes = select_genes(genes, gene_constraint_list)
-        motif_peaks = motif_peaks.loc[motif_peaks[MotifScan.chromosome_col].isin(genes[GTF_GENENAME]), :]
 
-    if save_locs:
-        save_locs = output_prefix + "_tf_binding_locs.tsv"
-        motif_peaks.to_csv(save_locs, sep="\t", index=False)
-
-    if save_locs_filtered:
-        save_locs_filtered = output_prefix + "_tf_binding_locs_filtered.tsv"
-
-    # PROCESS SCORES INTO NETWORK ######################################################################################
-    print("Processing TF binding sites into prior")
-    MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-
-    raw_matrix, prior_data = summarize_target_per_regulator(genes, motif_peaks, motif_information,
-                                                            num_workers=num_cores, debug=debug, by_chromosome=False)
-
-    return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug,
-                         save_locs_filtered=save_locs_filtered)
+    return scan_and_build_by_tf(promoter_fasta_file, None, genes, None, output_prefix, motif_information,
+                                debug=debug, motif_ic=motif_ic, tandem=tandem, scanner_thresh=scanner_thresh,
+                                save_locs=save_locs, save_locs_filtered=save_locs_filtered, num_cores=num_cores,
+                                extract_genome=False, filter_motif_hits_for_gene_list=gene_constraint_list is not None, 
+                                by_chromosome=False)
 
 
 if __name__ == '__main__':

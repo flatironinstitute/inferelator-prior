@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 
 def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thresholds=None, total_time=None,
-                                 time_quantiles=(0.05, 0.95)):
+                                 time_quantiles=(0.05, 0.95), random_order_pools=None, random_seed=256):
     """
     Assign real times from a pseudotime axis
 
@@ -54,6 +54,7 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
         warnings.warn(f"Labels {list(_diff_in_labels)} in time labels are not found in time_threshold")
 
     ### DO GROUPWISE TIME ASSIGNMENT ###
+    rng = np.random.default_rng(random_seed)
     real_times = np.full_like(pseudotimes, np.nan, dtype=float)
 
     for group, rt_start, rt_stop in time_thresholds:
@@ -63,8 +64,15 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
             continue
 
         rt_interval = rt_stop - rt_start
-        group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
-        real_times[group_idx] = group_pts 
+
+        # Randomly order times if random_order_pools is set and group is in the passed list
+        if random_order_pools is not None and any(x == group for x in random_order_pools):
+            real_times[group_idx] = rng.uniform(0., 1., group_idx.sum()) * rt_interval + rt_start
+        
+        # Otherwise interval normalize
+        else:
+            group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
+            real_times[group_idx] = group_pts 
 
     return real_times
 

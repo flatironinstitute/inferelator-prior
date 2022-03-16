@@ -258,6 +258,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
 
     # Load and scan target chromatin peaks
     print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=constraint_bed_file, f_m=motif_file))
+    MotifScan.set_type(scanner_type)
 
     # Create a fake bed file with the gene promoter
     gene_locs = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND]].copy()
@@ -277,83 +278,11 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                              save_locs_filtered=save_locs_filtered)
 
     else:
-        MotifScan.set_type(scanner_type)
 
-        # EXTRACT GENOMIC SEQUENCES ONLY ONCE ##########################################################################
-        extract_fasta = MotifScan.scanner.extract_genome(genomic_fasta_file,
-                                                         constraint_bed_file=constraint_bed_file,
-                                                         promoter_bed=gene_locs,
-                                                         debug=debug)
-
-        # BUILD PER-TF DATA FUNCTION ###################################################################################
-        def network_scan_build_single_tf(tf_mi_df):
-
-            tf_motifs = tf_mi_df[MOTIF_OBJ_COL].tolist()
-
-            motif_peaks = MotifScan.scanner(motifs=tf_motifs, num_workers=1).scan(None,
-                                                                                  extracted_genome=extract_fasta,
-                                                                                  min_ic=motif_ic,
-                                                                                  threshold=scanner_thresh)
-
-            # Process into an information score matrix
-            MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
-
-            if motif_peaks is not None:
-                ra_ma, pr_da = summarize_target_per_regulator(genes, motif_peaks, tf_mi_df, num_workers=1, debug=debug,
-                                                              silent=True)
-
-            else:
-                ra_ma = pd.DataFrame(0.0, index=genes[GTF_GENENAME],
-                                     columns=tf_mi_df[MOTIF_NAME_COL].unique().tolist())
-                pr_da = None
-
-            raw_loc = motif_peaks if save_locs else None
-            net_results = network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
-
-            return net_results, raw_loc
-
-        # MULTIPROCESS PER-TF ##########################################################################################
-        prior_matrix, raw_matrix, prior_data = [], [], []
-
-        with pathos.multiprocessing.Pool(processes=num_cores, maxtasksperchild=10) as pool:
-            motif_information = [df for _, df in motif_information.groupby(MOTIF_NAME_COL)]
-            _is_first = True
-            for i, res in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
-
-                if save_locs and res[1] is not None:
-                    res[1].iloc[:, 0:-1].to_csv(save_locs, sep="\t", mode="w" if _is_first else "a",
-                                                header=_is_first, index=False)
-                    _is_first = False
-                
-                p_m, r_m, p_d = res[0]
-
-                print("Processed TF {i}/{n}".format(i=i, n=len(motif_information)))
-                prior_matrix.append(p_m)
-                raw_matrix.append(r_m)
-                prior_data.append(p_d)
-
-        # CONCAT FINAL DATA ############################################################################################
-        prior_matrix = pd.concat(prior_matrix, axis=1)
-        raw_matrix = pd.concat(raw_matrix, axis=1)
-        prior_data = pd.concat(prior_data, axis=0)
-
-        try:
-            os.remove(extract_fasta)
-        except FileNotFoundError:
-            pass
-
-        if output_prefix is not None:
-            print("Writing output file {o}".format(o=output_prefix + "_unfiltered_matrix.tsv.gz"))
-            raw_matrix.to_csv(output_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
-
-        if output_prefix is not None:
-            print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
-            (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
-
-        if save_locs_filtered and prior_data is not None:
-            prior_data.to_csv(save_locs_filtered, sep="\t", index=False)
-
-        return prior_matrix, raw_matrix, prior_data
+        return scan_and_build_by_tf(genomic_fasta_file, constraint_bed_file, genes, gene_locs, output_prefix,
+                                    motif_information, debug=debug, motif_ic=motif_ic, tandem=tandem, 
+                                    scanner_thresh=scanner_thresh, save_locs=save_locs, 
+                                    save_locs_filtered=save_locs_filtered, num_cores=num_cores)
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,
@@ -459,6 +388,92 @@ def network_build(raw_matrix, prior_data, num_cores=1, output_prefix=None, debug
         prior_data.to_csv(save_locs_filtered, sep="\t", index=False)
 
     return prior_matrix, raw_matrix, prior_data
+
+
+def scan_and_build_by_tf(genomic_fasta_file, constraint_bed_file, genes, gene_locs, output_prefix, motif_information,
+                         debug=False, motif_ic=6, tandem=100, scanner_thresh="1e-4",
+                         save_locs=False, save_locs_filtered=False, num_cores=None, extract_genome=True,
+                         filter_motif_hits_for_gene_list=False, by_chromosome=True):
+
+        if extract_genome:
+            # EXTRACT GENOMIC SEQUENCES ONLY ONCE ##########################################################################
+            extract_fasta = MotifScan.scanner.extract_genome(genomic_fasta_file,
+                                                            constraint_bed_file=constraint_bed_file,
+                                                            promoter_bed=gene_locs,
+                                                            debug=debug)
+        else:
+            extract_fasta = genomic_fasta_file
+
+        # BUILD PER-TF DATA FUNCTION ###################################################################################
+        def network_scan_build_single_tf(tf_mi_df):
+
+            tf_motifs = tf_mi_df[MOTIF_OBJ_COL].tolist()
+
+            motif_peaks = MotifScan.scanner(motifs=tf_motifs, num_workers=1).scan(None,
+                                                                                  extracted_genome=extract_fasta,
+                                                                                  min_ic=motif_ic,
+                                                                                  threshold=scanner_thresh)
+
+            # Process into an information score matrix
+            MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)
+
+            if motif_peaks is not None and filter_motif_hits_for_gene_list:
+                motif_peaks = motif_peaks.loc[motif_peaks[MotifScan.chromosome_col].isin(genes[GTF_GENENAME]), :]
+
+            if motif_peaks is not None:
+                ra_ma, pr_da = summarize_target_per_regulator(genes, motif_peaks, tf_mi_df, num_workers=1, debug=debug,
+                                                              silent=True, by_chromosome=by_chromosome)
+
+            else:
+                ra_ma = pd.DataFrame(0.0, index=genes[GTF_GENENAME],
+                                     columns=tf_mi_df[MOTIF_NAME_COL].unique().tolist())
+                pr_da = None
+
+            raw_loc = motif_peaks if save_locs else None
+            net_results = network_build(ra_ma, pr_da, num_cores=1, output_prefix=None, debug=debug, silent=True)
+
+            return net_results, raw_loc
+
+        # MULTIPROCESS PER-TF ##########################################################################################
+        prior_matrix, raw_matrix, prior_data = [], [], []
+
+        with pathos.multiprocessing.Pool(processes=num_cores, maxtasksperchild=10) as pool:
+            motif_information = [df for _, df in motif_information.groupby(MOTIF_NAME_COL)]
+            _is_first = True
+            for i, res in enumerate(pool.imap_unordered(network_scan_build_single_tf, motif_information)):
+
+                if save_locs and res[1] is not None:
+                    res[1].iloc[:, 0:-1].to_csv(save_locs, sep="\t", mode="w" if _is_first else "a",
+                                                header=_is_first, index=False)
+                    _is_first = False
+                
+                p_m, r_m, p_d = res[0]
+
+                print("Processed TF {i}/{n}".format(i=i, n=len(motif_information)))
+                prior_matrix.append(p_m)
+                raw_matrix.append(r_m)
+                prior_data.append(p_d)
+
+        # CONCAT FINAL DATA ############################################################################################
+        prior_matrix = pd.concat(prior_matrix, axis=1)
+        raw_matrix = pd.concat(raw_matrix, axis=1)
+        prior_data = pd.concat(prior_data, axis=0)
+
+        if extract_genome and os.path.exists(extract_fasta):
+            os.remove(extract_fasta)
+
+        if output_prefix is not None:
+            print("Writing output file {o}".format(o=output_prefix + "_unfiltered_matrix.tsv.gz"))
+            raw_matrix.to_csv(output_prefix + "_unfiltered_matrix.tsv.gz", sep="\t")
+
+        if output_prefix is not None:
+            print("Writing output file {o}".format(o=output_prefix + "_edge_matrix.tsv.gz"))
+            (prior_matrix != 0).astype(int).to_csv(output_prefix + "_edge_matrix.tsv.gz", sep="\t")
+
+        if save_locs_filtered and prior_data is not None:
+            prior_data.to_csv(save_locs_filtered, sep="\t", index=False)
+
+        return prior_matrix, raw_matrix, prior_data
 
 
 if __name__ == '__main__':
