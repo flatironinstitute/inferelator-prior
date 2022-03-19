@@ -1,4 +1,8 @@
-### Version 0.3.6
+### Version 0.3.8
+
+* Fixed bug when saving motif locations with `network_from_motifs_fasta`
+
+### Version 0.3.7
 
 * Improved memory usage for `network_from_motifs_fasta` when a large number of sequences or TFs are used
 

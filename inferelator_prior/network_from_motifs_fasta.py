@@ -106,6 +106,12 @@ def build_motif_prior_from_fasta(motif_file, promoter_fasta_file, scanner_type='
     if gene_constraint_list is not None:
         genes = select_genes(genes, gene_constraint_list)
 
+    if save_locs and output_prefix is not None:
+        save_locs = output_prefix + "_tf_binding_locs.tsv"
+
+    if save_locs_filtered and output_prefix is not None:
+        save_locs_filtered = output_prefix + "_tf_binding_locs_filtered.tsv"
+
     return scan_and_build_by_tf(promoter_fasta_file, None, genes, None, output_prefix, motif_information,
                                 debug=debug, motif_ic=motif_ic, tandem=tandem, scanner_thresh=scanner_thresh,
                                 save_locs=save_locs, save_locs_filtered=save_locs_filtered, num_cores=num_cores,

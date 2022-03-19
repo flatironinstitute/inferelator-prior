@@ -240,3 +240,44 @@ class TestFullStack(unittest.TestCase):
         self.assertTrue(os.path.exists(temp_path_prefix + "g_edge_matrix.tsv.gz"))
         self.assertTrue(os.path.exists(temp_path_prefix + "g_tf_binding_locs.tsv"))
         self.assertTrue(os.path.exists(temp_path_prefix + "g_tf_binding_locs_filtered.tsv"))
+
+
+    def test_file_output_fasta(self):
+        cut, raw, _ = build_motif_prior_from_fasta(os.path.join(artifact_path, "test_ecori.meme"),
+                                                   os.path.join(artifact_path, "test_motif_search.fasta"),
+                                                   output_prefix=temp_path_prefix)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "_edge_matrix.tsv.gz"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "_tf_binding_locs.tsv"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "_tf_binding_locs_filtered.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_fasta(os.path.join(artifact_path, "test_ecori.meme"),
+                                                   os.path.join(artifact_path, "test_motif_search.fasta"),
+                            output_prefix=temp_path_prefix + "c",
+                            save_locs=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "c_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "c_edge_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "c_tf_binding_locs.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_fasta(os.path.join(artifact_path, "test_ecori.meme"),
+                                                   os.path.join(artifact_path, "test_motif_search.fasta"),
+                            output_prefix=temp_path_prefix + "d",
+                            save_locs_filtered=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "d_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "d_edge_matrix.tsv.gz"))
+        self.assertFalse(os.path.exists(temp_path_prefix + "d_tf_binding_locs.tsv"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "d_tf_binding_locs_filtered.tsv"))
+
+        cut, raw, _ = build_motif_prior_from_fasta(os.path.join(artifact_path, "test_ecori.meme"),
+                                                   os.path.join(artifact_path, "test_motif_search.fasta"),
+                            output_prefix=temp_path_prefix + "f",
+                            save_locs_filtered=True,
+                            save_locs=True)
+
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_unfiltered_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_edge_matrix.tsv.gz"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_tf_binding_locs.tsv"))
+        self.assertTrue(os.path.exists(temp_path_prefix + "f_tf_binding_locs_filtered.tsv"))
