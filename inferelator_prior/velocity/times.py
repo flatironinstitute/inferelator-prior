@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import numpy as np
 import warnings
 
@@ -72,7 +73,7 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
         # Otherwise interval normalize
         else:
             group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
-            real_times[group_idx] = group_pts 
+            real_times[group_idx] = group_pts
 
     return real_times
 
@@ -96,6 +97,9 @@ def _quantile_shift(arr, quantiles):
 
     lq, rq = np.nanquantile(arr, quantiles)
 
+    if not np.isfinite(lq) or not np.isfinite(rq):
+        raise ValueError(f"Unable to anchor values {lq} and {rq}")
+
     if lq != rq:
         arr = (arr - lq) / (rq - lq)
 
@@ -103,8 +107,21 @@ def _quantile_shift(arr, quantiles):
 
 
 def _interval_normalize(arr):
+    """
+    Normalize to 0-1. Ignore NaN and Inf.
 
-    s_min, s_max = np.nanmin(arr), np.nanmax(arr)
+    :param arr: Data to normalize
+    :type arr: np.ndarray
+    :return: Normalized data
+    :rtype: no.ndarray
+    """
+
+    _is_finite = np.isfinite(arr)
+
+    if np.sum(_is_finite) == 0:
+        return np.zeros_like(arr)
+
+    s_min, s_max = np.nanmin(arr[_is_finite]), np.nanmax(arr[_is_finite])
 
     if s_min != s_max:
         scaled_arr = (arr - s_min) / (s_max - s_min)
