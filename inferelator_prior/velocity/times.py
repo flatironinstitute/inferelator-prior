@@ -71,7 +71,10 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
         
         # Otherwise interval normalize
         else:
-            group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
+            try:
+                group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
+            except ValueError:
+                group_pts = np.full_like(pseudotimes[group_idx], np.nan)
             real_times[group_idx] = group_pts
 
     return real_times
@@ -94,7 +97,12 @@ def _quantile_shift(arr, quantiles):
     if quantiles is None:
         return arr
 
-    lq, rq = np.nanquantile(arr, quantiles)
+    _is_finite = np.isfinite(arr)
+
+    if np.sum(_is_finite) < 2:
+        raise ValueError("Pseudotime values are not finite")
+
+    lq, rq = np.nanquantile(arr[_is_finite], quantiles)
 
     if not np.isfinite(lq) or not np.isfinite(rq):
         raise ValueError(f"Unable to anchor values {lq} and {rq}")
