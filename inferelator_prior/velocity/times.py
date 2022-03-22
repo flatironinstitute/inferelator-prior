@@ -138,8 +138,8 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
         interval_time = right_time - left_time
 
         ### GET PT THRESHOLDS OF LEFTMOST AND RIGHTMOST ###
-        lq = np.nanquantile(pseudotime[time_group_labels == time_order[left_idx]], edges[0])
-        rq = np.nanquantile(pseudotime[time_group_labels == time_order[left_idx + span]], edges[1])
+        lq = _finite_quantile(pseudotime[time_group_labels == time_order[left_idx]], edges[0])
+        rq = _finite_quantile(pseudotime[time_group_labels == time_order[left_idx + span]], edges[1])
 
         ### INDICES FOR PT VALUES OF INTEREST ###
         keep_window = time_group_labels == center_time
@@ -173,13 +173,8 @@ def _quantile_shift(arr, quantiles=None, thresholds=None):
     if quantiles is None and thresholds is None:
         return arr.copy()
 
-    _is_finite = np.isfinite(arr)
-
-    if np.sum(_is_finite) < 2:
-        raise ValueError("Pseudotime values are not finite")
-
     if quantiles is not None:
-        lq, rq = np.nanquantile(arr[_is_finite], quantiles)
+        lq, rq = _finite_quantile(arr, quantiles)
     elif thresholds is not None:
         lq, rq = thresholds
 
@@ -192,6 +187,19 @@ def _quantile_shift(arr, quantiles=None, thresholds=None):
         arr = arr.copy()
 
     return arr
+
+
+def _finite_quantile(arr, quantile):
+
+    if quantile is None:
+        return None
+
+    _is_finite = np.isfinite(arr)
+
+    if np.sum(_is_finite) < len(quantile):
+        raise ValueError(f"Cannot find {len(quantile)} quantiles from {np.sum(_is_finite)} values")
+
+    return np.nanquantile(arr[_is_finite], quantile)
 
 
 def _interval_normalize(arr):
