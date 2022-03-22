@@ -196,8 +196,13 @@ def _finite_quantile(arr, quantile):
 
     _is_finite = np.isfinite(arr)
 
-    if np.sum(_is_finite) < len(quantile):
-        raise ValueError(f"Cannot find {len(quantile)} quantiles from {np.sum(_is_finite)} values")
+    try:
+        n = len(quantile)
+    except TypeError:
+        n = 1
+
+    if np.sum(_is_finite) < n:
+        raise ValueError(f"Cannot find {n} quantiles from {np.sum(_is_finite)} values")
 
     return np.nanquantile(arr[_is_finite], quantile)
 
