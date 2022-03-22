@@ -139,13 +139,15 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
 
         ### GET PT THRESHOLDS OF LEFTMOST AND RIGHTMOST ###
         lq = _finite_quantile(pseudotime[time_group_labels == time_order[left_idx]], edges[0])
-        rq = _finite_quantile(pseudotime[time_group_labels == time_order[left_idx + span]], edges[1])
+        rq = _finite_quantile(pseudotime[time_group_labels == time_order[right_idx - 1]], edges[1])
 
         ### INDICES FOR PT VALUES OF INTEREST ###
         keep_window = time_group_labels == center_time
 
         ### CONVERT TO TIMES ###
-        window_pts = _quantile_shift(pseudotime[keep_window].copy(), thresholds=(lq, rq))
+        window_pts = _quantile_shift(pseudotime[keep_window].copy(),
+                                     thresholds=(lq, rq))
+
         window_pts[(window_pts < 0) | (window_pts > 1)] = np.nan
         window_pts *= interval_time
         window_pts += left_time
