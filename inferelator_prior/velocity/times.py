@@ -183,8 +183,6 @@ def _quantile_shift(arr, quantiles=None, thresholds=None):
     elif thresholds is not None:
         lq, rq = thresholds
 
-    print(f'Quantiles {lq}-{rq}')
-
     if not np.isfinite(lq) or not np.isfinite(rq):
         raise ValueError(f"Unable to anchor values {lq} and {rq}")
 
