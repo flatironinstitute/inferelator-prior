@@ -37,7 +37,7 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
 
     pseudotimes = _interval_normalize(pseudotimes)
 
-    ### DO TOTAL TIME IF THAT'S SET ###    
+    ### DO TOTAL TIME IF THAT'S SET ###
     if total_time is not None:
         return _quantile_shift(pseudotimes, time_quantiles) * total_time
 
@@ -82,12 +82,36 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
 
 def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_order, time_thresholds, window_width=1,
                                          edges=(0.05, 0.95)):
+    """
+    Assign real times using a sliding window around groups of pseudotimes
+
+    :param pseudotimes: Array of pseudotime values (will be scaled 0-1 if not already)
+    :type pseudotimes: np.ndarray
+    :param time_group_labels: An array of time group labels to go with time_thresholds
+    :type time_group_labels: np.ndarray
+    :param time_order: A list of group labels in order temporally
+    :type time_order: list
+    :param time_thresholds: A list of tuples where each tuple defines an anchor point
+        (group_label, realtime_start, realtime_end).
+    :type time_thresholds: list(tuples)
+    :param window_width: The number of groups to consider on each side of the center group, defaults to 1
+    :type window_width: int, optional
+    :param edges: The quantiles for the outer edge groups, defaults to (0.05, 0.95)
+    :type edges: tuple, optional
+    :raises ValueError: Raises ValueError if the windowing is bad or if unknown time labels are provided in time_order
+    :return: Real-time values
+    :rtype: np.ndarray
+    """
 
     n = len(time_order)
     span = 2 * window_width + 1
 
     if not isinstance(time_thresholds, dict):
         time_thresholds = {k: (k1, k2) for k, k1, k2 in time_thresholds}
+
+    _unknown_times = [t for t in time_order if t not in time_thresholds]
+    if len(_unknown_times) != 0:
+            raise ValueError(f"Unable to find times {_unknown_times}")
 
     if n < span:
         raise ValueError(f"Cannot make windows of size {window_width} from {n} groups")
@@ -97,37 +121,42 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
     for i in range(n):
 
         ### GET INDICES AROUND EACH GROUP ###
-        left_idx, right_idx = i - window_width, i + window_width
+        left_idx, right_idx = i - window_width, i + window_width + 1
 
         ### MAKE SURE INDICES AREN'T TOO BIG/SMALL ###
         if left_idx < 0:
             left_idx, right_idx = 0, span
-        elif right_idx > n:
-            left_idx, right_idx = n - span, n
+        elif right_idx > n - 1:
+            left_idx, right_idx = n - span - 1, n - 1
 
         ### DEFINE WINDOW TIMES ###
         select_times = time_order[left_idx:right_idx]
+        center_time = time_order[i]
 
         left_time = min(x[0] for k, x in time_thresholds.items() for y in select_times if k == y)
-        right_time = min(x[1] for k, x in time_thresholds.items() for y in select_times if k == y)
+        right_time = max(x[1] for k, x in time_thresholds.items() for y in select_times if k == y)
         interval_time = right_time - left_time
 
+        ### GET PT THRESHOLDS OF LEFTMOST AND RIGHTMOST ###
+        lq = np.nanquantile(pseudotime[time_group_labels == time_order[left_idx]], edges[0])
+        rq = np.nanquantile(pseudotime[time_group_labels == time_order[left_idx + span]], edges[1])
+
         ### INDICES FOR PT VALUES OF INTEREST ###
-        keep_window = np.any(np.hstack(time_group_labels == x for x in select_times), axis=0)
+        keep_window = time_group_labels == center_time
 
         ### CONVERT TO TIMES ###
-        window_pts = _quantile_shift(pseudotime[keep_window], edges)
+        window_pts = _quantile_shift(pseudotime[keep_window].copy(), thresholds=(lq, rq))
         window_pts[(window_pts < 0) | (window_pts > 1)] = np.nan
         window_pts *= interval_time
         window_pts += left_time
 
         ### ADD TO VECTOR ##
-        time_vector[time_group_labels == i] = window_pts[time_group_labels[keep_window] == i]
+        time_vector[time_group_labels == center_time] = window_pts[time_group_labels[keep_window] == center_time]
 
     return time_vector
 
 
-def _quantile_shift(arr, quantiles):
+def _quantile_shift(arr, quantiles=None, thresholds=None):
     """
     Shift values so that they're 0-1 where 0 and 1 are set to quantile values from the original data
 
@@ -141,21 +170,28 @@ def _quantile_shift(arr, quantiles):
 
     arr = _interval_normalize(arr)
 
-    if quantiles is None:
-        return arr
+    if quantiles is None and thresholds is None:
+        return arr.copy()
 
     _is_finite = np.isfinite(arr)
 
     if np.sum(_is_finite) < 2:
         raise ValueError("Pseudotime values are not finite")
 
-    lq, rq = np.nanquantile(arr[_is_finite], quantiles)
+    if quantiles is not None:
+        lq, rq = np.nanquantile(arr[_is_finite], quantiles)
+    elif thresholds is not None:
+        lq, rq = thresholds
+
+    print(f'Quantiles {lq}-{rq}')
 
     if not np.isfinite(lq) or not np.isfinite(rq):
         raise ValueError(f"Unable to anchor values {lq} and {rq}")
 
     if lq != rq:
         arr = (arr - lq) / (rq - lq)
+    else:
+        arr = arr.copy()
 
     return arr
 
