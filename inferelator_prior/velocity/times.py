@@ -126,8 +126,8 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
         ### MAKE SURE INDICES AREN'T TOO BIG/SMALL ###
         if left_idx < 0:
             left_idx, right_idx = 0, span
-        elif right_idx > n - 1:
-            left_idx, right_idx = n - span - 1, n - 1
+        elif right_idx > n:
+            left_idx, right_idx = n - span, n
 
         ### DEFINE WINDOW TIMES ###
         select_times = time_order[left_idx:right_idx]
@@ -145,9 +145,7 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
         keep_window = time_group_labels == center_time
 
         ### CONVERT TO TIMES ###
-        window_pts = _quantile_shift(pseudotime[keep_window].copy(),
-                                     thresholds=(lq, rq))
-
+        window_pts = _quantile_shift(pseudotime[keep_window].copy(), thresholds=(lq, rq))
         window_pts[(window_pts < 0) | (window_pts > 1)] = np.nan
         window_pts *= interval_time
         window_pts += left_time
@@ -192,6 +190,17 @@ def _quantile_shift(arr, quantiles=None, thresholds=None):
 
 
 def _finite_quantile(arr, quantile):
+    """
+    Get quantiles from only finite values
+
+    :param arr: Numeric array
+    :type arr: np.ndarray
+    :param quantile: Numeric, list/tuple of numerics
+    :type quantile: Numeric, list, tuple
+    :raises ValueError: Raises ValueError if there are not enough finite values
+    :return: Quantile thresholds
+    :rtype: Numeric, tuple
+    """
 
     if quantile is None:
         return None
