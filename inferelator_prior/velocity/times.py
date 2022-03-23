@@ -81,7 +81,7 @@ def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thres
 
 
 def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_order, time_thresholds, window_width=1,
-                                         edges=(0.05, 0.95)):
+                                         edges=(0.05, 0.95), trim_outliers=True):
     """
     Assign real times using a sliding window around groups of pseudotimes
 
@@ -146,6 +146,10 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
 
         ### CONVERT TO TIMES ###
         window_pts = _quantile_shift(pseudotime[keep_window].copy(), thresholds=(lq, rq))
+
+        if trim_outliers:
+            window_pts[(window_pts < 0) | (window_pts > 1)] = np.nan
+            
         window_pts *= interval_time
         window_pts += left_time
 
