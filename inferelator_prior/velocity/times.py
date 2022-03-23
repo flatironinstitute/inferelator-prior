@@ -146,7 +146,6 @@ def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_ord
 
         ### CONVERT TO TIMES ###
         window_pts = _quantile_shift(pseudotime[keep_window].copy(), thresholds=(lq, rq))
-        window_pts[(window_pts < 0) | (window_pts > 1)] = np.nan
         window_pts *= interval_time
         window_pts += left_time
 
