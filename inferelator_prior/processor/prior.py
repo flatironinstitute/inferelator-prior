@@ -228,6 +228,10 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
                                       chunksize=20)
 
     # Combine priors for all genes
+    if all([x is None for x in prior_data]):
+        return pd.DataFrame(0, index=genes[GTF_GENENAME], columns=motif_names, dtype=int), None
+
+
     prior_data = pd.concat(prior_data).reset_index(drop=True)
     prior_data[PRIOR_START] = prior_data[PRIOR_START].astype(int)
     prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
