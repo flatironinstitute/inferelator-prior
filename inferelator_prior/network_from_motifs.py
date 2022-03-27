@@ -449,7 +449,9 @@ def scan_and_build_by_tf(genomic_fasta_file, constraint_bed_file, genes, gene_lo
                 
                 p_m, r_m, p_d = res[0]
 
-                print("Processed TF {i}/{n}".format(i=i, n=len(motif_information)))
+                tf_name = p_m.columns[0] if p_m is not None else ""
+
+                print(f"Processed TF {i}/{len(motif_information)} [{tf_name}]")
                 prior_matrix.append(p_m)
                 raw_matrix.append(r_m)
                 prior_data.append(p_d)
