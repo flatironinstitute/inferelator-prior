@@ -1,4 +1,4 @@
-from inferelator_prior.motifs.pwm import read
+from inferelator_prior.motifs.pwm import read, TF_NAME_COL
 from inferelator_prior.motifs.meme import write
 
 import argparse
@@ -18,6 +18,10 @@ def main():
     ap.add_argument("--pwm_alphabet", dest="alphabet", help="PWM bases (alphabet)", metavar="ALPHABET", default=None)
     ap.add_argument("--pwm_transpose", dest="transpose", help="PWM is Bases x Positions", action='store_const',
                     const=True, default=False)
+    ap.add_argument("--id_col",  dest="idcol", help="PWM bases (alphabet)", metavar="ALPHABET", default=TF_NAME_COL)
+    ap.add_argument("--join_TF_names", dest="joint", help="Join TF names which are associated with the same motif",
+                    action='store_const', const=True, default=False)
+
 
     args = ap.parse_args()
 
@@ -26,17 +30,17 @@ def main():
         files.extend(glob.glob(os.path.expanduser(mf)))
 
     pwm_to_meme(files, args.info, args.out, direct=args.direct, no_headers=args.pwm_no_header, alphabet=args.alphabet,
-                transpose=args.transpose)
+                transpose=args.transpose, tf_id_col=args.idcol, join_TF_names=args.joint)
 
 
 def pwm_to_meme(pwm_file_list, tf_info_file, output_file, direct=True, no_headers=False, alphabet=None,
-                transpose=False):
+                transpose=False, tf_id_col=TF_NAME_COL, join_TF_names=False):
 
     alphabet = list(alphabet) if alphabet is not None else None
 
     print("Parsing {x} PWM files".format(x=len(pwm_file_list)))
     motifs = read(pwm_file_list, tf_info_file, direct_only=direct, pwm_has_idx=not no_headers, pwm_alphabet=alphabet,
-                  transpose=transpose)
+                  transpose=transpose, tf_name_col=tf_id_col, join_TF_names=join_TF_names)
 
     print("Parsed {m} motifs, writing to file {f}".format(m=len(motifs), f=output_file))
     write(output_file, list(motifs))

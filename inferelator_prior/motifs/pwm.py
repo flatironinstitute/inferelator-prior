@@ -9,7 +9,7 @@ TF_STATUS_COL = "TF_Status"
 
 
 def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_idx=True, pwm_alphabet=None,
-         transpose=False):
+         transpose=False, tf_name_col=TF_NAME_COL, join_TF_names=True):
 
     info_df = pd.read_csv(info_file, sep="\t")
     info_df[MOTIF_COL] = info_df[MOTIF_COL].astype(str)
@@ -34,11 +34,12 @@ def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_i
             if not direct.any():
                 continue
             else:
-                pwm_names = info_df.loc[match_id & (info_df[TF_STATUS_COL] == "D"), TF_NAME_COL]
+                pwm_names = info_df.loc[match_id & (info_df[TF_STATUS_COL] == "D"), tf_name_col]
         else:
-            pwm_names = info_df.loc[match_id, TF_NAME_COL]
+            pwm_names = info_df.loc[match_id, tf_name_col]
 
-        pwm_name = "/".join(pwm_names)
+        if join_TF_names:
+            pwm_names = ["/".join(pwm_names)]
 
         try:
             if pwm_has_idx:
@@ -48,20 +49,29 @@ def read(pwm_file_list, info_file, background=None, direct_only=False, pwm_has_i
 
             pwm = pwm.T if transpose else pwm
         except pde.ParserError:
-            print("Parser error on file {f}".format(f=pwm_name))
+            print("Parser error on file {f}".format(f=pwm_id))
             pwm_malformed.append(pwm_id)
             continue
 
         pwm_alphabet = pwm.columns.tolist() if pwm_has_idx else pwm_alphabet
 
-        motif = Motif(pwm_id, pwm_name, pwm_alphabet, motif_background=background)
-        motif.probability_matrix = pwm.values
+        for i, n in enumerate(pwm_names):
+            if i > 0:
+                pid = pwm_id + "_" + str(i)
+            else:
+                pid = pwm_id
 
-        if min(pwm.values.shape) == 0:
-            pwm_malformed.append(pwm_id)
-            continue
+            motif = Motif(pid, n, pwm_alphabet, motif_background=background)
+            motif.probability_matrix = pwm.values
 
-        motifs.append(motif)
+            if min(pwm.values.shape) == 0:
+
+                if i == 0:
+                    pwm_malformed.append(pwm_id)
+                    
+                continue
+
+            motifs.append(motif)
 
     if len(pwm_not_present) > 0:
         print(f"{len(pwm_not_present)} PWM files not found in in {MOTIF_COL} of {info_file}")
