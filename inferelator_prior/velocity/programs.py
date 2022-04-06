@@ -57,10 +57,16 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     alphas = ALPHA.copy() if alphas is None else alphas
 
     if normalize:
+        # Mask is the same as sc.pp.filter_genes(min_cells=10)
+        _keep_gene_mask = np.sum(d.X != 0, axis=0) >= 10
+
+        sc.pp.filter_genes(d, min_cells=10)
         sc.pp.normalize_per_cell(d)
         sc.pp.log1p(d)
-        sc.pp.filter_genes(d, min_cells=10)
         d.X = zscore(d.X)
+    else:
+        # Dummy mask
+        _keep_gene_mask = np.ones(d.shape[1], dtype=bool)
 
     if batch_size is None:
         batch_size = max(int(d.shape[0] / 1000), 5)
@@ -101,10 +107,18 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     min_mse = np.argmin(results['mse'])
 
     results['opt_alpha'] = alphas[min_mse]
-    data.uns['sparse_pca'] = results
 
     output_key = layer + "_sparsepca"
+
+    # Pad components with zeros if some genes were filtered during normalization
+    if results['loadings'][min_mse].shape[0] != data.shape[1]:
+        for i in range(len(results['loadings'])):
+            v_out = np.zeros((data.shape[1], n_components), dtype=float)
+            v_out[_keep_gene_mask, :] = results['loadings'][i]
+            results['loadings'][i] = v_out
+
     data.varm[output_key] = results['loadings'][min_mse].copy()
     data.obsm[output_key] = mbsp[min_mse].transform(d.X)
+    data.uns['sparse_pca'] = results
 
     return data
