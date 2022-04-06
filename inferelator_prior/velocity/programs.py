@@ -21,7 +21,30 @@ ALPHA = np.concatenate((np.array([0]),
 
 
 def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
-               n_components=100, normalize=True):
+               n_components=100, normalize=True, **kwargs):
+    """
+    Calculate a sparse PCA using sklearn MiniBatchSparsePCA for a range of
+    alpha hyperparameters.
+
+    :param data: Data object
+    :type data: ad.AnnData
+    :param alphas: A 1d array of alpha parameters, defaults to None.
+        If None is passed, a default search space will be used
+    :type alphas: np.ndarray, optional
+    :param batch_size: The batch_size for MiniBatchSparsePCA, defaults to None
+    :type batch_size: int, optional
+    :param random_state: The random state for MiniBatchSparsePCA, defaults to 50
+    :type random_state: int, optional
+    :param layer: Data object layer to use, defaults to 'X'
+    :type layer: str, optional
+    :param n_components: Number of PCs to evaluate, defaults to 100
+    :type n_components: int, optional
+    :param normalize: Depth-normalize, log-transform, and scale date before PCA,
+        defaults to True
+    :type normalize: bool, optional
+    :return: Data object with .uns['sparse_pca'], .obsm[], and .varm[] added
+    :rtype: ad.AnnData
+    """
 
     if layer == 'X':
         d = ad.AnnData(data.X.astype(float), dtype=float)
@@ -60,7 +83,8 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
                                                         n_jobs=-1,
                                                         alpha=a,
                                                         batch_size=batch_size,
-                                                        random_state=random_state)
+                                                        random_state=random_state,
+                                                        **kwargs)
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
@@ -80,8 +104,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     data.uns['sparse_pca'] = results
 
     output_key = layer + "_sparsepca"
-    data.varm[output_key] = results['loadings'][str(alphas[min_mse])].copy()
+    data.varm[output_key] = results['loadings'][min_mse].copy()
     data.obsm[output_key] = mbsp[min_mse].transform(d.X)
 
     return data
-
