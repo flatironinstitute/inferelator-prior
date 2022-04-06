@@ -103,7 +103,6 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         models.append(mbsp)
 
-
     min_mse = np.argmin(results['mse'])
 
     results['opt_alpha'] = alphas[min_mse]
@@ -118,7 +117,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
             results['loadings'][i] = v_out
 
     data.varm[output_key] = results['loadings'][min_mse].copy()
-    data.obsm[output_key] = mbsp[min_mse].transform(d.X)
+    data.obsm[output_key] = models[min_mse].transform(d.X)
     data.uns['sparse_pca'] = results
 
     return data
