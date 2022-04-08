@@ -24,7 +24,7 @@ OUTLIER_SQUISH = 10
 
 
 def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
-               n_components=100, normalize=True, **kwargs):
+               n_components=100, normalize=True, ridge_alpha=0.01, **kwargs):
     """
     Calculate a sparse PCA using sklearn MiniBatchSparsePCA for a range of
     alpha hyperparameters.
@@ -83,6 +83,12 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
     # Calculate baseline for deviance
     sc.pp.pca(d, n_comps=n_components, zero_center=True, dtype=float)
+    d.obsm['X_from_pca'] = ridge_regression(
+        d.varm['PCs'].T,
+        d.obsm['X_pca'].T,
+        ridge_alpha,
+        solver="cholesky"
+    )
 
     results = {
         'alphas': alphas,
@@ -109,13 +115,13 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
-            resid = ridge_regression(mbsp.components_, projected.T, 0.01, solver="cholesky")
+            resid = ridge_regression(mbsp.components_, projected.T, ridge_alpha, solver="cholesky")
 
         # Cleanup floats
         mbsp.components_[np.abs(mbsp.components_) <= np.finfo(mbsp.components_.dtype).eps] = 0.
 
         # Deviance from PCA per gene
-        resid -= d.obsm['X_pca']
+        resid -= d.obsm['X_from_pca']
         resid **= 2
         resid = np.mean(resid, axis=0)
 
