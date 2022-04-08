@@ -43,9 +43,9 @@ class HOMERScanner(MotifScanner):
         proc = subprocess.run(homer_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
         if int(proc.returncode) != 0:
-            print("HOMER motif scan failed for {meme}, {fa} (cmd)".format(meme=motif_file,
-                                                                          fa=fasta_file,
-                                                                          cmd=" ".join(homer_command)))
+            print("HOMER motif scan failed for {meme}, {fa} ({cmd})".format(meme=motif_file,
+                                                                           fa=fasta_file,
+                                                                           cmd=" ".join(homer_command)))
 
         return self._parse_output(io.StringIO(proc.stdout.decode("utf-8")))
 
