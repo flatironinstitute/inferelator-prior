@@ -85,7 +85,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         'alphas': alphas,
         'loadings': [],
         'mse': np.zeros(alphas.shape, dtype=float),
-        'bic': np.zeros((alphas.shape, d.X.shape[1]), dtype=float),
+        'bic': np.zeros((alphas.shape[0], d.X.shape[1]), dtype=float),
         'bic_joint': np.zeros(alphas.shape, dtype=float),
         'nnz': np.zeros(alphas.shape, dtype=float),
         'nnz_genes': np.zeros(alphas.shape, dtype=float)
