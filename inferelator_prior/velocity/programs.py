@@ -8,6 +8,8 @@ from scipy.stats import zscore
 
 import sklearn.decomposition
 from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import ridge_regression
+
 from joblib import parallel_backend as _parallel_backend
 
 # DEFAULT ALPHA SEARCH SPACE #
@@ -94,7 +96,9 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
-            back_rotate = (np.linalg.pinv(mbsp.components_) @ projected.T).T
+            back_rotate = ridge_regression(
+                mbsp.components_, projected.T, 0.01, solver="cholesky"
+            )
 
         results['loadings'].append(mbsp.components_.T)
         results['nnz'][i] = np.sum(mbsp.components_ != 0)
