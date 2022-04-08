@@ -81,6 +81,9 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
     n = d.X.shape[0]
 
+    # Calculate baseline for deviance
+    sc.pp.pca(d, n_comps=n_components, zero_center=True, dtype=float)
+
     results = {
         'alphas': alphas,
         'loadings': [],
@@ -106,23 +109,24 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
-            resid = ridge_regression(
-                mbsp.components_, projected.T, 0.01, solver="cholesky"
-            )
+            resid = ridge_regression(mbsp.components_, projected.T, 0.01, solver="cholesky")
 
-        # MSE per gene
-        resid -= d.X
+        # Cleanup floats
+        mbsp.components_[np.abs(mbsp.components_) <= np.finfo(mbsp.components_.dtype).eps] = 0.
+
+        # Deviance from PCA per gene
+        resid -= d.obsm['X_pca']
         resid **= 2
         resid = np.mean(resid, axis=0)
 
         nnz_per_gene = np.sum(mbsp.components_ != 0, axis=0)
 
-        # Calculate BIC from mean squared residuals
-        # n * log(MSE) + k * log(n)
-        results['bic'][i, :] = n * np.log(resid) + nnz_per_gene * np.log(n)
+        # Calculate BIC per gene from deviance
+        # deviance + k * log(n)
+        results['bic'][i, :] = resid + nnz_per_gene * np.log(n)
 
         # Sum all BIC to get a joint information criterion
-        results['bic_joint'] = np.sum(results['bic'][i, :])
+        results['bic_joint'][i] = np.sum(results['bic'][i, :])
 
         # Add loadings
         results['loadings'].append(mbsp.components_.T)
@@ -130,7 +134,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         # Add summary stats
         results['nnz'][i] = np.sum(mbsp.components_ != 0)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
-        results['mse'][i] = np.mean(resid)
+        results['deviance'][i] = np.mean(resid)
 
         models.append(mbsp)
 
