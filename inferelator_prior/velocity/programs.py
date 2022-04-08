@@ -21,6 +21,8 @@ ALPHA = np.concatenate((np.array([0]),
                         np.array([75, 100, 150, 200]))
                        )
 
+OUTLIER_SQUISH = 10
+
 
 def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
                n_components=100, normalize=True, **kwargs):
@@ -66,6 +68,11 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         sc.pp.normalize_per_cell(d)
         sc.pp.log1p(d)
         d.X = zscore(d.X)
+
+        ### Squish outliers ###
+        d.X[d.X < (-1 * OUTLIER_SQUISH)] = -1 * OUTLIER_SQUISH
+        d.X[d.X > OUTLIER_SQUISH] = OUTLIER_SQUISH
+
     else:
         # Dummy mask
         _keep_gene_mask = np.ones(d.shape[1], dtype=bool)
