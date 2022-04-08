@@ -82,17 +82,19 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     n = d.X.shape[0]
 
     # Calculate baseline for deviance
-    sc.pp.pca(d, n_comps=n_components, zero_center=True, dtype=float)
-    d.obsm['X_from_pca'] = ridge_regression(
-        d.varm['PCs'].T,
-        d.obsm['X_pca'].T,
-        ridge_alpha,
-        solver="cholesky"
-    )
+    with _parallel_backend("loky", inner_max_num_threads=1):
+        sc.pp.pca(d, n_comps=n_components, zero_center=True, dtype=float)
+        d.obsm['X_from_pca'] = ridge_regression(
+            d.varm['PCs'].T,
+            d.obsm['X_pca'].T,
+            ridge_alpha,
+            solver="cholesky"
+        )
 
     results = {
         'alphas': alphas,
         'loadings': [],
+        'full_model_mse': np.mean((d.X - d.obsm['X_from_pca']) ** 2),
         'mse': np.zeros(alphas.shape, dtype=float),
         'bic': np.zeros((alphas.shape[0], d.X.shape[1]), dtype=float),
         'bic_joint': np.zeros(alphas.shape, dtype=float),
@@ -117,13 +119,14 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
             projected = mbsp.fit_transform(d.X)
             resid = ridge_regression(mbsp.components_, projected.T, ridge_alpha, solver="cholesky")
 
-        # Cleanup floats
-        mbsp.components_[np.abs(mbsp.components_) <= np.finfo(mbsp.components_.dtype).eps] = 0.
+        # Cleanup component floats
+        comp_eps =  np.finfo(mbsp.components_.dtype).eps
+        mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
 
         # Deviance from PCA per gene
         resid -= d.obsm['X_from_pca']
         resid **= 2
-        resid = np.mean(resid, axis=0)
+        resid = np.sum(resid, axis=0)
 
         nnz_per_gene = np.sum(mbsp.components_ != 0, axis=0)
 
@@ -132,7 +135,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         results['bic'][i, :] = resid + nnz_per_gene * np.log(n)
 
         # Sum all BIC to get a joint information criterion
-        results['bic_joint'][i] = np.sum(results['bic'][i, :])
+        results['bic_joint'][i] = np.mean(results['bic'][i, :])
 
         # Add loadings
         results['loadings'].append(mbsp.components_.T)
@@ -140,7 +143,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         # Add summary stats
         results['nnz'][i] = np.sum(mbsp.components_ != 0)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
-        results['deviance'][i] = np.mean(resid)
+        results['deviance'][i] = np.sum(resid)
 
         models.append(mbsp)
 
