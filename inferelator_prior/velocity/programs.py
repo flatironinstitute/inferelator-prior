@@ -7,7 +7,6 @@ from scipy.sparse import issparse
 from scipy.stats import zscore
 
 import sklearn.decomposition
-from sklearn.metrics import mean_squared_error
 from sklearn.linear_model import ridge_regression
 
 from joblib import parallel_backend as _parallel_backend
@@ -80,10 +79,14 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     if batch_size is None:
         batch_size = max(int(d.shape[0] / 1000), 5)
 
+    n = d.X.shape[0]
+
     results = {
         'alphas': alphas,
         'loadings': [],
         'mse': np.zeros(alphas.shape, dtype=float),
+        'bic': np.zeros((alphas.shape, d.X.shape[1]), dtype=float),
+        'bic_joint': np.zeros(alphas.shape, dtype=float),
         'nnz': np.zeros(alphas.shape, dtype=float),
         'nnz_genes': np.zeros(alphas.shape, dtype=float)
     }
@@ -103,18 +106,35 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
-            back_rotate = ridge_regression(
+            resid = ridge_regression(
                 mbsp.components_, projected.T, 0.01, solver="cholesky"
             )
 
+        # MSE per gene
+        resid -= d.X
+        resid **= 2
+        resid = np.mean(resid, axis=0)
+
+        nnz_per_gene = np.sum(mbsp.components_ != 0, axis=0)
+
+        # Calculate BIC from mean squared residuals
+        # n * log(MSE) + k * log(n)
+        results['bic'][i, :] = n * np.log(resid) + nnz_per_gene * np.log(n)
+
+        # Sum all BIC to get a joint information criterion
+        results['bic_joint'] = np.sum(results['bic'][i, :])
+
+        # Add loadings
         results['loadings'].append(mbsp.components_.T)
+
+        # Add summary stats
         results['nnz'][i] = np.sum(mbsp.components_ != 0)
-        results['nnz_genes'][i] = np.sum(np.sum(mbsp.components_ != 0, axis=0) > 0)
-        results['mse'][i] = mean_squared_error(back_rotate, d.X)
+        results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
+        results['mse'][i] = np.mean(resid)
 
         models.append(mbsp)
 
-    min_mse = np.argmin(results['mse'])
+    min_mse = np.argmin(results['bic_joint'])
 
     results['opt_alpha'] = alphas[min_mse]
 
