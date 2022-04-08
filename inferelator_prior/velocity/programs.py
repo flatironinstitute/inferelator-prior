@@ -99,7 +99,8 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         'bic': np.zeros((alphas.shape[0], d.X.shape[1]), dtype=float),
         'bic_joint': np.zeros(alphas.shape, dtype=float),
         'nnz': np.zeros(alphas.shape, dtype=float),
-        'nnz_genes': np.zeros(alphas.shape, dtype=float)
+        'nnz_genes': np.zeros(alphas.shape, dtype=float),
+        'deviance': np.zeros(alphas.shape, dtype=float)
     }
 
     models = []
@@ -134,7 +135,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         # deviance + k * log(n)
         results['bic'][i, :] = resid + nnz_per_gene * np.log(n)
 
-        # Sum all BIC to get a joint information criterion
+        # Mean BIC to get a joint information criterion
         results['bic_joint'][i] = np.mean(results['bic'][i, :])
 
         # Add loadings
