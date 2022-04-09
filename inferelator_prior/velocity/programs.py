@@ -152,7 +152,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         results['loadings'].append(mbsp.components_.T)
 
         # Add summary stats
-        results['mse'] = mse
+        results['mse'][i] = mse
         results['nnz'][i] = np.sum(mbsp.components_ != 0)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
         results['deviance'][i] = np.sum(deviance)
@@ -169,8 +169,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
     # Largest Alpha w/90% of genes
     elif threshold == 'genes':
-        select_alpha = results['nnz_genes'] / m
-        select_alpha = np.argmax(select_alpha[select_alpha > 0.9])
+        select_alpha = np.argmax(alphas[(results['nnz_genes'] / m) > 0.9])
 
     results['opt_alpha'] = alphas[select_alpha]
 
