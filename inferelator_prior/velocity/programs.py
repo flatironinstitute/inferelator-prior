@@ -8,6 +8,7 @@ from scipy.stats import zscore
 
 import sklearn.decomposition
 from sklearn.linear_model import ridge_regression
+from sklearn.metrics import mean_squared_error
 
 from joblib import parallel_backend as _parallel_backend
 
@@ -24,7 +25,8 @@ OUTLIER_SQUISH = 10
 
 
 def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
-               n_components=100, normalize=True, ridge_alpha=0.01, **kwargs):
+               n_components=100, normalize=True, ridge_alpha=0.01, threshold='genes',
+               **kwargs):
     """
     Calculate a sparse PCA using sklearn MiniBatchSparsePCA for a range of
     alpha hyperparameters.
@@ -79,7 +81,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     if batch_size is None:
         batch_size = max(int(d.shape[0] / 1000), 5)
 
-    n = d.X.shape[0]
+    n, m = d.X.shape
 
     # Calculate baseline for deviance
     with _parallel_backend("loky", inner_max_num_threads=1):
@@ -94,7 +96,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     results = {
         'alphas': alphas,
         'loadings': [],
-        'full_model_mse': np.mean((d.X - d.obsm['X_from_pca']) ** 2),
+        'full_model_mse': mean_squared_error(d.X, d.obsm['X_from_pca']),
         'mse': np.zeros(alphas.shape, dtype=float),
         'bic': np.zeros((alphas.shape[0], d.X.shape[1]), dtype=float),
         'bic_joint': np.zeros(alphas.shape, dtype=float),
@@ -118,22 +120,30 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
-            resid = ridge_regression(mbsp.components_, projected.T, ridge_alpha, solver="cholesky")
+            deviance = ridge_regression(
+                mbsp.components_,
+                projected.T,
+                ridge_alpha,
+                solver="cholesky"
+            )
 
         # Cleanup component floats
-        comp_eps =  np.finfo(mbsp.components_.dtype).eps
+        comp_eps = np.finfo(mbsp.components_.dtype).eps
         mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
 
+        # MSE from base data
+        mse = mean_squared_error(deviance, d.X)
+
         # Deviance from PCA per gene
-        resid -= d.obsm['X_from_pca']
-        resid **= 2
-        resid = np.sum(resid, axis=0)
+        deviance -= d.obsm['X_from_pca']
+        deviance **= 2
+        deviance = np.sum(deviance, axis=0)
 
         nnz_per_gene = np.sum(mbsp.components_ != 0, axis=0)
 
         # Calculate BIC per gene from deviance
         # deviance + k * log(n)
-        results['bic'][i, :] = resid + nnz_per_gene * np.log(n)
+        results['bic'][i, :] = deviance + nnz_per_gene * np.log(n)
 
         # Mean BIC to get a joint information criterion
         results['bic_joint'][i] = np.mean(results['bic'][i, :])
@@ -142,27 +152,39 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         results['loadings'].append(mbsp.components_.T)
 
         # Add summary stats
+        results['mse'] = mse
         results['nnz'][i] = np.sum(mbsp.components_ != 0)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
-        results['deviance'][i] = np.sum(resid)
+        results['deviance'][i] = np.sum(deviance)
 
         models.append(mbsp)
 
-    min_mse = np.argmin(results['bic_joint'])
+    # Minimum BIC
+    if threshold == 'bic':
+        select_alpha = np.argmin(results['bic_joint'])
 
-    results['opt_alpha'] = alphas[min_mse]
+    # Minimum MSE
+    elif threshold == 'mse':
+        select_alpha = np.argmin(results['mse'])
+
+    # Largest Alpha w/90% of genes
+    elif threshold == 'genes':
+        select_alpha = results['nnz_genes'] / m
+        select_alpha = np.argmax(select_alpha[select_alpha > 0.9])
+
+    results['opt_alpha'] = alphas[select_alpha]
 
     output_key = layer + "_sparsepca"
 
     # Pad components with zeros if some genes were filtered during normalization
-    if results['loadings'][min_mse].shape[0] != data.shape[1]:
+    if results['loadings'][select_alpha].shape[0] != data.shape[1]:
         for i in range(len(results['loadings'])):
             v_out = np.zeros((data.shape[1], n_components), dtype=float)
             v_out[_keep_gene_mask, :] = results['loadings'][i]
             results['loadings'][i] = v_out
 
-    data.varm[output_key] = results['loadings'][min_mse].copy()
-    data.obsm[output_key] = models[min_mse].transform(d.X)
+    data.varm[output_key] = results['loadings'][select_alpha].copy()
+    data.obsm[output_key] = models[select_alpha].transform(d.X)
     data.uns['sparse_pca'] = results
 
     return data
