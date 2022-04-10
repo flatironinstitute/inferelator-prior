@@ -25,8 +25,8 @@ OUTLIER_SQUISH = 10
 
 
 def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
-               n_components=100, normalize=True, ridge_alpha=0.01, threshold='genes',
-               **kwargs):
+               n_components=100, normalize=True, ridge_alpha=0.025, threshold='genes',
+               minibatchsparsepca=True, **kwargs):
     """
     Calculate a sparse PCA using sklearn MiniBatchSparsePCA for a range of
     alpha hyperparameters.
@@ -47,6 +47,14 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     :param normalize: Depth-normalize, log-transform, and scale date before PCA,
         defaults to True
     :type normalize: bool, optional
+    :param threshold: Select optimization threshold, defaults to 'genes'.
+        'genes' selects alpha based on retaining 90% of genes in final model
+        'mse' minimizes mean squared error against raw data
+        'bic' minimizes BIC of deviance from full PCA model
+    :type threshold: str, optional
+    :param minibatchsparsepca: Use sklearn MiniBatchSparsePCA, defaults to True
+    :type minibatchsparsepca: bool, optional
+    :param **kwargs: Additional keyword arguments for sklearn.decomposition object
     :return: Data object with .uns['sparse_pca'], .obsm[], and .varm[] added
     :rtype: ad.AnnData
     """
@@ -58,6 +66,11 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
     if issparse(d.X):
         d.X = d.X.A
+
+    if minibatchsparsepca:
+        sklearn_sparse = sklearn.decomposition.MiniBatchSparsePCA
+    else:
+        sklearn_sparse = sklearn.decomposition.SparsePCA
 
     alphas = ALPHA.copy() if alphas is None else alphas
 
@@ -98,10 +111,9 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         'loadings': [],
         'full_model_mse': mean_squared_error(d.X, d.obsm['X_from_pca']),
         'mse': np.zeros(alphas.shape, dtype=float),
-        'bic': np.zeros((alphas.shape[0], d.X.shape[1]), dtype=float),
-        'bic_joint': np.zeros(alphas.shape, dtype=float),
-        'nnz': np.zeros(alphas.shape, dtype=float),
-        'nnz_genes': np.zeros(alphas.shape, dtype=float),
+        'bic': np.zeros(alphas.shape, dtype=float),
+        'nnz': np.zeros(alphas.shape, dtype=int),
+        'nnz_genes': np.zeros(alphas.shape, dtype=int),
         'deviance': np.zeros(alphas.shape, dtype=float)
     }
 
@@ -111,12 +123,11 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         a = alphas[i]
 
-        mbsp = sklearn.decomposition.MiniBatchSparsePCA(n_components=n_components,
-                                                        n_jobs=-1,
-                                                        alpha=a,
-                                                        batch_size=batch_size,
-                                                        random_state=random_state,
-                                                        **kwargs)
+        mbsp = sklearn_sparse(n_components=n_components,
+                              n_jobs=-1,
+                              alpha=a,
+                              random_state=random_state,
+                              **kwargs)
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
@@ -137,25 +148,22 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         # Deviance from PCA per gene
         deviance -= d.obsm['X_from_pca']
         deviance **= 2
-        deviance = np.sum(deviance, axis=0)
+        deviance = np.sum(deviance)
 
         nnz_per_gene = np.sum(mbsp.components_ != 0, axis=0)
 
-        # Calculate BIC per gene from deviance
-        # deviance + k * log(n)
-        results['bic'][i, :] = deviance + nnz_per_gene * np.log(n)
-
-        # Mean BIC to get a joint information criterion
-        results['bic_joint'][i] = np.mean(results['bic'][i, :])
+        # Calculate BIC from deviance
+        # n * log(deviance / n) + k * log(n)
+        results['bic'][i] = n * np.log(deviance / n) + np.sum(nnz_per_gene) * np.log(n)
 
         # Add loadings
         results['loadings'].append(mbsp.components_.T)
 
         # Add summary stats
         results['mse'][i] = mse
-        results['nnz'][i] = np.sum(mbsp.components_ != 0)
+        results['nnz'][i] = np.sum(nnz_per_gene)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
-        results['deviance'][i] = np.sum(deviance)
+        results['deviance'][i] = deviance
 
         models.append(mbsp)
 
