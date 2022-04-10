@@ -127,6 +127,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
                               n_jobs=-1,
                               alpha=a,
                               random_state=random_state,
+                              ridge_alpha=ridge_alpha,
                               **kwargs)
 
         with _parallel_backend("loky", inner_max_num_threads=1):
