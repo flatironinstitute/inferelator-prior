@@ -64,6 +64,8 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     if issparse(d.X):
         d.X = d.X.A
 
+    n, m = d.X.shape
+
     if minibatchsparsepca:
         sklearn_sparse = sklearn.decomposition.MiniBatchSparsePCA
     else:
@@ -81,12 +83,11 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
     else:
         # Dummy mask
-        _keep_gene_mask = np.ones(d.shape[1], dtype=bool)
+        _keep_gene_mask = np.ones(m, dtype=bool)
 
     if batch_size is None:
-        batch_size = max(int(d.shape[0] / 1000), 5)
+        batch_size = min(1000, max(int(n/10), 10))
 
-    n, m = d.X.shape
 
     # Center means
     m_mean = np.mean(d.X, axis=0)
