@@ -140,6 +140,10 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
                 ridge_alpha,
             )
 
+            # Calculate errors
+            mse = mean_squared_error(deviance, d.obsm['X_from_pca'])
+            mse_full = mean_squared_error(deviance, d.X)
+
         # Deviance from PCA per gene w/same # comps
         deviance -= d.obsm['X_from_pca']
         deviance **= 2
@@ -156,8 +160,8 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         results['loadings'].append(mbsp.components_.T)
 
         # Add summary stats
-        results['mse'][i] = mean_squared_error(deviance, d.obsm['X_from_pca'])
-        results['mse_full'][i] = mean_squared_error(deviance, d.X)
+        results['mse'][i] = mse
+        results['mse_full'][i] = mse_full
         results['nnz'][i] = np.sum(nnz_per_gene)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
         results['deviance'][i] = deviance
