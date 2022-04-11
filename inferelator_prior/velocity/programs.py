@@ -4,7 +4,6 @@ import scanpy as sc
 import anndata as ad
 
 from scipy.sparse import issparse
-from scipy.stats import zscore
 
 import sklearn.decomposition
 from sklearn.linear_model import ridge_regression
@@ -15,13 +14,11 @@ from joblib import parallel_backend as _parallel_backend
 # DEFAULT ALPHA SEARCH SPACE #
 # 0 to 200 (LOGSPACE <1 & INCREASING STEPS >1) #
 ALPHA = np.concatenate((np.array([0]),
-                        np.logspace(-4, 0, 15),
-                        np.linspace(2, 20, 11),
-                        np.linspace(25, 50, 6),
+                        np.logspace(-4, 0, 5),
+                        np.linspace(2, 10, 5),
+                        np.linspace(20, 50, 4),
                         np.array([75, 100, 150, 200]))
                        )
-
-OUTLIER_SQUISH = 10
 
 
 def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
@@ -81,11 +78,6 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         sc.pp.filter_genes(d, min_cells=10)
         sc.pp.normalize_per_cell(d)
         sc.pp.log1p(d)
-        d.X = zscore(d.X)
-
-        ### Squish outliers ###
-        d.X[d.X < (-1 * OUTLIER_SQUISH)] = -1 * OUTLIER_SQUISH
-        d.X[d.X > OUTLIER_SQUISH] = OUTLIER_SQUISH
 
     else:
         # Dummy mask
@@ -95,6 +87,10 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         batch_size = max(int(d.shape[0] / 1000), 5)
 
     n, m = d.X.shape
+
+    # Center means
+    m_mean = np.mean(d.X, axis=0)
+    d.X = d.X - m_mean[:, None]
 
     # Calculate baseline for deviance
     with _parallel_backend("loky", inner_max_num_threads=1):
@@ -109,8 +105,10 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     results = {
         'alphas': alphas,
         'loadings': [],
+        'means': m_mean,
         'full_model_mse': mean_squared_error(d.X, d.obsm['X_from_pca']),
         'mse': np.zeros(alphas.shape, dtype=float),
+        'mse_full': np.zeros(alphas.shape, dtype=float),
         'bic': np.zeros(alphas.shape, dtype=float),
         'nnz': np.zeros(alphas.shape, dtype=int),
         'nnz_genes': np.zeros(alphas.shape, dtype=int),
@@ -132,6 +130,11 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         with _parallel_backend("loky", inner_max_num_threads=1):
             projected = mbsp.fit_transform(d.X)
+
+            # Cleanup component floats
+            comp_eps = np.finfo(mbsp.components_.dtype).eps
+            mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
+
             deviance = ridge_regression(
                 mbsp.components_,
                 projected.T,
@@ -139,14 +142,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
                 solver="cholesky"
             )
 
-        # Cleanup component floats
-        comp_eps = np.finfo(mbsp.components_.dtype).eps
-        mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
-
-        # MSE from base data
-        mse = mean_squared_error(deviance, d.X)
-
-        # Deviance from PCA per gene
+        # Deviance from PCA per gene w/same # comps
         deviance -= d.obsm['X_from_pca']
         deviance **= 2
         deviance = np.sum(deviance)
@@ -155,13 +151,15 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
 
         # Calculate BIC from deviance
         # n * log(deviance / n) + k * log(n)
-        results['bic'][i] = n * np.log(deviance / n) + np.sum(nnz_per_gene) * np.log(n)
+        k = np.sum(nnz_per_gene) + 1
+        results['bic'][i] = n * np.log(deviance / n) + k * np.log(n)
 
         # Add loadings
         results['loadings'].append(mbsp.components_.T)
 
         # Add summary stats
-        results['mse'][i] = mse
+        results['mse'][i] = mean_squared_error(deviance, d.obsm['X_from_pca'])
+        results['mse_full'][i] = mean_squared_error(deviance, d.X)
         results['nnz'][i] = np.sum(nnz_per_gene)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
         results['deviance'][i] = deviance
@@ -190,6 +188,8 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
             v_out = np.zeros((data.shape[1], n_components), dtype=float)
             v_out[_keep_gene_mask, :] = results['loadings'][i]
             results['loadings'][i] = v_out
+
+    results['loadings'] = np.array(results['loadings'])
 
     data.varm[output_key] = results['loadings'][select_alpha].copy()
     data.obsm[output_key] = models[select_alpha].transform(d.X)
