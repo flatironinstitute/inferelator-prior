@@ -51,7 +51,7 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     :type threshold: str, optional
     :param minibatchsparsepca: Use sklearn MiniBatchSparsePCA, defaults to True
     :type minibatchsparsepca: bool, optional
-    :param **kwargs: Additional keyword arguments for sklearn.decomposition object
+    :param **d.X.shape[0]kwargs: Additional keyword arguments for sklearn.decomposition object
     :return: Data object with .uns['sparse_pca'], .obsm[], and .varm[] added
     :rtype: ad.AnnData
     """
@@ -88,10 +88,9 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     if batch_size is None:
         batch_size = min(1000, max(int(n/10), 10))
 
-
     # Center means
     m_mean = np.mean(d.X, axis=0)
-    d.X = d.X - m_mean[:, None]
+    d.X = d.X - m_mean[None, :]
 
     # Calculate baseline for deviance
     with _parallel_backend("loky", inner_max_num_threads=1):
@@ -100,7 +99,6 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
             d.varm['PCs'].T,
             d.obsm['X_pca'].T,
             ridge_alpha,
-            solver="cholesky"
         )
 
     results = {
@@ -136,11 +134,10 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
             comp_eps = np.finfo(mbsp.components_.dtype).eps
             mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
 
-            deviance = ridge_regression(
+            deviance = _ridge_rotate(
                 mbsp.components_,
                 projected.T,
                 ridge_alpha,
-                solver="cholesky"
             )
 
         # Deviance from PCA per gene w/same # comps
@@ -197,3 +194,12 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     data.uns['sparse_pca'] = results
 
     return data
+
+
+def _ridge_rotate(comps, data, ridge_alpha=0.01, solver="cholesky"):
+    return ridge_regression(
+                comps,
+                data,
+                ridge_alpha,
+                solver=solver
+            )
