@@ -6,10 +6,13 @@ import anndata as ad
 from scipy.sparse import issparse
 
 import sklearn.decomposition
-from sklearn.linear_model import ridge_regression
+from sklearn.linear_model import ridge_regression, Lasso
 from sklearn.metrics import mean_squared_error
+from sklearn.utils.fixes import delayed
+from sklearn.utils import gen_even_slices
 
 from joblib import parallel_backend as _parallel_backend
+from joblib import Parallel, effective_n_jobs
 
 # DEFAULT ALPHA SEARCH SPACE #
 # 0 to 200 (LOGSPACE <1 & INCREASING STEPS >1) #
@@ -21,9 +24,9 @@ ALPHA = np.concatenate((np.array([0]),
                        )
 
 
-def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
-               n_components=100, normalize=True, ridge_alpha=0.025, threshold='genes',
-               minibatchsparsepca=True, **kwargs):
+def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X',
+                   n_components=100, normalize=True, ridge_alpha=0.01, threshold='mse',
+                   method='lasso', **kwargs):
     """
     Calculate a sparse PCA using sklearn MiniBatchSparsePCA for a range of
     alpha hyperparameters.
@@ -65,11 +68,14 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
         d.X = d.X.A
 
     n, m = d.X.shape
+    a = alphas.shape[0]
 
-    if minibatchsparsepca:
+    if method.lower() == 'minibatchsparsepca':
         sklearn_sparse = sklearn.decomposition.MiniBatchSparsePCA
-    else:
+    elif method.lower() == 'sparsepca':
         sklearn_sparse = sklearn.decomposition.SparsePCA
+    elif method.lower() == 'lasso':
+        sklearn_sparse = ParallelLasso
 
     alphas = ALPHA.copy() if alphas is None else alphas
 
@@ -93,36 +99,38 @@ def sparse_PCA(data, alphas=None, batch_size=None, random_state=50, layer='X',
     d.X = d.X - m_mean[None, :]
 
     # Calculate baseline for deviance
-    with _parallel_backend("loky", inner_max_num_threads=1):
-        sc.pp.pca(d, n_comps=n_components, zero_center=True, dtype=float)
-        d.obsm['X_from_pca'] = ridge_regression(
-            d.varm['PCs'].T,
-            d.obsm['X_pca'].T,
-            ridge_alpha,
-        )
+    pca_obj = sklearn.decomposition.PCA(n_components=n_components, n_jobs=-1)
+    d.obsm['X_pca'] = pca_obj.fit_transform(d.X)
+    d.varm['PCs'] = pca_obj.components_.T
+
+    del pca_obj
+
+    d.obsm['X_from_pca'] = ridge_regression(
+        d.varm['PCs'].T,
+        d.obsm['X_pca'].T,
+        ridge_alpha,
+    )
 
     results = {
         'alphas': alphas,
         'loadings': [],
         'means': m_mean,
         'full_model_mse': mean_squared_error(d.X, d.obsm['X_from_pca']),
-        'mse': np.zeros(alphas.shape, dtype=float),
-        'mse_full': np.zeros(alphas.shape, dtype=float),
-        'bic': np.zeros(alphas.shape, dtype=float),
-        'nnz': np.zeros(alphas.shape, dtype=int),
-        'nnz_genes': np.zeros(alphas.shape, dtype=int),
-        'deviance': np.zeros(alphas.shape, dtype=float)
+        'mse': np.zeros(a, dtype=float),
+        'mse_full': np.zeros(a, dtype=float),
+        'bic': np.zeros(a, dtype=float),
+        'nnz': np.zeros(a, dtype=int),
+        'nnz_genes': np.zeros(a, dtype=int),
+        'deviance': np.zeros(a, dtype=float)
     }
 
     models = []
 
-    for i in tqdm.trange(len(alphas)):
-
-        a = alphas[i]
+    for i in tqdm.trange(a):
 
         mbsp = sklearn_sparse(n_components=n_components,
                               n_jobs=-1,
-                              alpha=a,
+                              alpha=alphas[i],
                               random_state=random_state,
                               ridge_alpha=ridge_alpha,
                               **kwargs)
@@ -207,3 +215,67 @@ def _ridge_rotate(comps, data, ridge_alpha=0.01, solver="cholesky"):
                 ridge_alpha,
                 solver=solver
             )
+
+
+class ParallelLasso:
+
+    alpha = 1.0
+    n_jobs = -1
+
+    components_ = None
+
+    @property
+    def coef_(self):
+        return self.components_
+
+    def __init__(self, alpha=1.0, n_jobs=-1, **kwargs):
+        self.alpha = alpha
+        self.n_jobs = n_jobs
+
+    def fit(self, X, Y):
+
+        n, m = X.shape
+        p = Y.shape[1]
+
+        gram = np.dot(X.T, X)
+
+        coefs = np.zeros((p, m), dtype=float)
+        slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
+        
+        views = Parallel(n_jobs=self.n_jobs)(
+            delayed(_lasso)(
+                X,
+                Y[:, i],
+                self.alpha,
+                precompute=gram,
+            )
+            for i in slices
+        )
+
+        for i, results in zip(slices, views):
+            coefs[i, :] = results
+
+        self.coef_ = coefs
+
+        return self
+
+    def fit_transform(self, X, Y):
+
+        self.fit(X, Y)
+        self.transform(X, Y)
+
+    def transform(self, X):
+        return _ridge_rotate(self.coef_.T, X.T)
+
+
+def _lasso(X, y, alpha, precompute=False):
+
+    lasso = Lasso(
+        alpha=alpha,
+        fit_intercept=False,
+        precompute=precompute
+    )
+
+    lasso.fit(X, y)
+
+    return lasso.coef_
