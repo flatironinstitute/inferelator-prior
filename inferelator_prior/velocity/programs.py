@@ -70,11 +70,13 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     n, m = d.X.shape
     a = alphas.shape[0]
 
-    if method.lower() == 'minibatchsparsepca':
+    method = method.lower()
+
+    if method == 'minibatchsparsepca':
         sklearn_sparse = sklearn.decomposition.MiniBatchSparsePCA
-    elif method.lower() == 'sparsepca':
+    elif method == 'sparsepca':
         sklearn_sparse = sklearn.decomposition.SparsePCA
-    elif method.lower() == 'lasso':
+    elif method == 'lasso':
         sklearn_sparse = ParallelLasso
 
     alphas = ALPHA.copy() if alphas is None else alphas
@@ -105,10 +107,10 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     del pca_obj
 
-    d.obsm['X_from_pca'] = ridge_regression(
+    d.obsm['X_from_pca'] = _ridge_rotate(
         d.varm['PCs'].T,
         d.obsm['X_pca'].T,
-        ridge_alpha,
+        ridge_alpha
     )
 
     results = {
@@ -136,7 +138,11 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
                               **kwargs)
 
         with _parallel_backend("loky", inner_max_num_threads=1):
-            projected = mbsp.fit_transform(d.X)
+
+            if method == 'lasso':
+                projected = mbsp.fit_transform(d.obsm['X_from_pca'], d.X)
+            else:
+                projected = mbsp.fit_transform(d.X)
 
             # Cleanup component floats
             comp_eps = np.finfo(mbsp.components_.dtype).eps
@@ -145,7 +151,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
             deviance = _ridge_rotate(
                 mbsp.components_,
                 projected.T,
-                ridge_alpha,
+                ridge_alpha
             )
 
             # Calculate errors
