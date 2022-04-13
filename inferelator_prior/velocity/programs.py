@@ -6,7 +6,7 @@ import anndata as ad
 from scipy.sparse import issparse
 
 import sklearn.decomposition
-from sklearn.linear_model import ridge_regression, Lasso
+from sklearn.linear_model import ridge_regression, Lasso, LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.utils.fixes import delayed
 from sklearn.utils import gen_even_slices
@@ -68,7 +68,6 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         d.X = d.X.A
 
     n, m = d.X.shape
-    a = alphas.shape[0]
 
     method = method.lower()
 
@@ -80,6 +79,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         sklearn_sparse = ParallelLasso
 
     alphas = ALPHA.copy() if alphas is None else alphas
+    a = alphas.shape[0]
 
     if normalize:
         # Mask is the same as sc.pp.filter_genes(min_cells=10)
@@ -227,6 +227,7 @@ class ParallelLasso:
 
     alpha = 1.0
     n_jobs = -1
+    ridge_alpha = 0.01
 
     components_ = None
 
@@ -234,11 +235,12 @@ class ParallelLasso:
     def coef_(self):
         return self.components_
 
-    def __init__(self, alpha=1.0, n_jobs=-1, **kwargs):
+    def __init__(self, alpha=1.0, n_jobs=-1, ridge_alpha=0.01, **kwargs):
         self.alpha = alpha
         self.n_jobs = n_jobs
+        self.ridge_alpha = ridge_alpha
 
-    def fit(self, X, Y):
+    def fit(self, X, Y, **kwargs):
 
         n, m = X.shape
         p = Y.shape[1]
@@ -252,8 +254,9 @@ class ParallelLasso:
             delayed(_lasso)(
                 X,
                 Y[:, i],
-                self.alpha,
+                alpha=self.alpha,
                 precompute=gram,
+                **kwargs,
             )
             for i in slices
         )
@@ -271,17 +274,17 @@ class ParallelLasso:
         self.transform(X, Y)
 
     def transform(self, X):
-        return _ridge_rotate(self.coef_.T, X.T)
+        return _ridge_rotate(self.coef_.T, X.T,
+                             ridge_alpha=self.ridge_alpha)
 
 
-def _lasso(X, y, alpha, precompute=False):
+def _lasso(X, y, **kwargs):
 
-    lasso = Lasso(
-        alpha=alpha,
-        fit_intercept=False,
-        precompute=precompute
-    )
+    kwargs['fit_intercept'] = False
 
-    lasso.fit(X, y)
+    if 'alpha' not in kwargs or kwargs['alpha'] == 0:
+        lasso = LinearRegression(n_jobs=1).fit(X, y)
+    else:
+        lasso = Lasso(**kwargs).fit(X, y)
 
     return lasso.coef_
