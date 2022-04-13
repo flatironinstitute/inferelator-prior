@@ -1,3 +1,4 @@
+import warnings
 import tqdm
 import numpy as np
 import scanpy as sc
@@ -10,6 +11,7 @@ from sklearn.linear_model import ridge_regression, Lasso, LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.utils.fixes import delayed
 from sklearn.utils import gen_even_slices
+from sklearn.exceptions import ConvergenceWarning
 
 from joblib import parallel_backend as _parallel_backend
 from joblib import Parallel, effective_n_jobs
@@ -17,7 +19,7 @@ from joblib import Parallel, effective_n_jobs
 # DEFAULT ALPHA SEARCH SPACE #
 # 0 to 200 (LOGSPACE <1 & INCREASING STEPS >1) #
 ALPHA = np.concatenate((np.array([0]),
-                        np.logspace(-4, 0, 5),
+                        np.logspace(-3, 0, 4),
                         np.linspace(2, 10, 5),
                         np.linspace(20, 50, 4),
                         np.array([75, 100, 150, 200]))
@@ -257,19 +259,22 @@ class ParallelLasso:
             coefs = np.zeros((p, m), dtype=float)
             slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
 
-            views = Parallel(n_jobs=self.n_jobs)(
-                delayed(_lasso)(
-                    X,
-                    Y[:, i],
-                    alpha=self.alpha,
-                    precompute=gram,
-                    **kwargs,
+            with warnings.catch_warnings():
+                warnings.simplefilter('once', ConvergenceWarning)
+                
+                views = Parallel(n_jobs=self.n_jobs)(
+                    delayed(_lasso)(
+                        X,
+                        Y[:, i],
+                        alpha=self.alpha,
+                        precompute=gram,
+                        **kwargs,
+                    )
+                    for i in slices
                 )
-                for i in slices
-            )
 
-            for i, results in zip(slices, views):
-                coefs[i, :] = results
+                for i, results in zip(slices, views):
+                    coefs[i, :] = results
 
             self.components_ = coefs
 
@@ -288,4 +293,8 @@ class ParallelLasso:
 def _lasso(X, y, **kwargs):
 
     kwargs['fit_intercept'] = False
+
+    if kwargs['alpha'] <= 0.1 and 'max_iter' not in kwargs:
+        kwargs['max_iter'] = 2500
+
     return Lasso(**kwargs).fit(X, y).coef_
