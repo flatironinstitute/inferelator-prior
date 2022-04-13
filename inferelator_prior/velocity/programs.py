@@ -283,7 +283,7 @@ def _lasso(X, y, **kwargs):
     kwargs['fit_intercept'] = False
 
     if 'alpha' not in kwargs or kwargs['alpha'] == 0:
-        lasso = LinearRegression(n_jobs=1).fit(X, y)
+        lasso = LinearRegression(n_jobs=1, fit_intercept=False).fit(X, y)
     else:
         lasso = Lasso(**kwargs).fit(X, y)
 
