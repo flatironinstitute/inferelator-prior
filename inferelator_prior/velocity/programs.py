@@ -5,9 +5,10 @@ import scanpy as sc
 import anndata as ad
 
 from scipy.sparse import issparse
+from scipy import linalg
 
 import sklearn.decomposition
-from sklearn.linear_model import ridge_regression, Lasso, LinearRegression
+from sklearn.linear_model import ridge_regression, Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.utils.fixes import delayed
 from sklearn.utils import gen_even_slices
@@ -101,8 +102,6 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     # Center means
     m_mean = np.mean(d.X, axis=0)
     d.X = d.X - m_mean[None, :]
-
-    d.X = np.asfortranarray(d.X)
 
     # Calculate baseline for deviance
     pca_obj = sklearn.decomposition.PCA(n_components=n_components)
@@ -249,14 +248,25 @@ class ParallelLasso:
         n, m = X.shape
         p = Y.shape[1]
 
+        coefs = np.zeros((p, m), dtype=float)
+
         if self.alpha == 0:
-            self.components_ = LinearRegression(n_jobs=self.n_jobs,
-                                                fit_intercept=False).fit(X, Y).coef_
+
+            # Break up the big data object so it's memory reasonable
+            slices = list(gen_even_slices(p, effective_n_jobs(100)))
+
+            for s in slices:
+                lstsq_comp, _, _, _ = linalg.lstsq(X, Y[:, s])
+                coefs[s, :] = lstsq_comp.T
+
+        elif self.n_jobs == 1:
+            coefs[:] = _lasso(X, Y, alpha=self.alpha)
 
         else:
             gram = np.dot(X.T, X)
 
-            coefs = np.zeros((p, m), dtype=float)
+            # Switch order 
+            X = np.asfortranarray(X)
             slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
 
             with warnings.catch_warnings():
@@ -276,7 +286,7 @@ class ParallelLasso:
                 for i, results in zip(slices, views):
                     coefs[i, :] = results
 
-            self.components_ = coefs
+        self.components_ = coefs
 
         return self
 
