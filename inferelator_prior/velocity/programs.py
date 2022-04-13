@@ -247,26 +247,31 @@ class ParallelLasso:
         n, m = X.shape
         p = Y.shape[1]
 
-        gram = np.dot(X.T, X)
+        if self.alpha == 0:
+            self.components_ = LinearRegression(n_jobs=self.n_jobs,
+                                                fit_intercept=False).fit(X, Y).coef_
 
-        coefs = np.zeros((p, m), dtype=float)
-        slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
-        
-        views = Parallel(n_jobs=self.n_jobs)(
-            delayed(_lasso)(
-                X,
-                Y[:, i],
-                alpha=self.alpha,
-                precompute=gram,
-                **kwargs,
+        else:
+            gram = np.dot(X.T, X)
+
+            coefs = np.zeros((p, m), dtype=float)
+            slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
+
+            views = Parallel(n_jobs=self.n_jobs)(
+                delayed(_lasso)(
+                    X,
+                    Y[:, i],
+                    alpha=self.alpha,
+                    precompute=gram,
+                    **kwargs,
+                )
+                for i in slices
             )
-            for i in slices
-        )
 
-        for i, results in zip(slices, views):
-            coefs[i, :] = results
+            for i, results in zip(slices, views):
+                coefs[i, :] = results
 
-        self.coef_ = coefs
+            self.components_ = coefs
 
         return self
 
@@ -283,10 +288,4 @@ class ParallelLasso:
 def _lasso(X, y, **kwargs):
 
     kwargs['fit_intercept'] = False
-
-    if 'alpha' not in kwargs or kwargs['alpha'] == 0:
-        lasso = LinearRegression(n_jobs=1, fit_intercept=False).fit(X, y)
-    else:
-        lasso = Lasso(**kwargs).fit(X, y)
-
-    return lasso.coef_
+    return Lasso(**kwargs).fit(X, y).coef_
