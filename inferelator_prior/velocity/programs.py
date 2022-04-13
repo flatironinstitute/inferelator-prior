@@ -278,7 +278,7 @@ class ParallelLasso:
     def fit_transform(self, X, Y):
 
         self.fit(X, Y)
-        self.transform(X)
+        return self.transform(X)
 
     def transform(self, X):
         return _ridge_rotate(self.coef_.T, X.T,
