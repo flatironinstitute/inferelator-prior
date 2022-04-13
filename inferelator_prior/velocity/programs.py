@@ -188,7 +188,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     # Minimum BIC
     if threshold == 'bic':
-        select_alpha = np.argmin(results['bic_joint'])
+        select_alpha = np.argmin(results['bic'])
 
     # Minimum MSE
     elif threshold == 'mse':
@@ -261,7 +261,7 @@ class ParallelLasso:
 
             with warnings.catch_warnings():
                 warnings.simplefilter('once', ConvergenceWarning)
-                
+
                 views = Parallel(n_jobs=self.n_jobs)(
                     delayed(_lasso)(
                         X,
