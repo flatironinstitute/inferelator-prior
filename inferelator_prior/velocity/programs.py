@@ -100,6 +100,8 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     m_mean = np.mean(d.X, axis=0)
     d.X = d.X - m_mean[None, :]
 
+    d.X = np.asfortranarray(d.X)
+
     # Calculate baseline for deviance
     pca_obj = sklearn.decomposition.PCA(n_components=n_components)
     d.obsm['X_pca'] = pca_obj.fit_transform(d.X)
