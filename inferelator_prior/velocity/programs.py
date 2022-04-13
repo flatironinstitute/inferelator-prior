@@ -101,7 +101,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     d.X = d.X - m_mean[None, :]
 
     # Calculate baseline for deviance
-    pca_obj = sklearn.decomposition.PCA(n_components=n_components, n_jobs=-1)
+    pca_obj = sklearn.decomposition.PCA(n_components=n_components)
     d.obsm['X_pca'] = pca_obj.fit_transform(d.X)
     d.varm['PCs'] = pca_obj.components_.T
 
