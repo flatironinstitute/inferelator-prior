@@ -262,7 +262,7 @@ class ParallelLasso:
             slices = list(gen_even_slices(p, effective_n_jobs(5)))
 
             for s in slices:
-                lstsq_comp = linalg.solve(gram, np.dot(X.T, xty[:, s]),
+                lstsq_comp = linalg.solve(gram, xty[:, s],
                                           assume_a='sym')
                 coefs[s, :] = lstsq_comp.T
 
