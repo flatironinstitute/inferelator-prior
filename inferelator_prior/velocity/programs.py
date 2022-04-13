@@ -110,6 +110,9 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     del pca_obj
 
+    # Switch order 
+    d.X = np.asfortranarray(d.X)
+
     d.obsm['X_from_pca'] = _ridge_rotate(
         d.varm['PCs'].T,
         d.obsm['X_pca'].T,
@@ -252,11 +255,15 @@ class ParallelLasso:
 
         if self.alpha == 0:
 
+            gram = np.dot(X.T, X)
+            xty = np.dot(X.T, Y)
+
             # Break up the big data object so it's memory reasonable
-            slices = list(gen_even_slices(p, effective_n_jobs(100)))
+            slices = list(gen_even_slices(p, effective_n_jobs(5)))
 
             for s in slices:
-                lstsq_comp, _, _, _ = linalg.lstsq(X, Y[:, s])
+                lstsq_comp = linalg.solve(gram, np.dot(X.T, xty[:, s]),
+                                          assume_a='sym')
                 coefs[s, :] = lstsq_comp.T
 
         elif self.n_jobs == 1:
@@ -265,8 +272,6 @@ class ParallelLasso:
         else:
             gram = np.dot(X.T, X)
 
-            # Switch order 
-            X = np.asfortranarray(X)
             slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
 
             with warnings.catch_warnings():
