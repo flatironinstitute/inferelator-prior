@@ -259,12 +259,7 @@ class ParallelLasso:
             xty = np.dot(X.T, Y)
 
             # Break up the big data object so it's memory reasonable
-            slices = list(gen_even_slices(p, effective_n_jobs(5)))
-
-            for s in slices:
-                lstsq_comp = linalg.solve(gram, xty[:, s],
-                                          assume_a='sym')
-                coefs[s, :] = lstsq_comp.T
+            coefs[:] = linalg.solve(gram, xty, assume_a='sym').T
 
         elif self.n_jobs == 1:
             coefs[:] = _lasso(X, Y, alpha=self.alpha)
