@@ -175,7 +175,6 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
                 # Add loadings
                 results['loadings'].append(mbsp.components_.T)
-                
 
             # Calculate errors
             mse = mean_squared_error(deviance, d.obsm['X_from_pca'])
@@ -223,6 +222,11 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     output_key = layer + "_sparsepca"
 
+    if method == 'lasso':
+        data.obsm[output_key] = d.obsm['X_pca'] @ np.linalg.pinv(results['loadings'][select_alpha])
+    else:
+        data.obsm[output_key] = models[select_alpha].transform(d.X)
+
     # Pad components with zeros if some genes were filtered during normalization
     if results['loadings'][select_alpha].shape[0] != data.shape[1]:
         for i in range(len(results['loadings'])):
@@ -233,12 +237,6 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     results['loadings'] = np.array(results['loadings'])
 
     data.varm[output_key] = results['loadings'][select_alpha].copy()
-
-    if method == 'lasso':
-        data.obsm[output_key] = d.obsm['X_pca'] @ np.linalg.pinv(models[select_alpha].components_.T)
-    else:
-        data.obsm[output_key] = models[select_alpha].transform(d.X)
-
     data.uns['sparse_pca'] = results
 
     return data
