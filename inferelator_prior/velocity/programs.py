@@ -60,7 +60,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     :type threshold: str, optional
     :param minibatchsparsepca: Use sklearn MiniBatchSparsePCA, defaults to True
     :type minibatchsparsepca: bool, optional
-    :param **d.X.shape[0]kwargs: Additional keyword arguments for sklearn.decomposition object
+    :param **kwargs: Additional keyword arguments for sklearn.decomposition object
     :return: Data object with .uns['sparse_pca'], .obsm[], and .varm[] added
     :rtype: ad.AnnData
     """
@@ -142,6 +142,9 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     models = []
 
     for i in tqdm.trange(a):
+
+        if i > 0 and method == 'lasso':
+            kwargs['warm_start'] = models[i - 1].components_
 
         mbsp = sklearn_sparse(n_components=n_components,
                               n_jobs=-1,
@@ -249,6 +252,7 @@ class ParallelLasso:
     alpha = 1.0
     n_jobs = -1
     ridge_alpha = 0.01
+    warm_start = None
 
     components_ = None
 
@@ -256,10 +260,11 @@ class ParallelLasso:
     def coef_(self):
         return self.components_
 
-    def __init__(self, alpha=1.0, n_jobs=-1, ridge_alpha=0.01, **kwargs):
+    def __init__(self, alpha=1.0, n_jobs=-1, ridge_alpha=0.01, warm_start=None, **kwargs):
         self.alpha = alpha
         self.n_jobs = n_jobs
         self.ridge_alpha = ridge_alpha
+        self.warm_start = warm_start
 
     def fit(self, X, Y, **kwargs):
 
@@ -270,7 +275,6 @@ class ParallelLasso:
 
         if self.alpha == 0:
 
-            # Break up the big data object so it's memory reasonable
             coefs[:] = linalg.solve(np.dot(X.T, X),
                                     np.dot(X.T, Y),
                                     assume_a='sym').T
@@ -292,6 +296,7 @@ class ParallelLasso:
                         Y[:, i],
                         alpha=self.alpha,
                         precompute=gram,
+                        warm_start=self.warm_start[i, :] if self.warm_start is not None else None,
                         **kwargs,
                     )
                     for i in slices
@@ -313,11 +318,16 @@ class ParallelLasso:
         return X @ self.coef_.T
 
 
-def _lasso(X, y, **kwargs):
+def _lasso(X, y, warm_start=None, **kwargs):
 
     kwargs['fit_intercept'] = False
 
     if kwargs['alpha'] <= 0.1 and 'max_iter' not in kwargs:
         kwargs['max_iter'] = 2500
 
-    return Lasso(**kwargs).fit(X, y).coef_
+    if warm_start is not None:
+        lasso_obj = Lasso(warm_start=True, **kwargs)
+        lasso_obj.coef_ = warm_start.copy()
+        return lasso_obj.fit(X, y).coef_
+    else:
+        return Lasso(**kwargs).fit(X, y).coef_
