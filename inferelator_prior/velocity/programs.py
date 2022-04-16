@@ -1,4 +1,3 @@
-import warnings
 import tqdm
 import numpy as np
 import scanpy as sc
@@ -13,6 +12,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.utils.fixes import delayed
 from sklearn.utils import gen_even_slices
 from sklearn.exceptions import ConvergenceWarning
+from sklearn.utils._testing import ignore_warnings
 
 from joblib import parallel_backend as _parallel_backend
 from joblib import Parallel, effective_n_jobs
@@ -317,6 +317,7 @@ class ParallelLasso:
         return X @ self.coef_.T
 
 
+@ignore_warnings(category=ConvergenceWarning)
 def _lasso(X, y, warm_start=None, **kwargs):
 
     kwargs['fit_intercept'] = False
@@ -324,12 +325,9 @@ def _lasso(X, y, warm_start=None, **kwargs):
     if kwargs['alpha'] <= 0.1 and 'max_iter' not in kwargs:
         kwargs['max_iter'] = 2500
 
-    with warnings.catch_warnings():
-        warnings.simplefilter('once', ConvergenceWarning)
-
-        if warm_start is not None:
-            lasso_obj = Lasso(warm_start=True, **kwargs)
-            lasso_obj.coef_ = warm_start.copy()
-            return lasso_obj.fit(X, y).coef_
-        else:
-            return Lasso(**kwargs).fit(X, y).coef_
+    if warm_start is not None:
+        lasso_obj = Lasso(warm_start=True, **kwargs)
+        lasso_obj.coef_ = warm_start.copy()
+        return lasso_obj.fit(X, y).coef_
+    else:
+        return Lasso(**kwargs).fit(X, y).coef_
