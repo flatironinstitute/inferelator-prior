@@ -225,7 +225,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     if results['loadings'][select_alpha].shape[0] != data.shape[1]:
         for i in range(len(results['loadings'])):
             v_out = np.zeros((data.shape[1], n_components), dtype=float)
-            v_out[_keep_gene_mask, :] = results['loadings'][i].T
+            v_out[_keep_gene_mask, :] = results['loadings'][i]
             results['loadings'][i] = v_out
 
     results['loadings'] = np.array(results['loadings'])
@@ -233,7 +233,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     data.varm[output_key] = results['loadings'][select_alpha].copy()
 
     if method == 'lasso':
-        data.obsm[output_key] = d['X_pca'] @ np.linalg.pinv(models[select_alpha].components_.T)
+        data.obsm[output_key] = d.obsm['X_pca'] @ np.linalg.pinv(models[select_alpha].components_.T)
     else:
         data.obsm[output_key] = models[select_alpha].transform(d.X)
 
@@ -303,7 +303,7 @@ class ParallelLasso:
             for i, results in zip(slices, views):
                 coefs[i, :] = results
 
-        self.components_ = coefs
+        self.components_ = coefs.T
 
         return self
 
