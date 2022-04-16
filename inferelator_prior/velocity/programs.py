@@ -231,7 +231,12 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     results['loadings'] = np.array(results['loadings'])
 
     data.varm[output_key] = results['loadings'][select_alpha].copy()
-    data.obsm[output_key] = models[select_alpha].transform(d.X)
+
+    if method == 'lasso':
+        data.obsm[output_key] = d['X_pca'] @ np.linalg.pinv(models[select_alpha].components_.T)
+    else:
+        data.obsm[output_key] = models[select_alpha].transform(d.X)
+
     data.uns['sparse_pca'] = results
 
     return data
