@@ -26,6 +26,9 @@ ALPHA = np.concatenate((np.array([0]),
                         np.array([75, 100, 150, 200]))
                        )
 
+ALPHA_LASSO = np.concatenate((np.array([0]),
+                              np.logspace(-5, 0, 11),
+                              np.linspace(2, 10, 5)))
 
 def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X',
                    n_components=100, normalize=True, ridge_alpha=0.01, threshold='mse',
@@ -81,7 +84,11 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     elif method == 'lasso':
         sklearn_sparse = ParallelLasso
 
-    alphas = ALPHA.copy() if alphas is None else alphas
+    if alphas is None and method == 'lasso':
+        alphas = ALPHA_LASSO
+    elif alphas is None:
+        alphas = ALPHA
+
     a = alphas.shape[0]
 
     if normalize:
@@ -124,12 +131,12 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         'loadings': [],
         'means': m_mean,
         'full_model_mse': mean_squared_error(d.X, d.obsm['X_from_pca']),
-        'mse': np.zeros(a, dtype=float),
-        'mse_full': np.zeros(a, dtype=float),
-        'bic': np.zeros(a, dtype=float),
+        'mse': np.full(a, fill_value=np.nan, dtype=float),
+        'mse_full': np.full(a, fill_value=np.nan, dtype=float),
+        'bic': np.full(a, fill_value=np.nan, dtype=float),
         'nnz': np.zeros(a, dtype=int),
         'nnz_genes': np.zeros(a, dtype=int),
-        'deviance': np.zeros(a, dtype=float)
+        'deviance': np.full(a, fill_value=np.nan, dtype=float)
     }
 
     models = []
@@ -193,17 +200,20 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
         models.append(mbsp)
 
+        if np.sum(nnz_per_gene) == 0:
+            break
+
     # Minimum BIC
     if threshold == 'bic':
-        select_alpha = np.argmin(results['bic'])
+        select_alpha = np.nanargmin(results['bic'])
 
     # Minimum MSE
     elif threshold == 'mse':
-        select_alpha = np.argmin(results['mse'])
+        select_alpha = np.nanargmin(results['mse'])
 
     # Largest Alpha w/90% of genes
     elif threshold == 'genes':
-        select_alpha = np.argmax(alphas[(results['nnz_genes'] / m) > 0.9])
+        select_alpha = np.nanargmax(alphas[(results['nnz_genes'] / m) > 0.9])
 
     results['opt_alpha'] = alphas[select_alpha]
 
