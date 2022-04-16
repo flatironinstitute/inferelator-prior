@@ -119,7 +119,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     del pca_obj
 
-    # Switch order 
+    # Switch order
     d.X = np.asfortranarray(d.X)
 
     d.obsm['X_from_pca'] = _ridge_rotate(
@@ -289,23 +289,20 @@ class ParallelLasso:
 
             slices = list(gen_even_slices(p, effective_n_jobs(self.n_jobs)))
 
-            with warnings.catch_warnings():
-                warnings.simplefilter('once', ConvergenceWarning)
-
-                views = Parallel(n_jobs=self.n_jobs)(
-                    delayed(_lasso)(
-                        X,
-                        Y[:, i],
-                        alpha=self.alpha,
-                        precompute=gram,
-                        warm_start=self.warm_start[i, :] if self.warm_start is not None else None,
-                        **kwargs,
-                    )
-                    for i in slices
+            views = Parallel(n_jobs=self.n_jobs)(
+                delayed(_lasso)(
+                    X,
+                    Y[:, i],
+                    alpha=self.alpha,
+                    precompute=gram,
+                    warm_start=self.warm_start[i, :] if self.warm_start is not None else None,
+                    **kwargs,
                 )
+                for i in slices
+            )
 
-                for i, results in zip(slices, views):
-                    coefs[i, :] = results
+            for i, results in zip(slices, views):
+                coefs[i, :] = results
 
         self.components_ = coefs
 
@@ -327,9 +324,12 @@ def _lasso(X, y, warm_start=None, **kwargs):
     if kwargs['alpha'] <= 0.1 and 'max_iter' not in kwargs:
         kwargs['max_iter'] = 2500
 
-    if warm_start is not None:
-        lasso_obj = Lasso(warm_start=True, **kwargs)
-        lasso_obj.coef_ = warm_start.copy()
-        return lasso_obj.fit(X, y).coef_
-    else:
-        return Lasso(**kwargs).fit(X, y).coef_
+    with warnings.catch_warnings():
+        warnings.simplefilter('once', ConvergenceWarning)
+
+        if warm_start is not None:
+            lasso_obj = Lasso(warm_start=True, **kwargs)
+            lasso_obj.coef_ = warm_start.copy()
+            return lasso_obj.fit(X, y).coef_
+        else:
+            return Lasso(**kwargs).fit(X, y).coef_
