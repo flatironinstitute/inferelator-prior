@@ -141,24 +141,29 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
                               alpha=alphas[i],
                               random_state=random_state,
                               ridge_alpha=ridge_alpha,
+                              batch_size=batch_size,
                               **kwargs)
 
         with _parallel_backend("loky", inner_max_num_threads=1):
 
+            # Fit a regularized linear model between projection & expression
             if method == 'lasso':
-                projected = mbsp.fit_transform(d.obsm['X_from_pca'], d.X)
+                deviance = mbsp.fit_transform(d.obsm['X_from_pca'], d.X)
+
+            # Do SparsePCA (regularized SVD) on expression
+            # And then use ridge regression to rotate back to expression
             else:
                 projected = mbsp.fit_transform(d.X)
+
+                deviance = _ridge_rotate(
+                    mbsp.components_,
+                    projected.T,
+                    ridge_alpha
+                )
 
             # Cleanup component floats
             comp_eps = np.finfo(mbsp.components_.dtype).eps
             mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
-
-            deviance = _ridge_rotate(
-                mbsp.components_,
-                projected.T,
-                ridge_alpha
-            )
 
             # Calculate errors
             mse = mean_squared_error(deviance, d.obsm['X_from_pca'])
@@ -255,11 +260,10 @@ class ParallelLasso:
 
         if self.alpha == 0:
 
-            gram = np.dot(X.T, X)
-            xty = np.dot(X.T, Y)
-
             # Break up the big data object so it's memory reasonable
-            coefs[:] = linalg.solve(gram, xty, assume_a='sym').T
+            coefs[:] = linalg.solve(np.dot(X.T, X),
+                                    np.dot(X.T, Y),
+                                    assume_a='sym').T
 
         elif self.n_jobs == 1:
             coefs[:] = _lasso(X, Y, alpha=self.alpha)
@@ -296,8 +300,7 @@ class ParallelLasso:
         return self.transform(X)
 
     def transform(self, X):
-        return _ridge_rotate(self.coef_.T, X.T,
-                             ridge_alpha=self.ridge_alpha)
+        return X @ self.coef_.T
 
 
 def _lasso(X, y, **kwargs):
