@@ -27,7 +27,7 @@ ALPHA = np.concatenate((np.array([0]),
                        )
 
 ALPHA_LASSO = np.concatenate((np.array([0]),
-                              np.logspace(-5, 0, 11),
+                              np.logspace(-4, 0, 9),
                               np.linspace(2, 10, 5)))
 
 def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X',
@@ -88,6 +88,8 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         alphas = ALPHA_LASSO
     elif alphas is None:
         alphas = ALPHA
+    else:
+        alphas = np.sort(alphas)
 
     a = alphas.shape[0]
 
