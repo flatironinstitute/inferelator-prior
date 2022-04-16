@@ -158,6 +158,9 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
             # Fit a regularized linear model between projection & expression
             if method == 'lasso':
                 deviance = mbsp.fit_transform(d.obsm['X_pca'], d.X)
+                
+                # Add loadings
+                results['loadings'].append(mbsp.components_)
 
             # Do SparsePCA (regularized SVD) on expression
             # And then use ridge regression to rotate back to expression
@@ -170,9 +173,9 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
                     ridge_alpha
                 )
 
-            # Cleanup component floats
-            comp_eps = np.finfo(mbsp.components_.dtype).eps
-            mbsp.components_[np.abs(mbsp.components_) <= comp_eps] = 0.
+                # Add loadings
+                results['loadings'].append(mbsp.components_.T)
+                
 
             # Calculate errors
             mse = mean_squared_error(deviance, d.obsm['X_from_pca'])
@@ -190,8 +193,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         k = np.sum(nnz_per_gene) + 1
         results['bic'][i] = n * np.log(deviance / n) + k * np.log(n)
 
-        # Add loadings
-        results['loadings'].append(mbsp.components_.T)
+
 
         # Add summary stats
         results['mse'][i] = mse
@@ -303,7 +305,7 @@ class ParallelLasso:
             for i, results in zip(slices, views):
                 coefs[i, :] = results
 
-        self.components_ = coefs.T
+        self.components_ = coefs
 
         return self
 
