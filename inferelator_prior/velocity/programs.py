@@ -225,7 +225,7 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     if results['loadings'][select_alpha].shape[0] != data.shape[1]:
         for i in range(len(results['loadings'])):
             v_out = np.zeros((data.shape[1], n_components), dtype=float)
-            v_out[_keep_gene_mask, :] = results['loadings'][i]
+            v_out[_keep_gene_mask, :] = results['loadings'][i].T
             results['loadings'][i] = v_out
 
     results['loadings'] = np.array(results['loadings'])
