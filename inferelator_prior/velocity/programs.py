@@ -7,32 +7,23 @@ from scipy.sparse import issparse
 from scipy import linalg
 
 import sklearn.decomposition
-from sklearn.linear_model import ridge_regression, Lasso
+from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.utils.fixes import delayed
 from sklearn.utils import gen_even_slices
-from sklearn.exceptions import ConvergenceWarning
-from sklearn.utils._testing import ignore_warnings
 
 from joblib import parallel_backend as _parallel_backend
 from joblib import Parallel, effective_n_jobs
 
 # DEFAULT ALPHA SEARCH SPACE #
-# 0 to 200 (LOGSPACE <1 & INCREASING STEPS >1) #
-ALPHA = np.concatenate((np.array([0]),
-                        np.logspace(-3, 0, 4),
-                        np.linspace(2, 10, 5),
-                        np.linspace(20, 50, 4),
-                        np.array([75, 100, 150, 200]))
-                       )
-
+# 0 to 10 (LOGSPACE <1 & INCREASING STEPS >1) #
 ALPHA_LASSO = np.concatenate((np.array([0]),
-                              np.logspace(-4, 0, 9),
+                              np.logspace(-4, 0, 17),
                               np.linspace(2, 10, 5)))
 
-def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X',
-                   n_components=100, normalize=True, ridge_alpha=0.01, threshold='mse',
-                   method='lasso', **kwargs):
+def program_select(data, alphas=None, random_state=50, layer='X',
+                   n_components=100, normalize=True, threshold='bic',
+                   n_jobs=-1, **kwargs):
     """
     Calculate a sparse PCA using sklearn MiniBatchSparsePCA for a range of
     alpha hyperparameters.
@@ -75,19 +66,8 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     n, m = d.X.shape
 
-    method = method.lower()
-
-    if method == 'minibatchsparsepca':
-        sklearn_sparse = sklearn.decomposition.MiniBatchSparsePCA
-    elif method == 'sparsepca':
-        sklearn_sparse = sklearn.decomposition.SparsePCA
-    elif method == 'lasso':
-        sklearn_sparse = ParallelLasso
-
-    if alphas is None and method == 'lasso':
+    if alphas is None:
         alphas = ALPHA_LASSO
-    elif alphas is None:
-        alphas = ALPHA
     else:
         alphas = np.sort(alphas)
 
@@ -105,9 +85,6 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         # Dummy mask
         _keep_gene_mask = np.ones(m, dtype=bool)
 
-    if batch_size is None:
-        batch_size = min(1000, max(int(n/10), 10))
-
     # Center means
     m_mean = np.mean(d.X, axis=0)
     d.X = d.X - m_mean[None, :]
@@ -116,17 +93,10 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
     pca_obj = sklearn.decomposition.PCA(n_components=n_components)
     d.obsm['X_pca'] = pca_obj.fit_transform(d.X)
     d.varm['PCs'] = pca_obj.components_.T
-
-    del pca_obj
+    d.obsm['X_from_pca'] = pca_obj.inverse_transform(d.obsm['X_pca'])
 
     # Switch order
     d.X = np.asfortranarray(d.X)
-
-    d.obsm['X_from_pca'] = _ridge_rotate(
-        d.varm['PCs'].T,
-        d.obsm['X_pca'].T,
-        ridge_alpha
-    )
 
     results = {
         'alphas': alphas,
@@ -134,8 +104,11 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
         'means': m_mean,
         'full_model_mse': mean_squared_error(d.X, d.obsm['X_from_pca']),
         'mse': np.full(a, fill_value=np.nan, dtype=float),
-        'mse_full': np.full(a, fill_value=np.nan, dtype=float),
+        'mse_X': np.full(a, fill_value=np.nan, dtype=float),
         'bic': np.full(a, fill_value=np.nan, dtype=float),
+        'bic_X': np.full(a, fill_value=np.nan, dtype=float),
+        'aic': np.full(a, fill_value=np.nan, dtype=float),
+        'aic_X': np.full(a, fill_value=np.nan, dtype=float),
         'nnz': np.zeros(a, dtype=int),
         'nnz_genes': np.zeros(a, dtype=int),
         'deviance': np.full(a, fill_value=np.nan, dtype=float)
@@ -145,110 +118,74 @@ def program_select(data, alphas=None, batch_size=None, random_state=50, layer='X
 
     for i in tqdm.trange(a):
 
-        mbsp = sklearn_sparse(n_components=n_components,
-                              n_jobs=-1,
-                              alpha=alphas[i],
-                              random_state=random_state,
-                              ridge_alpha=ridge_alpha,
-                              batch_size=batch_size,
-                              **kwargs)
+        mbsp = ParallelLasso(n_components=n_components,
+                             n_jobs=n_jobs,
+                             alpha=alphas[i],
+                             random_state=random_state,
+                             **kwargs)
 
         with _parallel_backend("loky", inner_max_num_threads=1):
+            _warm = None if i == 0 else results['loadings'][-1]
+            fit_proj = mbsp.fit_transform(d.X,
+                                          d.obsm['X_pca'],
+                                          warm_start=_warm)
 
-            # Fit a regularized linear model between projection & expression
-            if method == 'lasso':
-                deviance = mbsp.fit_transform(d.obsm['X_pca'], d.X)
-                
-                # Add loadings
-                results['loadings'].append(mbsp.components_)
+        # Append coefficients [Comps x Genes]
+        results['loadings'].append(mbsp.components_)
 
-            # Do SparsePCA (regularized SVD) on expression
-            # And then use ridge regression to rotate back to expression
-            else:
-                projected = mbsp.fit_transform(d.X)
-
-                deviance = _ridge_rotate(
-                    mbsp.components_,
-                    projected.T,
-                    ridge_alpha
-                )
-
-                # Add loadings
-                results['loadings'].append(mbsp.components_.T)
-
-            # Calculate errors
-            mse = mean_squared_error(deviance, d.obsm['X_from_pca'])
-            mse_full = mean_squared_error(deviance, d.X)
-
-        # Deviance from PCA per gene w/same # comps
-        deviance -= d.obsm['X_from_pca']
-        deviance **= 2
-        deviance = np.sum(deviance)
+        # SSR
+        ssr = np.sum((fit_proj - d.obsm['X_pca']) ** 2)
+        ssr_X = np.sum((pca_obj.inverse_transform(fit_proj) - d.X) ** 2)
 
         nnz_per_gene = np.sum(mbsp.components_ != 0, axis=0)
 
-        # Calculate BIC from deviance
-        # n * log(deviance / n) + k * log(n)
-        k = np.sum(nnz_per_gene) + 1
-        results['bic'][i] = n * np.log(deviance / n) + k * np.log(n)
+        # Calculate BIC from SSR
+        # n * log(SSR / n) + k * log(n)
+        results['bic'][i] = n * np.log(ssr / n) + np.sum(nnz_per_gene) * np.log(n)
+        results['bic_X'][i] = n * np.log(ssr_X / n) + np.sum(nnz_per_gene) * np.log(n)
 
-
+        results['aic'][i] = n * np.log(ssr / n) + 2 * np.sum(nnz_per_gene)
+        results['aic_X'][i] = n * np.log(ssr_X / n) + 2 * np.sum(nnz_per_gene)
 
         # Add summary stats
-        results['mse'][i] = mse
-        results['mse_full'][i] = mse_full
+        results['mse'][i] = ssr / d.obsm['X_pca'].size
+        results['mse_X'][i] = ssr_X / d.X.size
         results['nnz'][i] = np.sum(nnz_per_gene)
         results['nnz_genes'][i] = np.sum(nnz_per_gene > 0)
-        results['deviance'][i] = deviance
+        results['deviance'][i] = ssr
 
         models.append(mbsp)
 
         if np.sum(nnz_per_gene) == 0:
             break
 
-    # Minimum BIC
-    if threshold == 'bic':
-        select_alpha = np.nanargmin(results['bic'])
-
-    # Minimum MSE
-    elif threshold == 'mse':
-        select_alpha = np.nanargmin(results['mse'])
-
     # Largest Alpha w/90% of genes
-    elif threshold == 'genes':
+    if threshold == 'genes':
         select_alpha = np.nanargmax(alphas[(results['nnz_genes'] / m) > 0.9])
+    elif threshold in results:
+        select_alpha = np.nanargmin(results[threshold])
+    else:
+        _msg = f"threshold={threshold} is not a valid argument"
+        raise ValueError(_msg)
 
     results['opt_alpha'] = alphas[select_alpha]
 
     output_key = layer + "_sparsepca"
 
-    if method == 'lasso':
-        data.obsm[output_key] = d.obsm['X_pca'] @ np.linalg.pinv(results['loadings'][select_alpha])
-    else:
-        data.obsm[output_key] = models[select_alpha].transform(d.X)
-
     # Pad components with zeros if some genes were filtered during normalization
     if results['loadings'][select_alpha].shape[0] != data.shape[1]:
         for i in range(len(results['loadings'])):
             v_out = np.zeros((data.shape[1], n_components), dtype=float)
-            v_out[_keep_gene_mask, :] = results['loadings'][i]
+            v_out[_keep_gene_mask, :] = results['loadings'][i].T
             results['loadings'][i] = v_out
 
     results['loadings'] = np.array(results['loadings'])
 
+    data.obsm[output_key] = models[select_alpha].transform(d.X)
     data.varm[output_key] = results['loadings'][select_alpha].copy()
     data.uns['sparse_pca'] = results
 
     return data
-
-
-def _ridge_rotate(comps, data, ridge_alpha=0.01, solver="cholesky"):
-    return ridge_regression(
-                comps,
-                data,
-                ridge_alpha,
-                solver=solver
-            )
 
 
 class ParallelLasso:
@@ -268,7 +205,7 @@ class ParallelLasso:
         self.n_jobs = n_jobs
         self.ridge_alpha = ridge_alpha
 
-    def fit(self, X, Y, **kwargs):
+    def fit(self, X, Y, warm_start=None, **kwargs):
 
         n, m = X.shape
         p = Y.shape[1]
@@ -295,6 +232,7 @@ class ParallelLasso:
                     Y[:, i],
                     alpha=self.alpha,
                     precompute=gram,
+                    warm_start=warm_start[i, :] if warm_start is not None else None
                     **kwargs,
                 )
                 for i in slices
@@ -307,16 +245,15 @@ class ParallelLasso:
 
         return self
 
-    def fit_transform(self, X, Y):
+    def fit_transform(self, X, Y, **kwargs):
 
-        self.fit(X, Y)
+        self.fit(X, Y, **kwargs)
         return self.transform(X)
 
     def transform(self, X):
         return X @ self.coef_.T
 
 
-@ignore_warnings(category=ConvergenceWarning)
 def _lasso(X, y, warm_start=None, **kwargs):
 
     kwargs['fit_intercept'] = False
@@ -324,4 +261,9 @@ def _lasso(X, y, warm_start=None, **kwargs):
     if kwargs['alpha'] <= 0.1 and 'max_iter' not in kwargs:
         kwargs['max_iter'] = 2500
 
-    return Lasso(**kwargs).fit(X, y).coef_
+    if warm_start is not None:
+        lasso_obj = Lasso(warm_start=True, **kwargs)
+        lasso_obj.coef_ = warm_start.copy()
+        return lasso_obj.fit(X, y).coef_
+    else:
+        return Lasso(**kwargs).fit(X, y).coef_
