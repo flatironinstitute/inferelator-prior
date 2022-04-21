@@ -80,8 +80,6 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     n, m = d.X.shape
 
     #### PREPROCESSING / NORMALIZATION ####
-    if issparse(d.X):
-        d.X = d.X.A
 
     # Normalize, if required
     if normalize:
