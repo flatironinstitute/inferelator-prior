@@ -157,21 +157,21 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
                                       affinity='precomputed',
                                       linkage='average').fit_predict(1 - _rho_pc1)
 
-    clust_map = {k: clust_2[k] for k in range(_n_l_clusts)}
-    clust_map[-1] = -1
+    clust_map = {str(k): str(clust_2[k]) for k in range(_n_l_clusts)}
+    clust_map[str(-1)] = str(-1)
 
-    d.var['program'] = d.var['leiden'].map(clust_map)
+    d.var['program'] = d.var['leiden'].astype(str).map(clust_map)
 
     #### LOAD FINAL DATA INTO INITIAL DATA OBJECT AND RETURN IT ####
 
-    data.var['leiden'] = -1
-    data.var.loc[d.var_names, 'leiden'] = d.var['leiden']
+    data.var['leiden'] = str(-1)
+    data.var.loc[d.var_names, 'leiden'] = d.var['leiden'].astype(str)
     data.var['program'] = data.var['leiden'].map(clust_map)
 
     # Calculate PC1 for each program
     data.obsm['program_PCs'] = np.zeros((d.shape[0], n_programs), dtype=float)
     for i in range(n_programs):
-        data.obsm['program_PCs'][:, i] = _get_pc1(d.layers['counts'][:, d.var['program'] == i])
+        data.obsm['program_PCs'][:, i] = _get_pc1(d.layers['counts'][:, d.var['program'] == str(i)])
 
     data.uns['MI_program'] = {
         'leiden_correlation': _rho_pc1,
