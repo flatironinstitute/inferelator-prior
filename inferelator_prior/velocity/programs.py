@@ -2,7 +2,10 @@ import numpy as np
 import scanpy as sc
 import anndata as ad
 import itertools
+
 from scipy.sparse import issparse
+from sklearn.cluster import AgglomerativeClustering
+from scipy.stats import spearmanr
 
 from inferelator.regression.mi import _make_array_discrete, _make_table, _calc_mi
 
@@ -15,21 +18,70 @@ def vprint(*args, verbose=False, **kwargs):
         print(*args, **kwargs)
 
 
-def program_select_mi(data, mi_bins=10, n_comps=None, n_clusters=2, normalize=True,
+def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=True,
                       layer="X", max_comps=100, comp_var_required=0.0025, n_jobs=-1,
                       verbose=False, use_hvg=False):
+    """
+    Find a specific number of gene programs based on mutual information between genes
+    It is highly advisable to use raw counts as input.
+    The risk of information leakage is high otherwise.
+
+    :param data: Expression object
+    :type data: ad.AnnData
+    :param n_programs: Number of gene programs, defaults to 2
+    :type n_programs: int, optional
+    :param mi_bins: Number of bins to use when discretizing for MI,
+        defaults to 10
+    :type mi_bins: int, optional
+    :param n_comps: Number of components to use,
+        will select based on explained variance if None,
+        defaults to None
+    :type n_comps: int, optional
+    :param normalize: Do normalization and preprocessing,
+        defaults to True
+    :type normalize: bool, optional
+    :param layer: Data layer to use, defaults to "X"
+    :type layer: str, optional
+    :param max_comps: Maximum number of components to use if selecting based on explained variance,
+        defaults to 100
+    :type max_comps: int, optional
+    :param comp_var_required: Threshold for PC explained variance to use if selecting based on
+        explained variance,
+        defaults to 0.0025
+    :type comp_var_required: float, optional
+    :param n_jobs: Number of CPU cores to use for parallelization, defaults to -1 (all cores)
+    :type n_jobs: int, optional
+    :param verbose: Print status, defaults to False
+    :type verbose: bool, optional
+    :param use_hvg: Use precalculated HVG genes if normalization=False, defaults to False
+    :type use_hvg: bool, optional
+    :return: Data object with new attributes:
+        .obsm['program_PCs']: Principal component for each program
+        .var['leiden']: Leiden cluster ID
+        .var['program]: Program ID
+        .uns['MI_program']: {
+            'leiden_correlation': Absolute value of spearman rho between PC1 of each leiden cluster
+            'mutual_information_genes': Gene labels for mutual information matrix
+            'mutual_information': Mutual information (bits) between genes
+            'cluster_program_map': Dict mapping gene clusters to gene programs
+        }
+    :rtype: _type_
+    """
+
+    #### CREATE A NEW DATA OBJECT FOR THIS ANALYSIS ####
 
     if layer == 'X':
-        d = ad.AnnData(data.X.astype(float), dtype=float)
+        d = ad.AnnData(data.X, dtype=float)
     else:
-        d = ad.AnnData(data.layers[layer].astype(float), dtype=float)
+        d = ad.AnnData(data.layers[layer], dtype=float)
 
+    d.layers['counts'] = d.X.copy()
     d.var = data.var.copy()
+    n, m = d.X.shape
 
+    #### PREPROCESSING / NORMALIZATION ####
     if issparse(d.X):
         d.X = d.X.A
-
-    n, m = d.X.shape
 
     # Normalize, if required
     if normalize:
@@ -73,20 +125,98 @@ def program_select_mi(data, mi_bins=10, n_comps=None, n_clusters=2, normalize=Tr
     pca_expr = d.obsm['X_pca'] @ d.varm['PCs'].T
     pca_expr = _make_array_discrete(pca_expr, mi_bins, axis=0)
 
+    #### CALCULATING MUTUAL INFORMATION & GENE CLUSTERING ####
+
     vprint(f"Calculating MI for {pca_expr.shape} array", verbose=verbose)
     mutual_info = _mutual_information(pca_expr, mi_bins, n_jobs)
 
-    ad_mi = ad.AnnData(mutual_info, dtype=float, obs=d.var)
+    vprint(f"Calculating k-NN and Leiden for {mutual_info.shape} MI array",
+           verbose=verbose)
+    d.var['leiden'] = _leiden_cluster(mutual_info,
+                                      neighbors_kws={'metric': 'correlation'},
+                                      leiden_kws={'random_state': 50})
 
-    vprint(f"Calculating k-NN and Leiden for {ad_mi.shape} MI array", verbose=verbose)
+    _n_l_clusts = d.var['leiden'].nunique()
 
-    sc.pp.neighbors(ad_mi, metric='correlation', use_rep='X')
-    sc.tl.leiden(ad_mi, random_state=50)
-
-    vprint(f"Identified {len(ad_mi.obs['leiden'].cat.categories)} unique clusters",
+    vprint(f"Found {_n_l_clusts} unique gene clusters",
            verbose=verbose)
 
-    return ad_mi
+    _cluster_pc1 = np.zeros((d.shape[0], _n_l_clusts), dtype=float)
+    for i in range(_n_l_clusts):
+        _cluster_pc1[:, i] = _get_pc1(d.layers['counts'][:, d.var['leiden'] == i])
+
+    #### SECOND ROUND OF CLUSTERING TO MERGE GENE CLUSTERS INTO PROGRAMS ####
+
+    _rho_pc1 = np.abs(spearmanr(_cluster_pc1))[0]
+
+    vprint(f"Merging {_n_l_clusts} gene clusters into {n_programs} programs",
+           verbose=verbose)
+
+    # Merge clusters based on correlation distance (1 - abs(spearman rho))
+    clust_2 = AgglomerativeClustering(n_clusters=n_programs,
+                                      affinity='precomputed',
+                                      linkage='average').fit_predict(1 - _rho_pc1)
+
+    clust_map = {k: clust_2[k] for k in range(_n_l_clusts)}
+    clust_map[-1] = -1
+
+    d.var['program'] = d.var['leiden'].map(clust_map)
+
+    #### LOAD FINAL DATA INTO INITIAL DATA OBJECT AND RETURN IT ####
+
+    data.var['leiden'] = -1
+    data.var.loc[d.var_names, 'leiden'] = d.var['leiden']
+    data.var['program'] = data.var['leiden'].map(clust_map)
+
+    # Calculate PC1 for each program
+    data.obsm['program_PCs'] = np.zeros((d.shape[0], n_programs), dtype=float)
+    for i in range(n_programs):
+        data.obsm['program_PCs'][:, i] = _get_pc1(d.layers['counts'][:, d.var['program'] == i])
+
+    data.uns['MI_program'] = {
+        'leiden_correlation': _rho_pc1,
+        'mutual_information_genes': d.var_names.values,
+        'mutual_information': mutual_info,
+        'cluster_program_map': clust_map
+    }
+
+    return data
+
+
+def _get_pc1(data, normalize=True):
+    """
+    Get the values for PC1
+
+    :param data: Data array or matrix [Obs x Var]
+    :type data: np.ndarray, sp.spmatrix
+    :param normalize: Normalize depth & log transform, defaults to True
+    :type normalize: bool, optional
+    :return: PC1 [Obs]
+    :rtype: np.ndarray
+    """
+    _l_ad = ad.AnnData(data.A if issparse(data) else data, dtype=float)
+
+    if normalize:
+        sc.pp.normalize_per_cell(_l_ad, min_counts=0)
+        sc.pp.log1p(_l_ad)
+
+    sc.pp.pca(_l_ad, n_comps=2)
+
+    return _l_ad.obsm['X_pca'][:, 0]
+
+
+def _leiden_cluster(array, neighbors_kws=None, leiden_kws=None):
+
+    neighbors_kws = {} if neighbors_kws is None else neighbors_kws
+    leiden_kws = {} if leiden_kws is None else leiden_kws
+
+    neighbors_kws['use_rep'] = 'X'
+
+    ad_arr = ad.AnnData(array, dtype=float)
+    sc.pp.neighbors(ad_arr, **neighbors_kws)
+    sc.tl.leiden(ad_arr, **leiden_kws)
+
+    return ad_arr.obs['leiden'].astype(int).values
 
 
 def _mutual_information(discrete_array, bins, n_jobs):
