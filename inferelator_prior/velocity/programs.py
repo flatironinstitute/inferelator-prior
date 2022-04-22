@@ -3,7 +3,6 @@ import scanpy as sc
 import anndata as ad
 import itertools
 
-from scipy.sparse import issparse
 from sklearn.cluster import AgglomerativeClustering
 from scipy.stats import spearmanr
 
@@ -167,9 +166,8 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     data.var['program'] = data.var['leiden'].map(clust_map)
 
     # Calculate PC1 for each program
-    data.obsm['program_PCs'] = np.zeros((d.shape[0], n_programs), dtype=float)
-    for i in range(n_programs):
-        data.obsm['program_PCs'][:, i] = _get_pc1(d.layers['counts'][:, d.var['program'] == str(i)])
+    data.obsm['program_PCs'] = program_pcs(d.layers['counts'], d.var['program'],
+                                           program_id_levels=list(map(str, range(n_programs))))
 
     data.uns['MI_program'] = {
         'leiden_correlation': _rho_pc1,
@@ -179,6 +177,44 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     }
 
     return data
+
+
+def program_pcs(data, program_id_vector, program_id_levels=None,
+                skip_program_ids=(str(-1)), normalize=False):
+    """
+    Calculate principal components for a set of expression programs
+
+    :param data: Expression data [Obs x Features]
+    :type data: np.ndarray, sp.spmatrix
+    :param program_id_vector: List mapping Features to Program ID
+    :type program_id_vector: pd.Series, np.ndarray, list
+    :param skip_program_ids: Program IDs to skip, defaults to (str(-1))
+        Ignored if program_id_levels is set.
+    :type skip_program_ids: tuple, list, pd.Series, np.ndarray, optional
+    :param program_id_levels: Program IDs and order for output array
+    :type program_id_levels: pd.Series, np.ndarray, list, optional
+    :param normalize: Normalize expression data, defaults to False
+    :type normalize: bool, optional
+    :returns: A numpy array with the program PC1 vector for each program,
+        and a list of Program IDs if program_id_levels is not set
+    :rtype: np.ndarray, list (optional)
+    """
+
+    if program_id_levels is None:
+        use_ids = [i for i in np.unique(program_id_vector) if i not in skip_program_ids]
+    else:
+        use_ids = program_id_levels
+
+    p_pcs = np.zeros((data.shape[0], len(use_ids)), dtype=float)
+    for i, prog_id in enumerate(use_ids):
+        p_pcs[:, i] = _get_pc1(data[:, program_id_vector == prog_id],
+                               normalize=normalize)
+
+    if program_id_levels is not None:
+        return p_pcs
+
+    else:
+        return p_pcs, use_ids
 
 
 def _get_pc1(data, normalize=True):
@@ -192,7 +228,7 @@ def _get_pc1(data, normalize=True):
     :return: PC1 [Obs]
     :rtype: np.ndarray
     """
-    _l_ad = ad.AnnData(data.A if issparse(data) else data, dtype=float)
+    _l_ad = ad.AnnData(data, dtype=float)
 
     if normalize:
         sc.pp.normalize_per_cell(_l_ad, min_counts=0)
@@ -218,6 +254,20 @@ def _leiden_cluster(array, neighbors_kws=None, leiden_kws=None):
 
 
 def _mutual_information(discrete_array, bins, n_jobs):
+    """
+    Calculate mutual information between features of a discrete array
+
+    :param discrete_array: Discrete integer array with values from 0 to `bins`
+    :type discrete_array: np.ndarray [int]
+    :param bins: Number of discrete bins in integer array
+    :type bins: int
+    :param n_jobs: Number of parallel jobs for joblib,
+        -1 uses all cores
+        None does not parallelize
+    :type n_jobs: int, None
+    :return: Mutual information array in bits
+    :rtype: np.ndarray [float]
+    """
 
     m, n = discrete_array.shape
 
