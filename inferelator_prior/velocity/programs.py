@@ -153,7 +153,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     # Merge clusters based on correlation distance (1 - abs(spearman rho))
     clust_2 = AgglomerativeClustering(n_clusters=n_programs,
                                       affinity='precomputed',
-                                      linkage='average').fit_predict(1 - _rho_pc1)
+                                      linkage='complete').fit_predict(1 - _rho_pc1)
 
     clust_map = {str(k): str(clust_2[k]) for k in range(_n_l_clusts)}
     clust_map[str(-1)] = str(-1)
