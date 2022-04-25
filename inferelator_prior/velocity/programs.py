@@ -218,7 +218,33 @@ def program_pcs(data, program_id_vector, program_id_levels=None,
         return p_pcs, use_ids
 
 
-def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log, return_information=False):
+def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log,
+                         return_information=False):
+    """
+    Calculate shannon information distance
+    D(X, X) = 1 - MI(X, X) / H(X, X)
+    Where MI(X, X) is mutual information between features of X
+    H(X, X) is joint entropy between features of X
+
+    :param discrete_array: Discrete integer array [Obs x Features]
+        with values from 0 to `bins`
+    :type discrete_array: np.ndarray [int]
+    :param bins: Number of discrete bins in integer array
+    :type bins: int
+    :param n_jobs: Number of parallel jobs for joblib,
+        -1 uses all cores
+        None does not parallelize
+    :type n_jobs: int, None
+    :param logtype: Log function to use for information calculations,
+        defaults to np.log
+    :type logtype: func, optional
+    :param return_information: Return mutual information in addition to distance,
+        defaults to False
+    :type return_information: bool, optional
+    :return: Information distance D(X, X) array [Features x Features],
+        and MI(X, X) array [Features x Features] if return_information is True
+    :rtype: np.ndarray [float], np.ndarray [float] (optional)
+    """
 
     # Calculate MI(X, X)
     mi_xx = _mutual_information(discrete_array, bins, logtype=logtype,
@@ -283,7 +309,8 @@ def _mutual_information(discrete_array, bins, n_jobs=-1, logtype=np.log):
     """
     Calculate mutual information between features of a discrete array
 
-    :param discrete_array: Discrete integer array with values from 0 to `bins`
+    :param discrete_array: Discrete integer array [Obs x Features]
+        with values from 0 to `bins`
     :type discrete_array: np.ndarray [int]
     :param bins: Number of discrete bins in integer array
     :type bins: int
@@ -291,7 +318,10 @@ def _mutual_information(discrete_array, bins, n_jobs=-1, logtype=np.log):
         -1 uses all cores
         None does not parallelize
     :type n_jobs: int, None
-    :return: Mutual information array in bits
+    :param logtype: Log function to use for information calculations,
+        defaults to np.log
+    :type logtype: func, optional
+    :return: Mutual information array [Features, Features]
     :rtype: np.ndarray [float]
     """
 
@@ -318,6 +348,24 @@ def _mutual_information(discrete_array, bins, n_jobs=-1, logtype=np.log):
 
 
 def _shannon_entropy(discrete_array, bins, n_jobs=-1, logtype=np.log):
+    """
+    Calculate shannon entropy for each feature in a discrete array
+
+    :param discrete_array: Discrete integer array [Obs x Features]
+        with values from 0 to `bins`
+    :type discrete_array: np.ndarray [int]
+    :param bins: Number of discrete bins in integer array
+    :type bins: int
+    :param n_jobs: Number of parallel jobs for joblib,
+        -1 uses all cores
+        None does not parallelize
+    :type n_jobs: int, None
+    :param logtype: Log function to use for information calculations,
+        defaults to np.log
+    :type logtype: func, optional
+    :return: Shannon entropy array [Features, ]
+    :rtype: np.ndarray [float]
+    """
 
     m, n = discrete_array.shape
 
