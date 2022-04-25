@@ -1,7 +1,9 @@
 import numpy as np
-import scanpy as sc
 import anndata as ad
 import itertools
+
+import scanpy as sc
+from scanpy.neighbors import compute_neighbors_umap, _compute_connectivities_umap
 
 from sklearn.cluster import AgglomerativeClustering
 from scipy.stats import spearmanr
@@ -21,7 +23,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
                       layer="X", max_comps=100, comp_var_required=0.0025, n_jobs=-1,
                       verbose=False, use_hvg=False):
     """
-    Find a specific number of gene programs based on mutual information between genes
+    Find a specific number of gene programs based on information distance between genes
     It is highly advisable to use raw counts as input.
     The risk of information leakage is high otherwise.
 
@@ -124,14 +126,25 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
     #### CALCULATING MUTUAL INFORMATION & GENE CLUSTERING ####
 
-    vprint(f"Calculating MI for {pca_expr.shape} array", verbose=verbose)
-    mutual_info = _mutual_information(pca_expr, mi_bins, n_jobs)
-
-    vprint(f"Calculating k-NN and Leiden for {mutual_info.shape} MI array",
+    vprint(f"Calculating information distance for {pca_expr.shape} array",
            verbose=verbose)
-    d.var['leiden'] = _leiden_cluster(mutual_info,
-                                      neighbors_kws={'metric': 'correlation'},
-                                      leiden_kws={'random_state': 50})
+
+    info_dist, mutual_info = information_distance(
+        pca_expr,
+        mi_bins,
+        n_jobs=n_jobs,
+        logtype=np.log2,
+        return_information=True
+    )
+
+    vprint(f"Calculating k-NN and Leiden for {info_dist.shape} distance array",
+           verbose=verbose)
+
+    d.var['leiden'] = _leiden_cluster(
+        info_dist,
+        15,
+        leiden_kws={'random_state': 50}
+    )
 
     _n_l_clusts = d.var['leiden'].nunique()
 
@@ -170,10 +183,11 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
                                            program_id_levels=list(map(str, range(n_programs))),
                                            normalize=False)
 
-    data.uns['MI_program'] = {
+    data.uns['programs'] = {
         'leiden_correlation': _rho_pc1,
-        'mutual_information_genes': d.var_names.values,
+        'metric_genes': d.var_names.values,
         'mutual_information': mutual_info,
+        'information_distance': info_dist,
         'cluster_program_map': clust_map
     }
 
@@ -291,15 +305,27 @@ def _get_pc1(data, normalize=True):
     return _l_ad.obsm['X_pca'][:, 0]
 
 
-def _leiden_cluster(array, neighbors_kws=None, leiden_kws=None):
+def _leiden_cluster(dist_array, n_neighbors, random_state=100, leiden_kws=None):
 
-    neighbors_kws = {} if neighbors_kws is None else neighbors_kws
+    # Calculate neighbors using scanpy internals
+    # (Needed as there's no way to provide a distance matrix)
+    knn_i, knn_dist, _ = compute_neighbors_umap(
+        dist_array,
+        n_neighbors,
+        random_state,
+        metric='precomputed'
+    )
+
+    knn_dist, knn_connect = _compute_connectivities_umap(
+        knn_i, knn_dist, dist_array.shape[0], n_neighbors
+    )
+
     leiden_kws = {} if leiden_kws is None else leiden_kws
+    leiden_kws['adjacency'] = knn_connect
+    leiden_kws['random_state'] = leiden_kws.get('random_state', random_state)
 
-    neighbors_kws['use_rep'] = 'X'
+    ad_arr = ad.AnnData(dist_array, dtype=float)
 
-    ad_arr = ad.AnnData(array, dtype=float)
-    sc.pp.neighbors(ad_arr, **neighbors_kws)
     sc.tl.leiden(ad_arr, **leiden_kws)
 
     return ad_arr.obs['leiden'].astype(int).values
