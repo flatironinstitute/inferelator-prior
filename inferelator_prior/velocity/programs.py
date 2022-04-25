@@ -167,7 +167,8 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
     # Calculate PC1 for each program
     data.obsm['program_PCs'] = program_pcs(d.layers['counts'], d.var['program'],
-                                           program_id_levels=list(map(str, range(n_programs))))
+                                           program_id_levels=list(map(str, range(n_programs))),
+                                           normalize=False)
 
     data.uns['MI_program'] = {
         'leiden_correlation': _rho_pc1,
@@ -180,7 +181,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
 
 def program_pcs(data, program_id_vector, program_id_levels=None,
-                skip_program_ids=(str(-1)), normalize=False):
+                skip_program_ids=(str(-1)), normalize=True):
     """
     Calculate principal components for a set of expression programs
 
@@ -215,6 +216,27 @@ def program_pcs(data, program_id_vector, program_id_levels=None,
 
     else:
         return p_pcs, use_ids
+
+
+def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log, return_information=False):
+
+    # Calculate MI(X, X)
+    mi_xx = _mutual_information(discrete_array, bins, logtype=logtype,
+                                n_jobs=n_jobs)
+
+    # Calculate H(X)
+    h_x = _shannon_entropy(discrete_array, bins, logtype=logtype,
+                           n_jobs=n_jobs)
+
+    # Calulate distance as 1 - MI(X, X) / H(X, X)
+    # Where H(X, X) = H(X) + H(X) - MI(X, X)
+    d_xx = 1 - mi_xx / (h_x[None, :] + h_x[:, None] - mi_xx)
+
+    # Return distance or distance & MI
+    if return_information:
+        return d_xx, mi_xx
+    else:
+        return d_xx
 
 
 def _get_pc1(data, normalize=True):
@@ -253,7 +275,7 @@ def _leiden_cluster(array, neighbors_kws=None, leiden_kws=None):
     return ad_arr.obs['leiden'].astype(int).values
 
 
-def _mutual_information(discrete_array, bins, n_jobs):
+def _mutual_information(discrete_array, bins, n_jobs=-1, logtype=np.log):
     """
     Calculate mutual information between features of a discrete array
 
@@ -278,7 +300,7 @@ def _mutual_information(discrete_array, bins, n_jobs):
             discrete_array,
             discrete_array[:, i],
             bins,
-            logtype=np.log2
+            logtype=logtype
         )
         for i in slices
     )
@@ -289,6 +311,38 @@ def _mutual_information(discrete_array, bins, n_jobs):
         mutual_info[:, i] = r
 
     return mutual_info
+
+
+def _shannon_entropy(discrete_array, bins, n_jobs=-1, logtype=np.log):
+
+    m, n = discrete_array.shape
+
+    slices = list(gen_even_slices(n, effective_n_jobs(n_jobs)))
+
+    views = Parallel(n_jobs=n_jobs)(
+        delayed(_entropy_slice)(
+            discrete_array[:, i],
+            bins,
+            logtype=logtype
+        )
+        for i in slices
+    )
+
+    entropy = np.empty(n, dtype=float)
+
+    for i, r in zip(slices, views):
+        entropy[i] = r
+
+    return entropy
+
+
+def _entropy_slice(x, bins, logtype=np.log):
+
+    def _entropy(vec):
+        px = np.bincount(vec, minlength=bins) / vec.size
+        return -1 * np.nansum(px * logtype(px))
+
+    return np.apply_along_axis(_entropy, 0, x)
 
 
 def _mi_slice(x, y, bins, logtype=np.log):
