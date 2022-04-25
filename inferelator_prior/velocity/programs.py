@@ -232,6 +232,10 @@ def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log, return
     # Where H(X, X) = H(X) + H(X) - MI(X, X)
     d_xx = 1 - mi_xx / (h_x[None, :] + h_x[:, None] - mi_xx)
 
+    # Trim floats to 0 based on machine precision
+    # Might need a looser tol; there's a lot of float ops here
+    d_xx[np.abs(d_xx) <= (bins * np.spacing(bins))] = 0.
+
     # Return distance or distance & MI
     if return_information:
         return d_xx, mi_xx
