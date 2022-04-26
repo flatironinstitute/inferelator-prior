@@ -213,27 +213,35 @@ def program_pcs(data, program_id_vector, program_id_levels=None,
     :param n_pcs: Number of PCs to include for each program,
         defaults to 1
     :type n_pcs: int, optional
-    :returns: A numpy array with the program PC1 vector for each program,
+    :returns: A numpy array with the program PCs for each program,
+        a numpy array with the program PCs variance ratio for each program,
         and a list of Program IDs if program_id_levels is not set
-    :rtype: np.ndarray, list (optional)
+    :rtype: np.ndarray, np.ndarray, list (optional)
     """
 
     if program_id_levels is None:
-        use_ids = [i for i in np.unique(program_id_vector) if i not in skip_program_ids]
+        use_ids = [i for i in np.unique(program_id_vector)
+                   if i not in skip_program_ids]
     else:
         use_ids = program_id_levels
 
-    p_pcs = np.zeros((data.shape[0], len(use_ids)), dtype=float)
+    p_pcs = np.zeros((data.shape[0], len(use_ids) * n_pcs), dtype=float)
+    vr_pcs = np.zeros(len(use_ids) * n_pcs, dtype=float)
+
     for i, prog_id in enumerate(use_ids):
-        _idx = i * n_pcs
-        p_pcs[:, _idx:_idx + n_pcs] = _get_pcs(data[:, program_id_vector == prog_id],
-                                               normalize=normalize, n_pcs=n_pcs)
+        _idx, _r_idx = i * n_pcs, i * n_pcs + n_pcs
+
+        p_pcs[:, _idx:_r_idx], vr_pcs[_idx:_r_idx] = _get_pcs(
+            data[:, program_id_vector == prog_id],
+            normalize=normalize,
+            n_pcs=n_pcs
+        )
 
     if program_id_levels is not None:
-        return p_pcs
+        return p_pcs, vr_pcs
 
     else:
-        return p_pcs, use_ids
+        return p_pcs, vr_pcs, use_ids
 
 
 def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log,
@@ -308,7 +316,7 @@ def _get_pcs(data, n_pcs=1, normalize=True):
 
     sc.pp.pca(_l_ad, n_comps=n_pcs + 1)
 
-    return _l_ad.obsm['X_pca'][:, 0:n_pcs]
+    return _l_ad.obsm['X_pca'][:, 0:n_pcs], _l_ad.uns['pca']['variance_ratio'][0:n_pcs]
 
 
 def _leiden_cluster(dist_array, n_neighbors, random_state=100, leiden_kws=None):
