@@ -153,7 +153,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
     _cluster_pc1 = np.zeros((d.shape[0], _n_l_clusts), dtype=float)
     for i in range(_n_l_clusts):
-        _cluster_pc1[:, i] = _get_pc1(d.layers['counts'][:, d.var['leiden'] == i])
+        _cluster_pc1[:, i] = _get_pcs(d.layers['counts'][:, d.var['leiden'] == i])
 
     #### SECOND ROUND OF CLUSTERING TO MERGE GENE CLUSTERS INTO PROGRAMS ####
 
@@ -195,7 +195,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
 
 def program_pcs(data, program_id_vector, program_id_levels=None,
-                skip_program_ids=(str(-1)), normalize=True):
+                skip_program_ids=(str(-1)), normalize=True, n_pcs=1):
     """
     Calculate principal components for a set of expression programs
 
@@ -210,6 +210,9 @@ def program_pcs(data, program_id_vector, program_id_levels=None,
     :type program_id_levels: pd.Series, np.ndarray, list, optional
     :param normalize: Normalize expression data, defaults to False
     :type normalize: bool, optional
+    :param n_pcs: Number of PCs to include for each program,
+        defaults to 1
+    :type n_pcs: int, optional
     :returns: A numpy array with the program PC1 vector for each program,
         and a list of Program IDs if program_id_levels is not set
     :rtype: np.ndarray, list (optional)
@@ -222,8 +225,9 @@ def program_pcs(data, program_id_vector, program_id_levels=None,
 
     p_pcs = np.zeros((data.shape[0], len(use_ids)), dtype=float)
     for i, prog_id in enumerate(use_ids):
-        p_pcs[:, i] = _get_pc1(data[:, program_id_vector == prog_id],
-                               normalize=normalize)
+        _idx = i * n_pcs
+        p_pcs[:, _idx:_idx + n_pcs] = _get_pcs(data[:, program_id_vector == prog_id],
+                                               normalize=normalize, n_pcs=n_pcs)
 
     if program_id_levels is not None:
         return p_pcs
@@ -283,15 +287,17 @@ def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log,
         return d_xx
 
 
-def _get_pc1(data, normalize=True):
+def _get_pcs(data, n_pcs=1, normalize=True):
     """
     Get the values for PC1
 
     :param data: Data array or matrix [Obs x Var]
     :type data: np.ndarray, sp.spmatrix
+    :param n_pcs: Number of PCs to include, defaults to 1
+    :type n_pcs: int
     :param normalize: Normalize depth & log transform, defaults to True
     :type normalize: bool, optional
-    :return: PC1 [Obs]
+    :return: PCs [Obs, n_pcs]
     :rtype: np.ndarray
     """
     _l_ad = ad.AnnData(data, dtype=float)
@@ -300,9 +306,9 @@ def _get_pc1(data, normalize=True):
         sc.pp.normalize_per_cell(_l_ad, min_counts=0)
         sc.pp.log1p(_l_ad)
 
-    sc.pp.pca(_l_ad, n_comps=2)
+    sc.pp.pca(_l_ad, n_comps=n_pcs + 1)
 
-    return _l_ad.obsm['X_pca'][:, 0]
+    return _l_ad.obsm['X_pca'][:, 0:n_pcs]
 
 
 def _leiden_cluster(dist_array, n_neighbors, random_state=100, leiden_kws=None):
@@ -358,7 +364,7 @@ def _mutual_information(discrete_array, bins, n_jobs=-1, logtype=np.log):
     views = Parallel(n_jobs=n_jobs)(
         delayed(_mi_slice)(
             discrete_array,
-            discrete_array[:, i],
+            i,
             bins,
             logtype=logtype
         )
@@ -423,8 +429,9 @@ def _entropy_slice(x, bins, logtype=np.log):
     return np.apply_along_axis(_entropy, 0, x)
 
 
-def _mi_slice(x, y, bins, logtype=np.log):
+def _mi_slice(x, y_slicer, bins, logtype=np.log):
 
+    y = x[:, y_slicer]
     n1, n2 = x.shape[1], y.shape[1]
 
     mutual_info = np.empty((n1, n2), dtype=float)
