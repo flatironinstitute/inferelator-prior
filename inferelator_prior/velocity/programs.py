@@ -7,10 +7,11 @@ from scanpy.neighbors import compute_neighbors_umap, _compute_connectivities_uma
 
 from sklearn.cluster import AgglomerativeClustering
 from scipy.stats import spearmanr
+from sklearn.utils import gen_even_slices
+from sklearn.metrics import pairwise_distances
 
 from inferelator.regression.mi import _make_array_discrete, _make_table, _calc_mi
 
-from sklearn.utils import gen_even_slices
 from joblib import Parallel, delayed, effective_n_jobs
 
 
@@ -21,7 +22,7 @@ def vprint(*args, verbose=False, **kwargs):
 
 def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=True,
                       layer="X", max_comps=100, comp_var_required=0.0025, n_jobs=-1,
-                      verbose=False, use_hvg=False):
+                      verbose=False, use_hvg=False, metric='information'):
     """
     Find a specific number of gene programs based on information distance between genes
     It is highly advisable to use raw counts as input.
@@ -137,11 +138,21 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         return_information=True
     )
 
+    if metric != 'information':
+        vprint(f"Calculating {metric} distance for {pca_expr.shape} array",
+               verbose=verbose)
+
+        dists = pairwise_distances(pca_expr.T,metric=metric)
+
+    else:
+        dists = info_dist
+
+
     vprint(f"Calculating k-NN and Leiden for {info_dist.shape} distance array",
            verbose=verbose)
 
     d.var['leiden'] = _leiden_cluster(
-        info_dist,
+        dists,
         15,
         leiden_kws={'random_state': 50}
     )
@@ -179,17 +190,23 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     data.var['program'] = data.var['leiden'].map(clust_map)
 
     # Calculate PC1 for each program
-    data.obsm['program_PCs'] = program_pcs(d.layers['counts'], d.var['program'],
-                                           program_id_levels=list(map(str, range(n_programs))),
-                                           normalize=False)
+    data.obsm['program_PCs'], var_expl = program_pcs(
+        d.layers['counts'], d.var['program'],
+        program_id_levels=list(map(str, range(n_programs))),
+        normalize=False
+    )
 
     data.uns['programs'] = {
         'leiden_correlation': _rho_pc1,
         'metric_genes': d.var_names.values,
         'mutual_information': mutual_info,
         'information_distance': info_dist,
-        'cluster_program_map': clust_map
+        'cluster_program_map': clust_map,
+        'program_PCs_variance_ratio': var_expl
     }
+
+    if metric != 'information':
+        data.uns['programs'][f'{metric}_distance'] = dists
 
     return data
 
