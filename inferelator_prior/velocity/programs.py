@@ -108,7 +108,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     if n_comps is None:
 
         if mcv_loss_arr is None:
-            mcv_loss_arr = mcv_pcs(d.layers['counts'], n=10)
+            mcv_loss_arr = mcv_pcs(d.layers['counts'], n=1)
 
         n_comps = np.median(mcv_loss_arr, axis=0).argmin()
 
