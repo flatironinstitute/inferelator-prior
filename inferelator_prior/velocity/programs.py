@@ -193,8 +193,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     # Calculate PC1 for each program
     data.obsm['program_PCs'], var_expl = program_pcs(
         d.layers['counts'], d.var['program'],
-        program_id_levels=list(map(str, range(n_programs))),
-        normalize=False
+        program_id_levels=list(map(str, range(n_programs)))
     )
 
     data.uns['programs'] = {
@@ -337,6 +336,8 @@ def _get_pcs(data, n_pcs=1, normalize=True, return_var_explained=True):
                 min_counts=0
             )
         )
+    else:
+        data = data.astype(float)
 
     _pca_X, _, _pca_var_ratio, _ = sc.pp.pca(
         data,
