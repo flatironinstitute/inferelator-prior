@@ -162,7 +162,10 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
     _cluster_pc1 = np.zeros((d.shape[0], _n_l_clusts), dtype=float)
     for i in range(_n_l_clusts):
-        _cluster_pc1[:, i] = _get_pcs(d.layers['counts'][:, d.var['leiden'] == i])
+        _cluster_pc1[:, i] = _get_pcs(
+            d.layers['counts'][:, d.var['leiden'] == i],
+            return_var_explained=False
+        )
 
     #### SECOND ROUND OF CLUSTERING TO MERGE GENE CLUSTERS INTO PROGRAMS ####
 
