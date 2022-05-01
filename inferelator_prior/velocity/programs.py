@@ -202,7 +202,8 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         'information_distance': info_dist,
         'cluster_program_map': clust_map,
         'program_PCs_variance_ratio': var_expl,
-        'n_comps': n_comps
+        'n_comps': n_comps,
+        'molecular_cv_loss': mcv_loss_arr
     }
 
     if metric != 'information':
