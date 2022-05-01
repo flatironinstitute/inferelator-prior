@@ -22,7 +22,7 @@ def vprint(*args, verbose=False, **kwargs):
 
 
 def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=True,
-                      layer="X", mcv_loss_arr=None, n_jobs=-1, verbose=False, use_hvg=False, 
+                      layer="X", mcv_loss_arr=None, n_jobs=-1, verbose=False, use_hvg=False,
                       metric='information'):
     """
     Find a specific number of gene programs based on information distance between genes
@@ -70,13 +70,12 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
     #### CREATE A NEW DATA OBJECT FOR THIS ANALYSIS ####
 
-    if layer == 'X':
-        d = ad.AnnData(data.X, dtype=float)
-    else:
-        d = ad.AnnData(data.layers[layer], dtype=float)
+    lref = data.X if layer == 'X' else data.layers[layer]
 
-    d.layers['counts'] = d.X.copy()
+    d = ad.AnnData(lref, dtype=float)
+    d.layers['counts'] = lref.copy()
     d.var = data.var.copy()
+
     n, m = d.X.shape
 
     #### PREPROCESSING / NORMALIZATION ####
