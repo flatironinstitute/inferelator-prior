@@ -165,7 +165,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         _cluster_pc1[:, i] = _get_pcs(
             d.layers['counts'][:, d.var['leiden'] == i],
             return_var_explained=False
-        )
+        ).ravel()
 
     #### SECOND ROUND OF CLUSTERING TO MERGE GENE CLUSTERS INTO PROGRAMS ####
 
