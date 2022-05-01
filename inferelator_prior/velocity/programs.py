@@ -110,13 +110,12 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         if mcv_loss_arr is None:
             mcv_loss_arr = mcv_pcs(d.layers['counts'], n=1)
 
-        n_comps = np.median(mcv_loss_arr, axis=0).argmin()
+        if mcv_loss_arr.ndim == 2:
+            n_comps = np.median(mcv_loss_arr, axis=0).argmin()
+        else:
+            n_comps = mcv_loss_arr.argmin()
 
-        d.obsm['X_pca'] = d.obsm['X_pca'][:, 0:n_comps]
-        d.varm['PCs'] = d.varm['PCs'][:, 0:n_comps]
-
-    else:
-        sc.pp.pca(d, n_comps=n_comps)
+    sc.pp.pca(d, n_comps=n_comps)
 
     vprint(f"Using {n_comps} components", verbose=verbose)
 
