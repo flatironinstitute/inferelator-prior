@@ -312,7 +312,7 @@ def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log,
         return d_xx
 
 
-def _get_pcs(data, n_pcs=1, normalize=True):
+def _get_pcs(data, n_pcs=1, normalize=True, return_var_explained=True):
     """
     Get the values for PC1
 
@@ -325,15 +325,27 @@ def _get_pcs(data, n_pcs=1, normalize=True):
     :return: PCs [Obs, n_pcs]
     :rtype: np.ndarray
     """
-    _l_ad = ad.AnnData(data, dtype=float)
 
     if normalize:
-        sc.pp.normalize_per_cell(_l_ad, min_counts=0)
-        sc.pp.log1p(_l_ad)
+        data = sc.pp.log1p(
+            sc.pp.normalize_per_cell(
+                data.astype(float),
+                copy=True,
+                min_counts=0
+            )
+        )
 
-    sc.pp.pca(_l_ad, n_comps=n_pcs + 1)
+    _pca_X, _, _pca_var_ratio, _ = sc.pp.pca(
+        data,
+        n_comps=n_pcs,
+        zero_center=True,
+        return_info=True
+    )
 
-    return _l_ad.obsm['X_pca'][:, 0:n_pcs], _l_ad.uns['pca']['variance_ratio'][0:n_pcs]
+    if return_var_explained:
+        return _pca_X[:, 0:n_pcs], _pca_var_ratio[0:n_pcs]
+    else:
+        return _pca_X[:, 0:n_pcs]
 
 
 def _leiden_cluster(dist_array, n_neighbors, random_state=100, leiden_kws=None):
