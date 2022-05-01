@@ -11,6 +11,7 @@ from sklearn.utils import gen_even_slices
 from sklearn.metrics import pairwise_distances
 
 from inferelator.regression.mi import _make_array_discrete, _make_table, _calc_mi
+from .mcv import mcv_pcs
 
 from joblib import Parallel, delayed, effective_n_jobs
 
@@ -21,8 +22,8 @@ def vprint(*args, verbose=False, **kwargs):
 
 
 def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=True,
-                      layer="X", max_comps=100, comp_var_required=0.0025, n_jobs=-1,
-                      verbose=False, use_hvg=False, metric='information'):
+                      layer="X", mcv_loss_arr=None, n_jobs=-1, verbose=False, use_hvg=False, 
+                      metric='information'):
     """
     Find a specific number of gene programs based on information distance between genes
     It is highly advisable to use raw counts as input.
@@ -44,13 +45,10 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     :type normalize: bool, optional
     :param layer: Data layer to use, defaults to "X"
     :type layer: str, optional
-    :param max_comps: Maximum number of components to use if selecting based on explained variance,
-        defaults to 100
-    :type max_comps: int, optional
-    :param comp_var_required: Threshold for PC explained variance to use if selecting based on
-        explained variance,
-        defaults to 0.0025
-    :type comp_var_required: float, optional
+    :param mcv_loss_arr: An array of molecular crossvalidation loss values [n x n_pcs],
+        will be calculated if not provided,
+        defaults to None
+    :type mcv_loss_arr: np.ndarray, optional
     :param n_jobs: Number of CPU cores to use for parallelization, defaults to -1 (all cores)
     :type n_jobs: int, optional
     :param verbose: Print status, defaults to False
@@ -109,10 +107,12 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
 
     # PCA
     if n_comps is None:
-        sc.pp.pca(d, n_comps=max_comps)
 
-        # Select comps explaining more than threshold
-        n_comps = np.sum(d.uns['pca']['variance_ratio'] >= comp_var_required)
+        if mcv_loss_arr is None:
+            mcv_loss_arr = mcv_pcs(d.layers['counts'], n=10)
+
+        n_comps = np.median(mcv_loss_arr, axis=0).argmin() + 1
+
         d.obsm['X_pca'] = d.obsm['X_pca'][:, 0:n_comps]
         d.varm['PCs'] = d.varm['PCs'][:, 0:n_comps]
 
@@ -142,7 +142,7 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         vprint(f"Calculating {metric} distance for {pca_expr.shape} array",
                verbose=verbose)
 
-        dists = pairwise_distances(pca_expr.T,metric=metric)
+        dists = pairwise_distances(pca_expr.T, metric=metric)
 
     else:
         dists = info_dist
@@ -202,7 +202,8 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         'mutual_information': mutual_info,
         'information_distance': info_dist,
         'cluster_program_map': clust_map,
-        'program_PCs_variance_ratio': var_expl
+        'program_PCs_variance_ratio': var_expl,
+        'n_comps': n_comps
     }
 
     if metric != 'information':
