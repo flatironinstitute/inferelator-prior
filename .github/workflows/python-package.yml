@@ -32,7 +32,7 @@ jobs:
         python -m pip install --upgrade pip wheel
         python -m pip install Cython --install-option="--no-cython-compile"
         python -m pip install coverage pytest
-        python -m pip install numpy matplotlib pysam anndata scanpy
+        python -m pip install numpy matplotlib pysam anndata scanpy inferelator
         python -m pip install -r requirements.txt
     - name: Test with pytest & coverage
       shell: bash -l {0}
