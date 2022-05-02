@@ -1,6 +1,7 @@
 import numpy as np
 import anndata as ad
 import itertools
+import warnings
 
 import scanpy as sc
 from scanpy.neighbors import compute_neighbors_umap, _compute_connectivities_umap
@@ -14,101 +15,103 @@ from inferelator.regression.mi import _make_array_discrete, _make_table, _calc_m
 from .mcv import mcv_pcs
 
 from joblib import Parallel, delayed, effective_n_jobs
+import pandas.api.types as pat
 
+mi_bins = 10
 
 def vprint(*args, verbose=False, **kwargs):
     if verbose:
         print(*args, **kwargs)
 
 
-def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=True,
-                      layer="X", mcv_loss_arr=None, n_jobs=-1, verbose=False, use_hvg=False,
-                      metric='information'):
+def program_select(data, n_programs=2, n_comps=None, layer="X",
+                   mcv_loss_arr=None, n_jobs=-1, verbose=False,
+                   metric='information'):
     """
-    Find a specific number of gene programs based on information distance between genes
-    It is highly advisable to use raw counts as input.
-    The risk of information leakage is high otherwise.
+    Find a specific number of gene programs based on information distance between genes.
+    Use raw counts as input.
 
-    :param data: Expression object
+    :param data: AnnData expression data object
     :type data: ad.AnnData
     :param n_programs: Number of gene programs, defaults to 2
     :type n_programs: int, optional
-    :param mi_bins: Number of bins to use when discretizing for MI,
-        defaults to 10
-    :type mi_bins: int, optional
     :param n_comps: Number of components to use,
-        will select based on explained variance if None,
+        overrides molecular crossvalidation,
+        *only set a value for testing purposes*,
         defaults to None
     :type n_comps: int, optional
-    :param normalize: Do normalization and preprocessing,
-        defaults to True
-    :type normalize: bool, optional
     :param layer: Data layer to use, defaults to "X"
     :type layer: str, optional
-    :param mcv_loss_arr: An array of molecular crossvalidation loss values [n x n_pcs],
+    :param mcv_loss_arr: An array of molecular crossvalidation
+        loss values [n x n_pcs],
         will be calculated if not provided,
         defaults to None
     :type mcv_loss_arr: np.ndarray, optional
-    :param n_jobs: Number of CPU cores to use for parallelization, defaults to -1 (all cores)
+    :param n_jobs: Number of CPU cores to use for parallelization,
+        defaults to -1 (all cores)
     :type n_jobs: int, optional
     :param verbose: Print status, defaults to False
     :type verbose: bool, optional
-    :param use_hvg: Use precalculated HVG genes if normalization=False, defaults to False
-    :type use_hvg: bool, optional
+    :param metric: Which metric to use for distance.
+        Accepts 'information', and any metric which is accepted
+        by sklearn.metrics.pairwise_distances.
+        Defaults to 'information'.
+    :type metric: str, optional
     :return: Data object with new attributes:
         .obsm['program_PCs']: Principal component for each program
         .var['leiden']: Leiden cluster ID
-        .var['program]: Program ID
+        .var['program']: Program ID
         .uns['MI_program']: {
-            'leiden_correlation': Absolute value of spearman rho between PC1 of each leiden cluster
-            'mutual_information_genes': Gene labels for mutual information matrix
-            'mutual_information': Mutual information (bits) between genes
-            'cluster_program_map': Dict mapping gene clusters to gene programs
+            'metric': Metric name,
+            'leiden_correlation': Absolute value of spearman rho
+                between PC1 of each leiden cluster,
+            'metric_genes': Gene labels for distance matrix
+            '{metric}_distance': Distance matrix for {metric},
+            'cluster_program_map': Dict mapping gene clusters to gene programs,
+            'program_PCs_variance_ratio': Variance explained by program PCs,
+            'n_comps': Number of PCs selected by molecular crossvalidation,
+            'molecular_cv_loss': Loss values for molecular crossvalidation
         }
-    :rtype: _type_
+    :rtype: AnnData object
     """
 
     #### CREATE A NEW DATA OBJECT FOR THIS ANALYSIS ####
 
     lref = data.X if layer == 'X' else data.layers[layer]
 
+    if not pat.is_integer_dtype(lref.dtype):
+        warnings.warn(
+            "program_select expects count data "
+            f"but {lref.dtype} data has been passed. "
+            "This data will be normalized and processed "
+            "as count data. If it is not count data, "
+            "these results will be nonsense."
+        )
+
     d = ad.AnnData(lref, dtype=float)
     d.layers['counts'] = lref.copy()
     d.var = data.var.copy()
 
-    n, m = d.X.shape
-
     #### PREPROCESSING / NORMALIZATION ####
 
-    # Normalize, if required
-    if normalize:
-        sc.pp.normalize_per_cell(d)
-        sc.pp.log1p(d)
-        sc.pp.highly_variable_genes(d, max_mean=np.inf, min_disp=0.01)
+    sc.pp.normalize_per_cell(d)
+    sc.pp.log1p(d)
+    sc.pp.highly_variable_genes(d, max_mean=np.inf, min_disp=0.01)
 
-        _keep_gene_mask = d.var['highly_variable'].values
-        d._inplace_subset_var(_keep_gene_mask)
+    d._inplace_subset_var(d.var['highly_variable'].values)
 
-        vprint(f"Normalized and kept {d.shape[1]} highly variable genes",
-               verbose=verbose)
+    vprint(f"Normalized and kept {d.shape[1]} highly variable genes",
+            verbose=verbose)
 
-    elif use_hvg:
-        _keep_gene_mask = data.var['highly_variable'].values
-        d._inplace_subset_var(_keep_gene_mask)
-        vprint(f"Using {d.shape[1]} highly variable genes",
-               verbose=verbose)
-
-    else:
-        # Dummy mask
-        _keep_gene_mask = np.ones(m, dtype=bool)
-        vprint(f"Skipped normalization and kept {d.shape[1]} genes",
-               verbose=verbose)
-
-    # PCA
+    #### PCA / COMPONENT SELECTION BY MOLECULAR CROSSVALIDATION ####
     if n_comps is None:
 
         if mcv_loss_arr is None:
-            mcv_loss_arr = mcv_pcs(d.layers['counts'], n=1)
+            mcv_loss_arr = mcv_pcs(
+                d.layers['counts'],
+                n=1,
+                n_pcs=min(d.shape[1] - 1, 100)
+            )
 
         if mcv_loss_arr.ndim == 2:
             n_comps = np.median(mcv_loss_arr, axis=0).argmin()
@@ -128,30 +131,29 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
     vprint(f"Calculating information distance for {pca_expr.shape} array",
            verbose=verbose)
 
-    info_dist, mutual_info = information_distance(
-        pca_expr,
-        mi_bins,
-        n_jobs=n_jobs,
-        logtype=np.log2,
-        return_information=True
-    )
-
     if metric != 'information':
         vprint(f"Calculating {metric} distance for {pca_expr.shape} array",
                verbose=verbose)
 
         dists = pairwise_distances(pca_expr.T, metric=metric)
+        mutual_info = np.array([])
 
     else:
-        dists = info_dist
+        dists, mutual_info = information_distance(
+            pca_expr,
+            mi_bins,
+            n_jobs=n_jobs,
+            logtype=np.log2,
+            return_information=True
+        )
 
-
-    vprint(f"Calculating k-NN and Leiden for {info_dist.shape} distance array",
+    vprint(f"Calculating k-NN and Leiden for {dists.shape} distance array",
            verbose=verbose)
 
+    ### k-NN & LEIDEN - 15 <= N_GENES / 100 <= 100 neighbors
     d.var['leiden'] = _leiden_cluster(
         dists,
-        15,
+        min(100, max(int(dists.shape[0] / 100), 15)),
         leiden_kws={'random_state': 50}
     )
 
@@ -196,19 +198,20 @@ def program_select_mi(data, n_programs=2, mi_bins=10, n_comps=None, normalize=Tr
         program_id_levels=list(map(str, range(n_programs)))
     )
 
+    #### ADD RESULTS OBJECT TO UNS ####
     data.uns['programs'] = {
+        'metric': metric,
         'leiden_correlation': _rho_pc1,
         'metric_genes': d.var_names.values,
-        'mutual_information': mutual_info,
-        'information_distance': info_dist,
+        f'{metric}_distance': dists,
         'cluster_program_map': clust_map,
         'program_PCs_variance_ratio': var_expl,
         'n_comps': n_comps,
         'molecular_cv_loss': mcv_loss_arr
     }
 
-    if metric != 'information':
-        data.uns['programs'][f'{metric}_distance'] = dists
+    if metric == 'information':
+        data.uns['programs']['mutual_information'] = mutual_info,
 
     return data
 
@@ -301,7 +304,14 @@ def information_distance(discrete_array, bins, n_jobs=-1, logtype=np.log,
 
     # Calulate distance as 1 - MI(X, X) / H(X, X)
     # Where H(X, X) = H(X) + H(X) - MI(X, X)
-    d_xx = 1 - mi_xx / (h_x[None, :] + h_x[:, None] - mi_xx)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        h_xx = h_x[None, :] + h_x[:, None] - mi_xx
+        d_xx = 1 - mi_xx / h_xx
+
+    # Explicitly set distance where h_xx == 0
+    # This is a rare edge case where there is no entropy in either gene
+    # As MI(x, y) == H(x, y), we set the distance to 0 by convention
+    d_xx[h_xx == 0] = 0.
 
     # Trim floats to 0 based on machine precision
     # Might need a looser tol; there's a lot of float ops here
