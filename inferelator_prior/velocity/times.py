@@ -7,30 +7,41 @@ from scipy.sparse.csgraph import shortest_path
 import itertools
 
 
-def program_times(data, cluster_obs_key, cluster_order_dict, layer="X", program_var_key='program', programs=['0', '1']):
+def program_times(data, cluster_obs_key, cluster_order_dict, layer="X", program_var_key='program',
+                  programs=['0', '1']):
 
     _cluster_labels = data.obs[cluster_obs_key].values
 
+    if type(programs) == list or type(programs) == tuple or isinstance(programs, np.ndarray):
+        pass
+    else:
+        programs = [programs]
+
     for prog in programs:
 
-        _out_key = f"program_{prog}_time"
+        _obsk = f"program_{prog}_time"
+        _obsmk = f"program_{prog}_pca"
+
         _var_idx = data.var[program_var_key] == prog
 
         if np.sum(_var_idx) == 0:
-            data.obs[_out_key] = np.nan
+            data.obs[_obsk] = np.nan
+
         else:
             lref = data.X if layer == "X" else data.layers[layer]
 
-            data.obs[_out_key] = _calculate_program_time(
+            data.obs[_obsk], data.obsm[_obsmk], data.uns[_obsmk] = _calculate_program_time(
                 lref[:, _var_idx],
                 _cluster_labels,
-                cluster_order_dict
+                cluster_order_dict,
+                return_components=True
             )
 
     return data
 
 
-def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_neighbors=10, n_comps=None, graph_method="D"):
+def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_neighbors=10,
+                            n_comps=None, graph_method="D", return_components=False):
 
     n = count_data.shape[0]
 
@@ -47,8 +58,8 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
     centroids = {k: adata.obs_names.get_loc(adata.obs_names[cluster_vector == k][idx])
                  for k, idx in get_centroids(adata.obsm['X_pca'], cluster_vector).items()}
 
-    centroid_cc_ids = list(centroids.keys())
-    centroid_indices = [centroids[k] for k in centroid_cc_ids]
+    centroid_ids = list(centroids.keys())
+    centroid_indices = [centroids[k] for k in centroid_ids]
 
     # Get the shortest path between centroids from the graph
     _shortest_path = _get_shortest_path(
@@ -61,7 +72,7 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
     _total_path, _tp_centroids = _get_total_path(
         _shortest_path,
         cluster_order_dict,
-        centroid_indices
+        centroid_ids
     )
 
     # Find the nearest points on the shortest path line for every point
@@ -76,7 +87,7 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
 
     # Scalar projections onto centroid-centroid vector
     times = np.full(n, np.nan, dtype=float)
-    for i, (left, (right, left_time, right_time)) in enumerate(cluster_order_dict.items()):
+    for left, (right, left_time, right_time) in cluster_order_dict.items():
 
         _right_centroid = _tp_centroids[right] if _tp_centroids[right] != 0 else len(
             _total_path)
@@ -90,7 +101,10 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
             centroids[right]
         )[_idx] * (right_time - left_time) + left_time
 
-    return times
+    if return_components:
+        return times, adata.obsm['X_pca'], adata.uns['pca']
+    else:
+        return times
 
 
 def scalar_projection(data, center_point, off_point, normalize=True):
