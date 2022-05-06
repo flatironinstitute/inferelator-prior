@@ -7,10 +7,8 @@ from scipy.sparse.csgraph import shortest_path
 import itertools
 
 
-def program_times(data, cluster_obs_key, cluster_order_dict, layer="X", program_var_key='program',
+def program_times(data, cluster_obs_key_dict, cluster_order_dict, layer="X", program_var_key='program',
                   programs=['0', '1']):
-
-    _cluster_labels = data.obs[cluster_obs_key].values
 
     if type(programs) == list or type(programs) == tuple or isinstance(programs, np.ndarray):
         pass
@@ -24,6 +22,8 @@ def program_times(data, cluster_obs_key, cluster_order_dict, layer="X", program_
 
         _var_idx = data.var[program_var_key] == prog
 
+        _cluster_labels = data.obs[cluster_obs_key_dict[prog]].values
+
         if np.sum(_var_idx) == 0:
             data.obs[_obsk] = np.nan
 
@@ -33,7 +33,7 @@ def program_times(data, cluster_obs_key, cluster_order_dict, layer="X", program_
             data.obs[_obsk], data.obsm[_obsmk], data.uns[_obsmk] = _calculate_program_time(
                 lref[:, _var_idx],
                 _cluster_labels,
-                cluster_order_dict,
+                cluster_order_dict[prog],
                 return_components=True
             )
 
