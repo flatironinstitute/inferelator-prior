@@ -1,253 +1,166 @@
+import anndata as ad
+import scanpy as sc
 import numpy as np
-import warnings
 
-def assign_times_from_pseudotime(pseudotimes, time_group_labels=None, time_thresholds=None, total_time=None,
-                                 time_quantiles=(0.05, 0.95), random_order_pools=None, random_seed=256):
-    """
-    Assign real times from a pseudotime axis
+from .mcv import mcv_pcs
+from scipy.sparse.csgraph import shortest_path
+import itertools
 
-    :param pseudotimes: Array of pseudotime values (will be scaled 0-1 if not already)
-    :type pseudotimes: np.ndarray
-    :param time_group_labels: An array of time group labels to go with time_thresholds
-    :type time_group_labels: np.ndarray
-    :param time_thresholds: A list of tuples where each tuple defines an anchor point
-        (group_label, realtime_start, realtime_end).
-        Set this or set total_time, defaults to None
-    :type time_thresholds: list(tuple(float, float)), optional
-    :param total_time: A total length of time to assign to the entire pseudotime axis.
-        Set this or set time_thresholds, defaults to None
-    :type total_time: numeric, optional
-    :param time_quantiles: Anchor the real-time values at these pseudotime quantiles, defaults to (0.05, 0.95).
-        Set to None to disable.
-    :type time_quantiles: tuple(float, float), optional
-    """
 
-    ### CHECK ARGUMENTS ###
-    if total_time is None and time_thresholds is None:
-        raise ValueError("total_time or time_threshold must be provided")
+def program_times(data, cluster_obs_key, cluster_order_dict, layer="X", program_var_key='program', programs=['0', '1']):
 
-    if total_time is not None and time_thresholds is not None:
-        raise ValueError("One of total_time or time_threshold must be provided, not both")
+    _cluster_labels = data.obs[cluster_obs_key].values
 
-    if time_quantiles is not None and len(time_quantiles) != 2:
-        raise ValueError("time_quantiles must be None or a tuple of two floats")
+    for prog in programs:
 
-    if time_thresholds is not None and time_group_labels is None:
-        raise ValueError("time_group_labels must be provided if time_thresholds is set")
+        _out_key = f"program_{prog}_time"
+        _var_idx = data.var[program_var_key] == prog
 
-    pseudotimes = _interval_normalize(pseudotimes)
-
-    ### DO TOTAL TIME IF THAT'S SET ###
-    if total_time is not None:
-        return _quantile_shift(pseudotimes, time_quantiles) * total_time
-
-    ### WARN IF GROUPS AREN'T IN ALIGNMENT ###
-    time_groups = set(np.unique(time_group_labels))
-    time_threshold_groups = set(x[0] for x in time_thresholds)
-
-    _diff_in_thresholds = time_threshold_groups.difference(time_groups)
-    if len(_diff_in_thresholds) > 0:
-        warnings.warn(f"Labels {list(_diff_in_thresholds)} in time_threshold are not found in time labels")
-
-    _diff_in_labels = time_groups.difference(time_threshold_groups)
-    if len(_diff_in_labels) > 0:
-        warnings.warn(f"Labels {list(_diff_in_labels)} in time labels are not found in time_threshold")
-
-    ### DO GROUPWISE TIME ASSIGNMENT ###
-    rng = np.random.default_rng(random_seed)
-    real_times = np.full_like(pseudotimes, np.nan, dtype=float)
-
-    for group, rt_start, rt_stop in time_thresholds:
-        group_idx = time_group_labels == group
-
-        if group_idx.sum() == 0:
-            continue
-
-        rt_interval = rt_stop - rt_start
-
-        # Randomly order times if random_order_pools is set and group is in the passed list
-        if random_order_pools is not None and any(x == group for x in random_order_pools):
-            real_times[group_idx] = rng.uniform(0., 1., group_idx.sum()) * rt_interval + rt_start
-
-        # Otherwise interval normalize
+        if np.sum(_var_idx) == 0:
+            data.obs[_out_key] = np.nan
         else:
-            try:
-                group_pts = _quantile_shift(pseudotimes[group_idx], time_quantiles) * rt_interval + rt_start
-            except ValueError:
-                group_pts = np.full_like(pseudotimes[group_idx], np.nan)
-            real_times[group_idx] = group_pts
+            lref = data.X if layer == "X" else data.layers[layer]
 
-    return real_times
+            data.obs[_out_key] = _calculate_program_time(
+                lref[:, _var_idx],
+                _cluster_labels,
+                cluster_order_dict
+            )
 
-
-def assign_times_from_pseudotime_sliding(pseudotime, time_group_labels, time_order, time_thresholds, window_width=1,
-                                         edges=(0.05, 0.95), trim_outliers=True, mask_outliers=False):
-    """
-    Assign real times using a sliding window around groups of pseudotimes
-
-    :param pseudotimes: Array of pseudotime values (will be scaled 0-1 if not already)
-    :type pseudotimes: np.ndarray
-    :param time_group_labels: An array of time group labels to go with time_thresholds
-    :type time_group_labels: np.ndarray
-    :param time_order: A list of group labels in order temporally
-    :type time_order: list
-    :param time_thresholds: A list of tuples where each tuple defines an anchor point
-        (group_label, realtime_start, realtime_end).
-    :type time_thresholds: list(tuples)
-    :param window_width: The number of groups to consider on each side of the center group, defaults to 1
-    :type window_width: int, optional
-    :param edges: The quantiles for the outer edge groups, defaults to (0.05, 0.95)
-    :type edges: tuple, optional
-    :raises ValueError: Raises ValueError if the windowing is bad or if unknown time labels are provided in time_order
-    :return: Real-time values
-    :rtype: np.ndarray
-    """
-
-    n = len(time_order)
-    span = 2 * window_width + 1
-
-    if not isinstance(time_thresholds, dict):
-        time_thresholds = {k: (k1, k2) for k, k1, k2 in time_thresholds}
-
-    _unknown_times = [t for t in time_order if t not in time_thresholds]
-    if len(_unknown_times) != 0:
-            raise ValueError(f"Unable to find times {_unknown_times}")
-
-    if n < span:
-        raise ValueError(f"Cannot make windows of size {window_width} from {n} groups")
-
-    time_vector = np.full_like(pseudotime, np.nan)
-    outliers = np.zeros(pseudotime.shape, dtype=bool)
-
-    for i in range(n):
-
-        ### GET INDICES AROUND EACH GROUP ###
-        left_idx, right_idx = i - window_width, i + window_width + 1
-
-        ### MAKE SURE INDICES AREN'T TOO BIG/SMALL ###
-        if left_idx < 0:
-            left_idx, right_idx = 0, span
-        elif right_idx > n:
-            left_idx, right_idx = n - span, n
-
-        ### DEFINE WINDOW TIMES ###
-        select_times = time_order[left_idx:right_idx]
-        center_time = time_order[i]
-
-        left_time = min(x[0] for k, x in time_thresholds.items() for y in select_times if k == y)
-        right_time = max(x[1] for k, x in time_thresholds.items() for y in select_times if k == y)
-        interval_time = right_time - left_time
-
-        ### GET PT THRESHOLDS OF LEFTMOST AND RIGHTMOST ###
-        lq = _finite_quantile(pseudotime[time_group_labels == time_order[left_idx]], edges[0])
-        rq = _finite_quantile(pseudotime[time_group_labels == time_order[right_idx - 1]], edges[1])
-
-        ### INDICES FOR PT VALUES OF INTEREST ###
-        keep_window = time_group_labels == center_time
-
-        ### CONVERT TO TIMES ###
-        window_pts = _quantile_shift(pseudotime[keep_window].copy(), thresholds=(lq, rq))
-
-        _outlier_idx = (window_pts < 0) | (window_pts > 1)
-        outliers[keep_window] |= _outlier_idx
-
-        if trim_outliers:
-            window_pts[_outlier_idx] = np.nan
-            
-        window_pts *= interval_time
-        window_pts += left_time
-
-        ### ADD TO VECTOR ##
-        time_vector[keep_window] = window_pts
-
-    if mask_outliers:
-        return time_vector, outliers
-    else:
-        return time_vector
+    return data
 
 
-def _quantile_shift(arr, quantiles=None, thresholds=None):
-    """
-    Shift values so that they're 0-1 where 0 and 1 are set to quantile values from the original data
+def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_neighbors=10, n_comps=None, graph_method="D"):
 
-    :param arr: Numeric array
-    :type arr: np.ndarray
-    :param quantiles: Quantiles (None disables)
-    :type quantiles: tuple(float, float), None
-    :return: Numeric array shifted
-    :rtype: np.ndarray
-    """
+    n = count_data.shape[0]
 
-    arr = _interval_normalize(arr)
+    adata = ad.AnnData(count_data, dtype=float)
+    sc.pp.normalize_per_cell(adata, min_counts=0)
+    sc.pp.log1p(adata)
 
-    if quantiles is None and thresholds is None:
-        return arr.copy()
+    if n_comps is None:
+        n_comps = np.median(mcv_pcs(count_data, n=1), axis=0).argmin()
 
-    if quantiles is not None:
-        lq, rq = _finite_quantile(arr, quantiles)
-    elif thresholds is not None:
-        lq, rq = thresholds
+    sc.pp.pca(adata, n_comps=n_comps, zero_center=True)
+    sc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=n_comps)
 
-    if not np.isfinite(lq) or not np.isfinite(rq):
-        raise ValueError(f"Unable to anchor values {lq} and {rq}")
+    centroids = {k: adata.obs_names.get_loc(adata.obs_names[cluster_vector == k][idx])
+                 for k, idx in get_centroids(adata.obsm['X_pca'], cluster_vector).items()}
 
-    if lq != rq:
-        arr = (arr - lq) / (rq - lq)
-    else:
-        arr = arr.copy()
+    centroid_cc_ids = list(centroids.keys())
+    centroid_indices = [centroids[k] for k in centroid_cc_ids]
 
-    return arr
+    # Get the shortest path between centroids from the graph
+    _shortest_path = _get_shortest_path(
+        adata.obsp['distances'],
+        centroid_indices,
+        graph_method=graph_method
+    )
+
+    # Order the centroids and build an end-to-end path
+    _total_path, _tp_centroids = _get_total_path(
+        _shortest_path,
+        cluster_order_dict,
+        centroid_indices
+    )
+
+    # Find the nearest points on the shortest path line for every point
+    # As numeric position on _total_path
+    _nearest_point_on_path = shortest_path(
+        adata.obsp['distances'],
+        directed=False,
+        indices=_total_path[:-1],
+        return_predecessors=False,
+        method=graph_method
+    ).argmin(axis=0)
+
+    # Scalar projections onto centroid-centroid vector
+    times = np.full(n, np.nan, dtype=float)
+    for i, (left, (right, left_time, right_time)) in enumerate(cluster_order_dict.items()):
+
+        _right_centroid = _tp_centroids[right] if _tp_centroids[right] != 0 else len(
+            _total_path)
+
+        _idx = _nearest_point_on_path >= _tp_centroids[left]
+        _idx &= _nearest_point_on_path < _right_centroid
+
+        times[_idx] = scalar_projection(
+            adata.obsm['X_pca'][:, 0:2],
+            centroids[left],
+            centroids[right]
+        )[_idx] * (right_time - left_time) + left_time
+
+    return times
 
 
-def _finite_quantile(arr, quantile):
-    """
-    Get quantiles from only finite values
+def scalar_projection(data, center_point, off_point, normalize=True):
 
-    :param arr: Numeric array
-    :type arr: np.ndarray
-    :param quantile: Numeric, list/tuple of numerics
-    :type quantile: Numeric, list, tuple
-    :raises ValueError: Raises ValueError if there are not enough finite values
-    :return: Quantile thresholds
-    :rtype: Numeric, tuple
-    """
+    vec = data[off_point, :] - data[center_point, :]
 
-    if quantile is None:
-        return None
+    scalar_proj = np.dot(
+        data - data[center_point, :],
+        vec
+    )
 
-    _is_finite = np.isfinite(arr)
+    scalar_proj = scalar_proj / np.linalg.norm(vec)
 
-    try:
-        n = len(quantile)
-    except TypeError:
-        n = 1
+    if normalize:
+        _center_scale = scalar_proj[center_point]
+        _off_scale = scalar_proj[off_point]
+        scalar_proj = (scalar_proj - _center_scale) / \
+            (_off_scale - _center_scale)
 
-    if np.sum(_is_finite) < n:
-        raise ValueError(f"Cannot find {n} quantiles from {np.sum(_is_finite)} values")
-
-    return np.nanquantile(arr[_is_finite], quantile)
+    return scalar_proj
 
 
-def _interval_normalize(arr):
-    """
-    Normalize to 0-1. Ignore NaN and Inf.
+def get_centroids(comps, cluster_vector):
+    return {k: _get_centroid(comps[cluster_vector == k, :])
+            for k in np.unique(cluster_vector)}
 
-    :param arr: Data to normalize
-    :type arr: np.ndarray
-    :return: Normalized data
-    :rtype: no.ndarray
-    """
 
-    _is_finite = np.isfinite(arr)
+def _get_centroid(comps):
+    return np.sum((comps - np.mean(comps, axis=0)[None, :]) ** 2, axis=1).argmin()
 
-    if np.sum(_is_finite) == 0:
-        return np.zeros_like(arr)
 
-    s_min, s_max = np.nanmin(arr[_is_finite]), np.nanmax(arr[_is_finite])
+def _get_shortest_path(graph, centroid_indices, graph_method="D"):
+    # Find the shortest path between centroids
+    graph_dist, graph_pred = shortest_path(
+        graph,
+        directed=False,
+        indices=centroid_indices,
+        return_predecessors=True,
+        method=graph_method
+    )
 
-    if s_min != s_max:
-        scaled_arr = (arr - s_min) / (s_max - s_min)
-    else:
-        scaled_arr = np.zeros_like(arr)
+    n_centroids = len(centroid_indices)
 
-    return scaled_arr
+    shortest_paths = np.zeros((n_centroids, n_centroids), dtype=object)
+
+    for left, right in itertools.product(range(n_centroids), range(n_centroids)):
+        start = centroid_indices[left]
+        pred_arr = graph_pred[left, :]
+
+        current_loc = centroid_indices[right]
+        path = [current_loc]
+
+        while current_loc != start:
+            current_loc = pred_arr[current_loc]
+            path.append(current_loc)
+
+        shortest_paths[left, right] = path
+
+    return shortest_paths
+
+
+def _get_total_path(shortest_paths, centroid_order_dict, centroid_order_list):
+    total_path = []
+    total_path_centroids = {}
+
+    for i, (left, (right, _, _)) in enumerate(centroid_order_dict.items()):
+        _link_path = shortest_paths[[right == x for x in centroid_order_list],
+                                    [left == x for x in centroid_order_list]][0]
+
+        total_path_centroids[left] = len(total_path)
+        total_path.extend(_link_path[int(i > 0):])
+
+    return total_path, total_path_centroids
