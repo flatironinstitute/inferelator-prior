@@ -19,13 +19,14 @@ def program_times(data, cluster_obs_key_dict, cluster_order_dict, layer="X", pro
 
     for prog in programs:
 
-        vprint(f"Assigning time values for program {prog}",
-               verbose=verbose)
-
         _obsk = f"program_{prog}_time"
         _obsmk = f"program_{prog}_pca"
 
         _var_idx = data.var[program_var_key] == prog
+
+        vprint(f"Assigning time values for program {prog} "
+               f"containing {np.sum(_var_idx)} genes",
+               verbose=verbose)
 
         _cluster_labels = data.obs[cluster_obs_key_dict[prog]].values
 
