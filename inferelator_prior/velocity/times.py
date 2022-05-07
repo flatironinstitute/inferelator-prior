@@ -19,7 +19,7 @@ def program_times(data, cluster_obs_key_dict, cluster_order_dict, layer="X", pro
 
     for prog in programs:
 
-        vprint("Assigning time values for program {prog}",
+        vprint(f"Assigning time values for program {prog}",
                verbose=verbose)
 
         _obsk = f"program_{prog}_time"
@@ -39,7 +39,8 @@ def program_times(data, cluster_obs_key_dict, cluster_order_dict, layer="X", pro
                 lref[:, _var_idx],
                 _cluster_labels,
                 cluster_order_dict[prog],
-                return_components=True
+                return_components=True,
+                verbose=verbose
             )
 
     return data
@@ -124,9 +125,10 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
             centroids[end]
         )[_idx] * (right_time - left_time) + left_time
 
-    vprint(f"Assigned times to {np.sum(~np.isnan(times))} cells "
-           f"[{np.nanmin(times):.3f} - {np.nanmax(times):.3f}]",
-           verbose=verbose)
+    if verbose:
+        vprint(f"Assigned times to {np.sum(~np.isnan(times))} cells "
+            f"[{np.nanmin(times):.3f} - {np.nanmax(times):.3f}]",
+            verbose=verbose)
 
     if return_components:
         return times, adata.obsm['X_pca'], adata.uns['pca']
