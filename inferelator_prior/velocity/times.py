@@ -124,7 +124,7 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
             centroids[end]
         )[_idx] * (right_time - left_time) + left_time
 
-    vprint(f"Assigned times to {np.sum(~np.nan(times))} cells "
+    vprint(f"Assigned times to {np.sum(~np.isnan(times))} cells "
            f"[{np.nanmin(times):.3f} - {np.nanmax(times):.3f}]",
            verbose=verbose)
 
