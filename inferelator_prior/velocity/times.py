@@ -19,8 +19,7 @@ def program_times(data, cluster_obs_key_dict, cluster_order_dict, layer="X", pro
 
     for prog in programs:
 
-        vprint("Assigning time values for program {prog} "
-               "from {cluster_obs_key_dict[prog]} groups",
+        vprint("Assigning time values for program {prog}",
                verbose=verbose)
 
         _obsk = f"program_{prog}_time"
@@ -70,11 +69,17 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
     sc.pp.pca(adata, n_comps=n_comps, zero_center=True)
     sc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=n_comps)
 
+    vprint(f"Preprocessed expression count data {count_data.shape}",
+           verbose=verbose)
+
     centroids = {k: adata.obs_names.get_loc(adata.obs_names[cluster_vector == k][idx])
                  for k, idx in get_centroids(adata.obsm['X_pca'], cluster_vector).items()}
 
     centroid_ids = list(centroids.keys())
     centroid_indices = [centroids[k] for k in centroid_ids]
+
+    vprint(f"Identified centroids for groups {''.join(centroid_ids)}",
+           verbose=verbose)
 
     # Order the centroids and build an end-to-end path
     _total_path, _tp_centroids = get_total_path(
@@ -86,6 +91,10 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
         cluster_order_dict,
         centroid_ids
     )
+
+    vprint(f"Built {len(_total_path)} length path connecting "
+           f"{len(_tp_centroids)} groups",
+           verbose=verbose)
 
     # Find the nearest points on the shortest path line for every point
     # As numeric position on _total_path
@@ -99,19 +108,25 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
 
     # Scalar projections onto centroid-centroid vector
     times = np.full(n, np.nan, dtype=float)
-    for left, (right, left_time, right_time) in cluster_order_dict.items():
+    for start, (end, left_time, right_time) in cluster_order_dict.items():
 
-        _right_centroid = _tp_centroids[right] if _tp_centroids[right] != 0 else len(
-            _total_path)
+        if _tp_centroids[end] == 0:
+            _right_centroid = len(_total_path)
+        else:
+            _right_centroid = _tp_centroids[end]
 
-        _idx = _nearest_point_on_path >= _tp_centroids[left]
+        _idx = _nearest_point_on_path >= _tp_centroids[start]
         _idx &= _nearest_point_on_path < _right_centroid
 
         times[_idx] = scalar_projection(
             adata.obsm['X_pca'][:, 0:2],
-            centroids[left],
-            centroids[right]
+            centroids[start],
+            centroids[end]
         )[_idx] * (right_time - left_time) + left_time
+
+    vprint(f"Assigned times to {np.sum(~np.nan(times))} cells "
+           f"[{np.nanmin(times):.3f} - {np.nanmax(times):.3f}]",
+           verbose=verbose)
 
     if return_components:
         return times, adata.obsm['X_pca'], adata.uns['pca']

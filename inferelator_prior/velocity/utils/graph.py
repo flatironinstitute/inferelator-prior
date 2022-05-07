@@ -93,5 +93,6 @@ def get_total_path(shortest_paths, centroid_order_dict, centroid_order_list):
         # Set the position of the key node on the total path
         total_path_centroids[start_label] = len(total_path)
         total_path.extend(_link_path[int(i > 0):])
+        total_path_centroids[end_label] = len(total_path)
 
     return total_path, total_path_centroids
