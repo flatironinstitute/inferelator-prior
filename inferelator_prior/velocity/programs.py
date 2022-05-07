@@ -13,15 +13,12 @@ from sklearn.metrics import pairwise_distances
 
 from inferelator.regression.mi import _make_array_discrete, _make_table, _calc_mi
 from .mcv import mcv_pcs
+from . import vprint
 
 from joblib import Parallel, delayed, effective_n_jobs
 import pandas.api.types as pat
 
 mi_bins = 10
-
-def vprint(*args, verbose=False, **kwargs):
-    if verbose:
-        print(*args, **kwargs)
 
 
 def program_select(data, n_programs=2, n_comps=None, layer="X",
