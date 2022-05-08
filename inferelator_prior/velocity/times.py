@@ -132,6 +132,10 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
         _idx = _nearest_point_on_path >= _tp_centroids[start]
         _idx &= _nearest_point_on_path < _right_centroid
 
+        vprint(f"Assigned times to {np.sum(_idx)} cells [{start} - {end}] "
+               f"conected by {_right_centroid - _tp_centroids[start]} points",
+               verbose=verbose)
+
         times[_idx] = scalar_projection(
             adata.obsm['X_pca'][:, 0:2],
             centroids[start],
@@ -150,7 +154,7 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
 
     adata.uns['pca']['centroids'] = centroids
     adata.uns['pca']['shortest_path'] = _total_path
-    adata.uns['pca']['closest_path_assignment'] = group
+    adata.uns['pca']['closest_path_assignment'] = group['index']
     adata.uns['pca']['assignment_names'] = group['names']
     adata.uns['pca']['assignment_centroids'] = group['centroids']
     adata.uns['pca']['assignment_path'] = group['path']
