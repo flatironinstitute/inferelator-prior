@@ -44,6 +44,11 @@ def program_times(data, cluster_obs_key_dict, cluster_order_dict, layer="X", pro
                 verbose=verbose
             )
 
+            data.uns[_obsmk]['obs_time_key'] = _obsk
+            data.uns[_obsmk]['obs_group_key'] = cluster_obs_key_dict[prog]
+            data.uns[_obsmk]['obsm_key'] = _obsmk
+            data.uns[_obsmk]['cluster_order_dict'] = cluster_order_dict[prog]
+
     return data
 
 
@@ -77,10 +82,9 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
     centroids = {k: adata.obs_names.get_loc(adata.obs_names[cluster_vector == k][idx])
                  for k, idx in get_centroids(adata.obsm['X_pca'], cluster_vector).items()}
 
-    centroid_ids = list(centroids.keys())
-    centroid_indices = [centroids[k] for k in centroid_ids]
+    centroid_indices = [centroids[k] for k in centroids.keys()]
 
-    vprint(f"Identified centroids for groups {''.join(centroid_ids)}",
+    vprint(f"Identified centroids for groups {', '.join(centroids.keys())}",
            verbose=verbose)
 
     # Order the centroids and build an end-to-end path
@@ -91,7 +95,7 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
             graph_method=graph_method
         ),
         cluster_order_dict,
-        centroid_ids
+        list(centroids.keys())
     )
 
     vprint(f"Built {len(_total_path)} length path connecting "
@@ -110,6 +114,14 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
 
     # Scalar projections onto centroid-centroid vector
     times = np.full(n, np.nan, dtype=float)
+
+    group = {
+        'index': np.zeros(n, dtype=int),
+        'names': [],
+        'centroids': [],
+        'path': []
+    }
+
     for start, (end, left_time, right_time) in cluster_order_dict.items():
 
         if _tp_centroids[end] == 0:
@@ -126,10 +138,22 @@ def _calculate_program_time(count_data, cluster_vector, cluster_order_dict, n_ne
             centroids[end]
         )[_idx] * (right_time - left_time) + left_time
 
+        group['index'][_idx] = len(group['names'])
+        group['names'].append(f"{start} / {end}")
+        group['centroids'].append((centroids[start], centroids[end]))
+        group['path'].append(_total_path[_tp_centroids[start]:_right_centroid])
+
     if verbose:
         vprint(f"Assigned times to {np.sum(~np.isnan(times))} cells "
-            f"[{np.nanmin(times):.3f} - {np.nanmax(times):.3f}]",
-            verbose=verbose)
+               f"[{np.nanmin(times):.3f} - {np.nanmax(times):.3f}]",
+               verbose=verbose)
+
+    adata.uns['pca']['centroids'] = centroids
+    adata.uns['pca']['shortest_path'] = _total_path
+    adata.uns['pca']['closest_path_assignment'] = group
+    adata.uns['pca']['assignment_names'] = group['names']
+    adata.uns['pca']['assignment_centroids'] = group['centroids']
+    adata.uns['pca']['assignment_path'] = group['path']
 
     if return_components:
         return times, adata.obsm['X_pca'], adata.uns['pca']
