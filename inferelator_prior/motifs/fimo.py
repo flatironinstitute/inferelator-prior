@@ -47,15 +47,21 @@ class FIMOScanner(MotifScanner):
         else:
             fimo_command = fimo_command + ["--thresh", str(threshold)] + [motif_file, fasta_file]
 
-        proc = subprocess.run(fimo_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.run(
+            fimo_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding='utf-8'
+        )
 
         if int(proc.returncode) != 0:
-            print(proc.stderr.decode("utf-8"))
-            print("fimo motif scan failed for {meme}, {fa} ({cmd})".format(meme=motif_file,
-                                                                           fa=fasta_file,
-                                                                           cmd=" ".join(fimo_command)))
+            print(proc.stderr)
+            print(
+                f"fimo motif scan failed for {motif_file}, "
+                f"{fasta_file} ({' '.join(fimo_command)})"
+            )
 
-        return self._parse_output(io.StringIO(proc.stdout.decode("utf-8")))
+        return self._parse_output(io.StringIO(proc.stdout))
 
     def _parse_output(self, output_handle):
         try:

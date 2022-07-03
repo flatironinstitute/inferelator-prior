@@ -20,7 +20,7 @@ WINDOW_DOWN = "Window_End"
 GTF_COLUMNS = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attributes"]
 
 
-def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
+def load_gtf_to_dataframe(gtf_path, annotations=None, fasta_record_lengths=None, gene_id_regex=None):
     """
     Loads genes from a GTF or GFF into a dataframe and returns them
 
@@ -28,6 +28,9 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
     :type gtf_path: str
     :param fasta_record_lengths: A dict of valid FASTA records, keyed by name
     :type fasta_record_lengths: dict(int)
+    :param gene_id_regex: Regular expression to extract gene ID,
+        None autodetects, defaults to None
+    :type gene_id_regex: str
     :return annotations: Loaded and processed gene annotations
         'gene_name': str
         'strand': str
@@ -37,13 +40,16 @@ def load_gtf_to_dataframe(gtf_path, fasta_record_lengths=None):
     :rtype: pd.DataFrame
     """
 
-    if any(gtf_path.lower().endswith(x) for x in [".gff", ".gff3", ".gff.gz", ".gff3.gz"]):
+    if gene_id_regex is not None:
+        _gregex = gene_id_regex
+    elif any(gtf_path.lower().endswith(x) for x in [".gff", ".gff3", ".gff.gz", ".gff3.gz"]):
         _gregex = GFF_GENE_ID_REGEX
     else:
         _gregex = GTF_GENE_ID_REGEX
 
     # Load annotations into a dataframe with pybedtools
-    annotations = pd.read_csv(gtf_path, sep="\t", names=GTF_COLUMNS, comment="#", low_memory=False)
+    if annotations is None:
+        annotations = pd.read_csv(gtf_path, sep="\t", names=GTF_COLUMNS, comment="#", low_memory=False)
 
     if len(annotations) == 0:
         raise ValueError("No records present in {f}".format(f=gtf_path))
@@ -84,10 +90,10 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
     :param fasta_record_lengths:
     :return window_annotate: pd.DataFrame
     """
-    
+
     window_annotate = annotation_dataframe.copy()
     window_annotate[WINDOW_UP], window_annotate[WINDOW_DOWN] = pd.NA, pd.NA
-    
+
     try:
         if len(window_size) == 1:
             w_up, w_down = window_size[0], window_size[0]
@@ -126,7 +132,7 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
             _chrlen = fasta_record_lengths[chromosome]
             _idx = window_annotate[GTF_CHROMOSOME] == chromosome
             window_annotate.loc[_idx & (window_annotate[WINDOW_UP] > _chrlen), WINDOW_UP] = _chrlen
-            window_annotate.loc[_idx & (window_annotate[WINDOW_DOWN] > _chrlen), WINDOW_DOWN] = _chrlen       
+            window_annotate.loc[_idx & (window_annotate[WINDOW_DOWN] > _chrlen), WINDOW_DOWN] = _chrlen
 
     if constrain_to_intergenic:
         window_annotate = window_annotate.groupby(GTF_CHROMOSOME).apply(fix_overlap)
@@ -138,6 +144,7 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
 
     return window_annotate
 
+
 def fix_overlap(dataframe):
     """
     Apply function that sets window start and stop positions so that they do not overlap with features
@@ -145,10 +152,10 @@ def fix_overlap(dataframe):
     :param dataframe: pd.DataFrame
     :return dataframe: pd.DataFrame
     """
-    
+
     dataframe = dataframe.sort_values(by=SEQ_START)
     windows = dataframe[[WINDOW_UP, WINDOW_DOWN]].copy()
-    
+
     start_idx = dataframe[WINDOW_UP] < dataframe[SEQ_STOP].shift(1)
     dataframe.loc[start_idx, WINDOW_UP] = dataframe[SEQ_STOP].shift(1).loc[start_idx].astype(int)
 

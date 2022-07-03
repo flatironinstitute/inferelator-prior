@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import os
 
 import pandas as pd
@@ -11,12 +9,13 @@ from inferelator_prior.processor.matrix import pileup_raw_counts, normalize_matr
 from inferelator_prior.processor.srr import get_srr_files, unpack_srr_files
 from inferelator_prior.processor.star import star_align_fastqs
 from inferelator_prior.processor.kallisto import kallisto_align_fastqs, KALLISTO_COUNT_COL, KALLISTO_TPM_COL
-from inferelator_prior.processor.utils import file_path_abs, test_requirements_exist, ArgParseTestRequirements
+from inferelator_prior.processor.utils import file_path_abs, ArgParseTestRequirements
 
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
 OUTPUT_COUNT_METADATA_NAME = "srr_alignment_metadata.tsv"
 OUTPUT_FPKM_FILE_NAME = "srr_fpkm.tsv"
 OUTPUT_TPM_FILE_NAME = "srr_tpm.tsv"
+OUTPUT_T2G_FILE_NAME = "srr_tpm_t2g.tsv"
 
 
 def main():
@@ -26,6 +25,7 @@ def main():
     ap.add_argument("-g", "--genome", dest="genome", help="Reference genome (STAR or Kallisto)", metavar="PATH",
                     required=True)
     ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", default=None)
+    ap.add_argument("-t", "--t2g", dest="t2g", help="Transcript2Gene File", metavar="FILE", default=None)
     ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
     ap.add_argument("--gzip", dest="gzip", help="GZIP output file", action='store_const', const=True, default=False)
     ap.add_argument("--cpu", dest="cpu", help="NUM of cores to use", metavar="NUM", type=int, default=4)
@@ -54,12 +54,34 @@ def main():
     else:
         raise ValueError("There is something wrong with this switch")
 
-    srr_tomat0(srr_ids, args.out, args.genome, annotation_file=args.anno, gzip_output=args.gzip, cores=args.cpu,
-               star_jobs=args.sjob, star_args=star_args, kallisto=args.kallisto, skip=args.skip)
+    srr_tomat0(
+        srr_ids,
+        args.out,
+        args.genome,
+        annotation_file=args.anno,
+        gzip_output=args.gzip,
+        cores=args.cpu,
+        star_jobs=args.sjob,
+        star_args=star_args,
+        kallisto=args.kallisto,
+        skip=args.skip,
+        transcripts_to_genes_file=args.t2g
+    )
 
 
-def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None, gzip_output=False, cores=4, star_jobs=2,
-               star_args=None, kallisto=False, skip=False):
+def srr_tomat0(
+    srr_ids,
+    output_path,
+    reference_genome,
+    annotation_file=None,
+    gzip_output=False,
+    cores=4,
+    star_jobs=2,
+    star_args=None,
+    kallisto=False,
+    skip=False,
+    transcripts_to_genes_file=None
+):
 
     output_path = file_path_abs(output_path)
     os.makedirs(output_path, exist_ok=True)
@@ -80,13 +102,17 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
     count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME) + gz_extension
     fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME) + gz_extension
     tpm_file_name = os.path.join(output_path, OUTPUT_TPM_FILE_NAME) + gz_extension
-    
+
     if kallisto:
+
         print("Aligning FASTQ files")
         os.makedirs(os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH), exist_ok=True)
-        count_file_names = kallisto_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
-                                                 os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH),
-                                                 num_workers=cores)
+        count_file_names = kallisto_align_fastqs(
+            srr_ids, fastq_file_names,
+            reference_genome,
+            os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH),
+            num_workers=cores
+        )
 
         tpm_df = None
         count_matrix = None
@@ -99,10 +125,10 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
             counts = pd.read_csv(cf, sep="\t", index_col=0)
 
             if tpm_df is None:
-                tpm_df = pd.DataFrame(index=counts.index)
+                tpm_df = pd.DataFrame(0., index=counts.index, columns=srr_ids)
 
             if count_matrix is None:
-                count_matrix = pd.DataFrame(index=counts.index)
+                count_matrix = pd.DataFrame(0, index=counts.index, columns=srr_ids)
 
             tpm_df[sid] = counts[KALLISTO_TPM_COL]
             count_matrix[sid] = counts[KALLISTO_COUNT_COL]
@@ -118,7 +144,7 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
 
         os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
         thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
-        sam_file_names = star_align_fastqs(srr_ids, fastq_file_names, star_reference_genome,
+        sam_file_names = star_align_fastqs(srr_ids, fastq_file_names, reference_genome,
                                            os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
                                            num_workers=star_jobs, threads_per_worker=thread_count,
                                            star_options=star_args)
@@ -148,10 +174,34 @@ def srr_tomat0(srr_ids, output_path, star_reference_genome, annotation_file=None
 
         # Normalize to TPM
         print("Normalizing result matrix to TPM")
-        normalized_count_matrix_tpm = normalize_matrix_to_tpm(count_matrix, annotation_file)
+        tpm_df = normalize_matrix_to_tpm(count_matrix, annotation_file)
 
         # Save the normalized counts file
-        normalized_count_matrix_tpm.to_csv(tpm_file_name, sep="\t")
+        tpm_df.to_csv(tpm_file_name, sep="\t")
+
+    # Save an aggregated gene TPM file
+    # If transcripts_to_genes_file has been provided
+    if transcripts_to_genes_file is not None:
+        gene_file_name = os.path.join(
+            output_path,
+            OUTPUT_T2G_FILE_NAME
+        ) + gz_extension
+
+        tpm_df.join(
+            pd.read_csv(
+                transcripts_to_genes_file,
+                sep="\t",
+                index_col=0
+            ),
+            how='inner'
+        ).groupby(
+            'Gene'
+        ).agg(
+            'sum'
+        ).T.to_csv(
+            gene_file_name,
+            sep="\t"
+        )
 
     print("Count file {sh} generated from {srlen} SRA files".format(sh=count_matrix.shape, srlen=len(srr_ids)))
     failed_counts = list(map(lambda x: x is None, count_file_names))
