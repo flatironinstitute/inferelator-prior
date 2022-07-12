@@ -162,7 +162,7 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
                                  truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
                                  gene_constraint_list=None, regulator_constraint_list=None,
                                  output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, lowmem=True, intergenic_only=True, save_locs=False, 
+                                 shuffle=None, lowmem=True, intergenic_only=True, save_locs=False,
                                  save_locs_filtered=False):
     """
     Build a motif-based prior from windows around annotated genes.
@@ -409,10 +409,18 @@ def scan_and_build_by_tf(genomic_fasta_file, constraint_bed_file, genes, gene_lo
 
             tf_motifs = tf_mi_df[MOTIF_OBJ_COL].tolist()
 
-            motif_peaks = MotifScan.scanner(motifs=tf_motifs, num_workers=1).scan(None,
-                                                                                  extracted_genome=extract_fasta,
-                                                                                  min_ic=motif_ic,
-                                                                                  threshold=scanner_thresh)
+            try:
+                motif_peaks = MotifScan.scanner(
+                    motifs=tf_motifs,
+                    num_workers=1
+                ).scan(
+                    None,
+                    extracted_genome=extract_fasta,
+                    min_ic=motif_ic,
+                    threshold=scanner_thresh
+                )
+            except RuntimeError:
+                return (None, None, None), None
 
             # Process into an information score matrix
             MotifScorer.set_information_criteria(min_binding_ic=motif_ic, max_dist=tandem)

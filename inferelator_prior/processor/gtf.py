@@ -19,8 +19,27 @@ WINDOW_DOWN = "Window_End"
 
 GTF_COLUMNS = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attributes"]
 
+def _most_common(x):
+    try:
+        return x.value_counts().index[0]
+    except IndexError:
+        return pd.NA
 
-def load_gtf_to_dataframe(gtf_path, annotations=None, fasta_record_lengths=None, gene_id_regex=None):
+# Define the functions for aggregating gene records
+AGGREGATE_FUNCS = {
+    SEQ_START: min,
+    SEQ_STOP: max,
+    GTF_CHROMOSOME: _most_common,
+    GTF_STRAND: _most_common
+}
+
+def load_gtf_to_dataframe(
+    gtf_path,
+    annotations=None,
+    fasta_record_lengths=None,
+    gene_id_regex=None,
+    additional_regex=None
+):
     """
     Loads genes from a GTF or GFF into a dataframe and returns them
 
@@ -31,6 +50,9 @@ def load_gtf_to_dataframe(gtf_path, annotations=None, fasta_record_lengths=None,
     :param gene_id_regex: Regular expression to extract gene ID,
         None autodetects, defaults to None
     :type gene_id_regex: str
+    :param additional_regex: Dict of column: regex to extract values from
+        annotations with regex and place into column, defaults to None
+    :type additional_regex: dict, None
     :return annotations: Loaded and processed gene annotations
         'gene_name': str
         'strand': str
@@ -47,9 +69,17 @@ def load_gtf_to_dataframe(gtf_path, annotations=None, fasta_record_lengths=None,
     else:
         _gregex = GTF_GENE_ID_REGEX
 
+    aggregate_functions = AGGREGATE_FUNCS.copy()
+
     # Load annotations into a dataframe with pybedtools
     if annotations is None:
-        annotations = pd.read_csv(gtf_path, sep="\t", names=GTF_COLUMNS, comment="#", low_memory=False)
+        annotations = pd.read_csv(
+            gtf_path,
+            sep="\t",
+            names=GTF_COLUMNS,
+            comment="#",
+            low_memory=False
+        )
 
     if len(annotations) == 0:
         raise ValueError("No records present in {f}".format(f=gtf_path))
@@ -65,7 +95,16 @@ def load_gtf_to_dataframe(gtf_path, annotations=None, fasta_record_lengths=None,
     annotations = annotations.loc[~pd.isnull(annotations[SEQ_START]) & ~pd.isnull(annotations[SEQ_STOP]), :]
 
     # Regex extract the gene_id from the annotations column
-    annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(_gregex, expand=False, flags=re.IGNORECASE)
+    annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(
+        _gregex, expand=False, flags=re.IGNORECASE
+    )
+
+    if additional_regex is not None:
+        for col, reg in additional_regex.items():
+            annotations[col] = annotations[GTF_ATTRIBUTES].str.extract(
+                reg, expand=False, flags=re.IGNORECASE
+            )
+            aggregate_functions[col] = _most_common
 
     # Drop any NaNs in GENE_NAME:
     annotations.dropna(inplace=True, subset=[GTF_GENENAME])
@@ -74,7 +113,7 @@ def load_gtf_to_dataframe(gtf_path, annotations=None, fasta_record_lengths=None,
         raise ValueError("Unable to parse gene IDs from annotation file attributes")
 
     # Define genes as going from the minimum start for any subfeature to the maximum end for any subfeature
-    annotations = _fix_genes(annotations)
+    annotations = _fix_genes(annotations, aggregate_functions)
 
     return _add_TSS(annotations)
 
@@ -264,7 +303,7 @@ def select_genes(gene_dataframe, gene_constraint_list):
     return gene_dataframe
 
 
-def _fix_genes(gene_dataframe):
+def _fix_genes(gene_dataframe, aggregate_functions):
     """
     Find minimum start and maximum stop
     :param gene_dataframe: pd.DataFrame
@@ -273,12 +312,6 @@ def _fix_genes(gene_dataframe):
 
     # Make sure that the strandedness doesn't reverse start/stop
     assert (gene_dataframe[SEQ_START] <= gene_dataframe[SEQ_STOP]).all()
-
-    def _most_common(x):
-        return x.value_counts().index[0]
-
-    # Define the functions for aggregating gene records
-    aggregate_functions = {SEQ_START: min, SEQ_STOP: max, GTF_CHROMOSOME: _most_common, GTF_STRAND: _most_common}
 
     return gene_dataframe.groupby(GTF_GENENAME).aggregate(aggregate_functions).reset_index()
 
