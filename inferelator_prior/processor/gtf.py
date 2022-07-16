@@ -227,8 +227,12 @@ def get_fasta_lengths(fasta_file):
             if line.startswith(">"):
                 current_record = line[1:].split()[0]
                 fasta_len[current_record] = 0
-            else:
+            elif line.startswith("#"):
+                pass
+            elif current_record is not None:
                 fasta_len[current_record] += len(line.strip())
+            else:
+                raise ParseError(f"{fasta_file} is a malformed FASTA file")
 
     return fasta_len
 
@@ -326,3 +330,7 @@ def _add_TSS(gene_dataframe):
     rev_strand = gene_dataframe[GTF_STRAND] == "-"
     gene_dataframe.loc[rev_strand, SEQ_TSS] = gene_dataframe.loc[rev_strand, SEQ_STOP].copy()
     return gene_dataframe
+
+
+class ParseError(RuntimeError):
+    pass

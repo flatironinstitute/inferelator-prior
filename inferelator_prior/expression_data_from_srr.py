@@ -89,13 +89,23 @@ def srr_tomat0(
     # Download all the SRR files
     print("Downloading SRR files")
     os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
-    srr_file_names = get_srr_files(srr_ids, os.path.join(output_path, SRR_SUBPATH), num_workers=cores, skip=skip)
+    srr_file_names = get_srr_files(
+        srr_ids,
+        os.path.join(output_path, SRR_SUBPATH),
+        num_workers=cores,
+        skip=skip
+    )
 
     # Unpack all the SRR files into FASTQ files
     print("Unpacking SRR files")
     os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
-    fastq_file_names = unpack_srr_files(srr_ids, srr_file_names, os.path.join(output_path, FASTQ_SUBPATH),
-                                        num_workers=cores, skip=skip)
+    fastq_file_names = unpack_srr_files(
+        srr_ids,
+        srr_file_names,
+        os.path.join(output_path, FASTQ_SUBPATH),
+        num_workers=cores,
+        skip=skip
+    )
 
     gz_extension = ".gz" if gzip_output else ""
 
@@ -178,6 +188,8 @@ def srr_tomat0(
 
         # Save the normalized counts file
         tpm_df.to_csv(tpm_file_name, sep="\t")
+        
+    print(f"Count file {count_matrix.shape} generated from {len(srr_ids)} SRA files")
 
     # Save an aggregated gene TPM file
     # If transcripts_to_genes_file has been provided
@@ -187,7 +199,7 @@ def srr_tomat0(
             OUTPUT_T2G_FILE_NAME
         ) + gz_extension
 
-        tpm_df.join(
+        tpm_df = tpm_df.join(
             pd.read_csv(
                 transcripts_to_genes_file,
                 sep="\t",
@@ -198,17 +210,26 @@ def srr_tomat0(
             'Gene'
         ).agg(
             'sum'
-        ).T.to_csv(
+        ).T
+
+        print(f"Transcripts merged to gene level {tpm_df.shape}")
+
+        tpm_df.to_csv(
             gene_file_name,
             sep="\t"
         )
 
-    print("Count file {sh} generated from {srlen} SRA files".format(sh=count_matrix.shape, srlen=len(srr_ids)))
     failed_counts = list(map(lambda x: x is None, count_file_names))
 
     if any(failed_counts):
-        print("{n} Sequence Records could not be counted:".format(n=sum(failed_counts)), end="")
-        print("\n\t".join([sid for sid, fail in zip(srr_ids, failed_counts) if fail]))
+        print(
+            f"{sum(failed_counts)} Sequence Records could not be counted: "
+            "\n\t".join(
+                [sid
+                 for sid, fail in zip(srr_ids, failed_counts)
+                 if fail]
+            )
+        )
 
     return count_matrix
 
