@@ -61,9 +61,6 @@ async def _kallisto_align(srr_id, fastq_file_names, reference_genome, output_pat
 
     async with semaphore:
 
-        if fastq_file_names[0] is None:
-            return None
-
         try:
             os.makedirs(output_path)
         except FileExistsError:
@@ -72,8 +69,11 @@ async def _kallisto_align(srr_id, fastq_file_names, reference_genome, output_pat
         output_file = os.path.join(file_path_abs(output_path), KALLISTO_OUT_FILE)
 
         if os.path.exists(output_file):
-            print("{id} Kallisto alignment file exists ({path})".format(id=srr_id, path=output_path))
+            print(f"{srr_id} Kallisto alignment file exists ({output_path})")
             return output_file
+
+        if fastq_file_names is None or fastq_file_names[0] is None:
+            return None
 
         # Build the Kallisto executable call
         kall_call = [
@@ -92,8 +92,10 @@ async def _kallisto_align(srr_id, fastq_file_names, reference_genome, output_pat
         code = await process.wait()
 
         if int(code) != 0:
-            print("Kallisto failed for {id} ({files})".format(id=srr_id, files=" ".join(fastq_file_names)))
-            print(" ".join(kall_call))
+            print(
+               f"Kallisto failed for {srr_id} ({' '.join(fastq_file_names)}): "
+               " ".join(kall_call)
+            )
             return None
 
         return output_file
