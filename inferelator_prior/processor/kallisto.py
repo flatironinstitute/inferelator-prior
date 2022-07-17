@@ -76,10 +76,17 @@ async def _kallisto_align(srr_id, fastq_file_names, reference_genome, output_pat
             return output_file
 
         # Build the Kallisto executable call
-        kall_call = [KALLISTO_EXECUTABLE_PATH, "quant",
-                     "-i", reference_genome,
-                     "-o", output_path,
-                     *fastq_file_names]
+        kall_call = [
+            KALLISTO_EXECUTABLE_PATH,
+            "quant",
+            "-i", reference_genome,
+            "-o", output_path
+        ]
+
+        if len(fastq_file_names) == 1:
+            kall_call = kall_call + ["--single"]
+
+        kall_call = kall_call + fastq_file_names
 
         process = await asyncio.create_subprocess_exec(*kall_call)
         code = await process.wait()
