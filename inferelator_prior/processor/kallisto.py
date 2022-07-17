@@ -84,7 +84,11 @@ async def _kallisto_align(srr_id, fastq_file_names, reference_genome, output_pat
         ]
 
         if len(fastq_file_names) == 1:
-            kall_call = kall_call + ["--single"]
+            kall_call = kall_call + [
+                "--single",
+                "-l", int(os.environ.get("KALLISTO_L", 400)),
+                "-s", int(os.environ.get("KALLISTO_S", 50))
+                ]
 
         kall_call = kall_call + fastq_file_names
 
