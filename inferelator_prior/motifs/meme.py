@@ -129,20 +129,29 @@ def __parse_motif_gen(handle, alphabet, background):
     for line in handle:
         line = line.strip()
 
-        if active_motif is None and line.lower().startswith("motif"):
+        # start line
+        if line.lower().startswith("motif"):
+
+            if active_motif is not None:
+                yield active_motif
+
             line = line.split()
-            active_motif = Motif(line[1], line[2] if len(line) > 2 else None, alphabet, background)
-            continue
-        elif active_motif is not None and line.lower().startswith("motif"):
-            yield active_motif
-            line = line.split()
-            active_motif = Motif(line[1], line[2] if len(line) > 2 else None, alphabet, background)
+
+            active_motif = Motif(
+                line[1],
+                line[2] if len(line) > 2 else line[1],
+                alphabet,
+                background
+            )
+
             continue
 
         if line.lower().startswith("letter-probability") or len(line) == 0:
+
             continue
 
         if line.lower().startswith("url") and active_motif is not None:
+
             active_motif.motif_url = line.split()[-1].strip()
             continue
 
