@@ -4,5 +4,5 @@ HTSeq
 pybedtools
 scipy
 pathos
-sklearn
+scikit-learn
 tqdm
