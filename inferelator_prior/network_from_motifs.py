@@ -41,28 +41,35 @@ def main():
     args = ap.parse_args()
     out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo, _intergenic = parse_common_arguments(args)
 
-    prior_matrix, raw_matrix, prior_data = build_motif_prior_from_genes(args.motif, args.annotation, args.fasta,
-                                                                        constraint_bed_file=args.constraint,
-                                                                        window_size=_window,
-                                                                        num_cores=args.cores,
-                                                                        motif_ic=args.min_ic,
-                                                                        tandem=_tandem,
-                                                                        scanner_type=args.scanner,
-                                                                        scanner_thresh=args.scan_thresh,
-                                                                        motif_format=args.motif_format,
-                                                                        output_prefix=out_prefix,
-                                                                        gene_constraint_list=_gl,
-                                                                        regulator_constraint_list=_tfl,
-                                                                        debug=args.debug,
-                                                                        fuzzy_motif_names=args.fuzzy,
-                                                                        motif_info=_minfo,
-                                                                        shuffle=args.shuffle,
-                                                                        lowmem=not args.highmem,
-                                                                        intergenic_only=_intergenic,
-                                                                        save_locs=args.save_locs,
-                                                                        save_locs_filtered=args.save_locs_filtered)
+    prior_matrix, raw_matrix, prior_data = build_motif_prior_from_genes(
+        args.motif,
+        args.annotation,
+        args.fasta,
+        constraint_bed_file=args.constraint,
+        use_tss=_use_tss,
+        window_size=_window,
+        num_cores=args.cores,
+        motif_ic=args.min_ic,
+        tandem=_tandem,
+        scanner_type=args.scanner,
+        scanner_thresh=args.scan_thresh,
+        motif_format=args.motif_format,
+        output_prefix=out_prefix,
+        gene_constraint_list=_gl,
+        regulator_constraint_list=_tfl,
+        debug=args.debug,
+        fuzzy_motif_names=args.fuzzy,
+        motif_info=_minfo,
+        shuffle=args.shuffle,
+        lowmem=not args.highmem,
+        intergenic_only=_intergenic,
+        save_locs=args.save_locs,
+        save_locs_filtered=args.save_locs_filtered
+    )
 
-    print("Prior matrix with {n} edges constructed".format(n=prior_matrix.sum().sum()))
+    print(
+        f"Prior matrix with {prior_matrix.sum().sum()} edges constructed"
+    )
 
 
 def add_common_arguments(argp):
@@ -148,22 +155,43 @@ def parse_common_arguments(args):
         _minfo = pd.read_csv(args.motif_info, sep="\t", index_col=None)
         _minfo.attrs["filename"] = args.motif_info
         if MOTIF_COL not in _minfo.columns or MOTIF_NAME_COL not in _minfo.columns:
-            _msg = "motif_info must have columns {a} and {b}; use inferelator_prior.motif_information as a template"
-            _msg = _msg.format(a=MOTIF_COL, b=MOTIF_NAME_COL)
-            raise ValueError(_msg)
+            raise ValueError(
+                f"motif_info must have columns {MOTIF_COL} and "
+                f"{MOTIF_NAME_COL}; use inferelator_prior.motif_information "
+                "as a template"
+            )
     else:
         _minfo = None
 
     return out_prefix, _window, _tandem, _use_tss, _gl, _tfl, _minfo, _intergenic
 
 
-def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file, constraint_bed_file=None,
-                                 window_size=0, use_tss=True, scanner_type='fimo', num_cores=1, motif_ic=6, tandem=100,
-                                 truncate_prob=0.35, scanner_thresh="1e-4", motif_format="meme",
-                                 gene_constraint_list=None, regulator_constraint_list=None,
-                                 output_prefix=None, debug=False, fuzzy_motif_names=False, motif_info=None,
-                                 shuffle=None, lowmem=True, intergenic_only=True, save_locs=False,
-                                 save_locs_filtered=False):
+def build_motif_prior_from_genes(
+    motif_file,
+    annotation_file,
+    genomic_fasta_file,
+    constraint_bed_file=None,
+    window_size=0,
+    use_tss=True,
+    scanner_type='fimo',
+    num_cores=1,
+    motif_ic=6,
+    tandem=100,
+    truncate_prob=0.35,
+    scanner_thresh="1e-4",
+    motif_format="meme",
+    gene_constraint_list=None,
+    regulator_constraint_list=None,
+    output_prefix=None,
+    debug=False,
+    fuzzy_motif_names=False,
+    motif_info=None,
+    shuffle=None,
+    lowmem=True,
+    intergenic_only=True,
+    save_locs=False,
+    save_locs_filtered=False
+):
     """
     Build a motif-based prior from windows around annotated genes.
 
@@ -231,33 +259,55 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     # PROCESS GENE ANNOTATIONS #########################################################################################
 
     print("Loading genes from file ({f})".format(f=annotation_file))
+
     # Load genes and open a window
+
     fasta_gene_len = get_fasta_lengths(genomic_fasta_file)
-    genes = load_gtf_to_dataframe(annotation_file, fasta_record_lengths=fasta_gene_len)
-    print("{n} genes loaded".format(n=genes.shape[0]))
+
+    genes = load_gtf_to_dataframe(
+        annotation_file,
+        fasta_record_lengths=fasta_gene_len
+    )
+
+    print(f"{genes.shape[0]} genes loaded")
 
     # Constrain to a list of genes
     if gene_constraint_list is not None:
         genes = select_genes(genes, gene_constraint_list)
 
-    genes = open_window(genes, window_size=window_size, use_tss=use_tss, fasta_record_lengths=fasta_gene_len,
-                        constrain_to_intergenic=intergenic_only)
+    genes = open_window(
+        genes,
+        window_size=window_size,
+        use_tss=use_tss,
+        fasta_record_lengths=fasta_gene_len,
+        constrain_to_intergenic=intergenic_only
+    )
 
-    _msg = "Promoter regions defined with window {w} around {g}".format(w=window_size, g="TSS" if use_tss else "gene")
-    _msg += " [Intergenic]" if intergenic_only else ""
-    print(_msg)
+    print(
+        f"Promoter regions defined with window {window_size} "
+        f"around {'TSS' if use_tss else 'gene'}"
+    )
 
     # PROCESS MOTIF PWMS ###############################################################################################
 
-    motifs, motif_information = load_and_process_motifs(motif_file, motif_format, truncate_prob=truncate_prob,
-                                                        regulator_constraint_list=regulator_constraint_list,
-                                                        fuzzy=fuzzy_motif_names, motif_constraint_info=motif_info,
-                                                        shuffle=shuffle)
+    motifs, motif_information = load_and_process_motifs(
+        motif_file,
+        motif_format,
+        truncate_prob=truncate_prob,
+        regulator_constraint_list=regulator_constraint_list,
+        fuzzy=fuzzy_motif_names,
+        motif_constraint_info=motif_info,
+        shuffle=shuffle
+    )
 
     # SCAN CHROMATIN FOR MOTIFS AND SCORE HITS #########################################################################
 
     # Load and scan target chromatin peaks
-    print("Scanning target chromatin ({f_c}) for motifs ({f_m})".format(f_c=constraint_bed_file, f_m=motif_file))
+    print(
+        f"Scanning target chromatin ({constraint_bed_file}) "
+        f"for motifs ({motif_file})"
+    )
+
     MotifScan.set_type(scanner_type)
 
     # Create a fake bed file with the gene promoter
@@ -265,24 +315,54 @@ def build_motif_prior_from_genes(motif_file, annotation_file, genomic_fasta_file
     gene_locs[[SEQ_START, SEQ_STOP]] = gene_locs[[SEQ_START, SEQ_STOP]].astype(int)
 
     if not lowmem:
-        raw_matrix, prior_data = network_scan(motifs, motif_information, genes, genomic_fasta_file,
-                                              constraint_bed_file=constraint_bed_file, promoter_bed_file=gene_locs,
-                                              scanner_type=scanner_type, scanner_thresh=scanner_thresh,
-                                              num_cores=num_cores, motif_ic=motif_ic, tandem=tandem, debug=debug,
-                                              save_locs=save_locs)
+        raw_matrix, prior_data = network_scan(
+            motifs,
+            motif_information,
+            genes,
+            genomic_fasta_file,
+            constraint_bed_file=constraint_bed_file,
+            promoter_bed_file=gene_locs,
+            scanner_type=scanner_type,
+            scanner_thresh=scanner_thresh,
+            num_cores=num_cores,
+            motif_ic=motif_ic,
+            tandem=tandem,
+            debug=debug,
+            save_locs=save_locs
+        )
 
         # PROCESS SCORES INTO NETWORK ##################################################################################
-        print("{n} regulatory edges identified by motif search".format(n=(raw_matrix != 0).sum().sum()))
+        print(
+            f"{(raw_matrix != 0).sum().sum()} regulatory edges "
+            "identified by motif search"
+        )
 
-        return network_build(raw_matrix, prior_data, num_cores=num_cores, output_prefix=output_prefix, debug=debug,
-                             save_locs_filtered=save_locs_filtered)
+        return network_build(
+            raw_matrix,
+            prior_data,
+            num_cores=num_cores,
+            output_prefix=output_prefix,
+            debug=debug,
+            save_locs_filtered=save_locs_filtered
+        )
 
     else:
 
-        return scan_and_build_by_tf(genomic_fasta_file, constraint_bed_file, genes, gene_locs, output_prefix,
-                                    motif_information, debug=debug, motif_ic=motif_ic, tandem=tandem, 
-                                    scanner_thresh=scanner_thresh, save_locs=save_locs, 
-                                    save_locs_filtered=save_locs_filtered, num_cores=num_cores)
+        return scan_and_build_by_tf(
+            genomic_fasta_file,
+            constraint_bed_file,
+            genes,
+            gene_locs,
+            output_prefix,
+            motif_information,
+            debug=debug,
+            motif_ic=motif_ic,
+            tandem=tandem,
+            scanner_thresh=scanner_thresh,
+            save_locs=save_locs,
+            save_locs_filtered=save_locs_filtered,
+            num_cores=num_cores
+        )
 
 
 def load_and_process_motifs(motif_file, motif_format, regulator_constraint_list=None, truncate_prob=None,

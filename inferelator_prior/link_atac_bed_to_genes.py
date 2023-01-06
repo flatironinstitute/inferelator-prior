@@ -1,14 +1,30 @@
-from inferelator_prior.processor.gtf import (load_gtf_to_dataframe, open_window, GTF_CHROMOSOME,
-                                             SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME)
-from inferelator_prior.processor.bedtools import (load_bed_to_bedtools, intersect_bed, load_bed_to_dataframe,
-                                                  BED_CHROMOSOME)
+from inferelator_prior.processor.gtf import (
+    load_gtf_to_dataframe,
+    open_window,
+    check_chromosomes_match,
+    GTF_CHROMOSOME,
+    SEQ_START,
+    SEQ_STOP,
+    GTF_STRAND,
+    GTF_GENENAME,
+    SEQ_TSS
+)
+
+from inferelator_prior.processor.bedtools import (
+    load_bed_to_bedtools,
+    intersect_bed,
+    load_bed_to_dataframe,
+    BED_CHROMOSOME
+)
 
 import argparse
 import pathlib
 import pandas as pd
+import numpy as np
 
 GENE_COL = "gene"
 PEAK_COL = "peak"
+DIST_COL = "distance"
 
 def main():
     ap = argparse.ArgumentParser(
@@ -123,10 +139,12 @@ def link_bed_to_genes(
     window_size=1000,
     dprint=print,
     non_gene_key="Intergenic",
-    out_header=False
+    out_header=False,
+    add_distance=False
 ):
     """
-    Link a BED file (of arbitraty origin) to a set of genes from a GTF file based on proximity
+    Link a BED file (of arbitraty origin) to a set of genes from a GTF file
+    based on proximity
 
     :param bed_file: Path to the BED file
     :type bed_file: str
@@ -172,26 +190,58 @@ def link_bed_to_genes(
         genes,
         window_size=window_size,
         use_tss=use_tss,
-        include_entire_gene_body=True
+        include_entire_gene_body=True,
+        constrain_to_intergenic=True
     )
 
     # Create a fake bed file with the gene promoter
-    genes_window = genes.loc[:, [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME]].copy()
-    genes_window[[SEQ_START, SEQ_STOP]] = genes_window[[SEQ_START, SEQ_STOP]].astype(int)
-    genes_window = genes_window.sort_values(by=[GTF_CHROMOSOME, SEQ_START])
+    _all_cols = [GTF_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND, GTF_GENENAME]
+    _int_cols = [SEQ_START, SEQ_STOP]
+
+    genes_window = genes_window[_all_cols].copy()
+    genes_window[_int_cols] = genes_window[_int_cols].astype(int)
+    genes_window = genes_window.rename(
+        {GTF_CHROMOSOME: BED_CHROMOSOME},
+        axis=1
+    ).sort_values(
+        by=[BED_CHROMOSOME, SEQ_START]
+    )
 
     gene_bed = load_bed_to_bedtools(genes_window)
 
     # Load BED-type file to a dataframe
     # Explicitly cast chromosomes into strings
     # (edge condition when chromosomes are just 1, 2, 3, Mt, etc)
-    bed_df = load_bed_to_dataframe(bed_file)
+
+    if isinstance(bed_file, str):
+        dprint(f"Loading BED from file ({bed_file})")
+
+        # Load genes and open a window
+        bed_df = load_bed_to_dataframe(bed_file)
+        dprint(f"{bed_df.shape[0]} BED annotations loaded")
+
+    elif isinstance(bed_file, pd.DataFrame):
+        bed_df = bed_file.copy()
+
     bed_df[BED_CHROMOSOME] = bed_df[BED_CHROMOSOME].astype(str)
 
-    bed_locs = load_bed_to_bedtools(bed_df[[BED_CHROMOSOME, SEQ_START, SEQ_STOP]])
+    check_chromosomes_match(
+        genes_window,
+        bed_df[BED_CHROMOSOME].unique().tolist(),
+        chromosome_column=BED_CHROMOSOME
+    )
+
+    bed_locs = load_bed_to_bedtools(bed_df)
 
     try:
-        ia = intersect_bed(gene_bed, bed_locs, wb=True).to_dataframe()
+        ia = intersect_bed(
+            gene_bed,
+            bed_locs,
+            wb=True
+        ).to_dataframe()
+
+    # Print some of the file structures
+    # because there's a structure problem if intersect fails
     except:
         print("Gene BED file:")
         print(gene_bed.to_dataframe().head())
@@ -201,35 +251,97 @@ def link_bed_to_genes(
         print(bed_locs.to_dataframe().head())
         raise
 
-    ia.rename({'score': GENE_COL}, axis=1, inplace=True)
+    ia.rename(
+        {'score': GENE_COL},
+        axis=1,
+        inplace=True
+    )
 
     # Rebuild an A/B bed file
-    ia.columns = ['a_chrom', 'a_start', 'a_end', GTF_STRAND, GENE_COL, BED_CHROMOSOME, SEQ_START, SEQ_STOP]
-    ia = ia[[BED_CHROMOSOME, SEQ_START, SEQ_STOP, GTF_STRAND, GENE_COL]].copy()
+    _new_cols = [
+        'a_chrom',
+        'a_start',
+        'a_end',
+        GTF_STRAND,
+        GENE_COL,
+        BED_CHROMOSOME,
+        SEQ_START,
+        SEQ_STOP
+    ]
 
-    # Add an intergenic key if set; otherwise peaks that don't overlap will be dropped
+    if len(ia.columns) > 8:
+        _extra_cols = ia.columns.tolist()[8:]
+    else:
+        _extra_cols = []
+
+    ia.columns = _new_cols + _extra_cols
+
+    ia = ia[[
+            BED_CHROMOSOME,
+            SEQ_START,
+            SEQ_STOP,
+            GTF_STRAND,
+            GENE_COL]].copy()
+
+    # Add an intergenic key if set
+    # otherwise peaks that don't overlap will be dropped
     if non_gene_key is not None:
-        ia = ia.merge(bed_df, how="outer", on=[BED_CHROMOSOME, SEQ_START, SEQ_STOP])
+        ia = ia.merge(
+            bed_df,
+            how="outer",
+            on=[BED_CHROMOSOME, SEQ_START, SEQ_STOP],
+            suffixes=(None, "_bed")
+        )
+
         ia[GENE_COL] = ia[GENE_COL].fillna(non_gene_key)
-        ia[GTF_STRAND] = ia[GTF_STRAND].fillna("")
+        ia[GTF_STRAND] = ia[GTF_STRAND].fillna(".")
 
     # Make unique peak IDs based on gene
     ia[PEAK_COL] = ia[GENE_COL].groupby(
         ia[GENE_COL]
     ).transform(
-        lambda x: pd.Series(map(lambda y: "_" + str(y), range(len(x))), index=x.index)
+        lambda x: pd.Series(
+            map(lambda y: "_" + str(y), range(len(x))),
+            index=x.index
+        )
     )
+
     ia[PEAK_COL] = ia[GENE_COL].str.cat(ia[PEAK_COL])
 
     peaks = ia[PEAK_COL].copy()
     ia.drop(PEAK_COL, inplace=True, axis=1)
     ia.insert(5, PEAK_COL, peaks)
 
+    if add_distance:
+        ia = ia.merge(
+            genes.rename(
+                {GTF_GENENAME: GENE_COL},
+                axis=1
+            )[[GENE_COL, SEQ_TSS]],
+            on=GENE_COL
+        )
+
+        dists = ia[[SEQ_START, SEQ_STOP]].values - ia[[SEQ_TSS]].values
+
+        ia[DIST_COL] = np.abs(dists).min(axis=1)
+
+        _overlaps = np.prod(np.sign(dists), axis=1) == -1
+        ia.loc[_overlaps, DIST_COL] = 0
+
     # Sort for output
-    ia = ia.sort_values(by=[BED_CHROMOSOME, SEQ_START]).reset_index(drop=True)
+    ia = ia.sort_values(
+        by=[BED_CHROMOSOME, SEQ_START]
+    ).reset_index(
+        drop=True
+    )
 
     if out_file is not None:
-        ia.to_csv(out_file, sep="\t", index=False, header=out_header)
+        ia.to_csv(
+            out_file,
+            sep="\t",
+            index=False,
+            header=out_header
+        )
 
     return bed_locs.count(), len(ia), ia
 

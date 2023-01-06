@@ -1,6 +1,19 @@
-from inferelator_prior.processor.gtf import GTF_GENENAME, GTF_CHROMOSOME, SEQ_START, SEQ_STOP
+from inferelator_prior.processor.gtf import (
+    GTF_GENENAME,
+    GTF_CHROMOSOME,
+    SEQ_START,
+    SEQ_STOP
+)
+
 from inferelator_prior.motifs.motif_scan import MotifScan
-from inferelator_prior.motifs import INFO_COL, MOTIF_COL, LEN_COL, SCAN_SCORE_COL, MOTIF_NAME_COL, SCORE_PER_BASE
+
+from inferelator_prior.motifs import (
+    INFO_COL,
+    MOTIF_COL,
+    SCAN_SCORE_COL,
+    MOTIF_NAME_COL,
+    SCORE_PER_BASE
+)
 
 import pandas as pd
 import numpy as np
@@ -18,7 +31,16 @@ PRIOR_START = 'start'
 PRIOR_STOP = 'stop'
 PRIOR_CHR = 'chromosome'
 
-PRIOR_COLS = [PRIOR_TF, PRIOR_GENE, PRIOR_COUNT, PRIOR_SCORE, PRIOR_MOTIF_IC, PRIOR_START, PRIOR_STOP, PRIOR_CHR]
+PRIOR_COLS = [
+    PRIOR_TF,
+    PRIOR_GENE,
+    PRIOR_COUNT,
+    PRIOR_SCORE,
+    PRIOR_MOTIF_IC,
+    PRIOR_START,
+    PRIOR_STOP,
+    PRIOR_CHR
+]
 
 PRIOR_FDR = 'qvalue'
 PRIOR_SIG = 'significance'
@@ -39,8 +61,12 @@ class MotifScorer:
         :param max_dist:
         :return:
         """
-        cls.min_binding_ic = cls.min_binding_ic if min_binding_ic is None else min_binding_ic
-        cls.max_dist = cls.max_dist if max_dist is None else max_dist
+
+        if min_binding_ic is not None:
+            cls.min_binding_ic = min_binding_ic
+
+        if max_dist is not None:
+            cls.max_dist = max_dist
 
     @classmethod
     def score_tf(cls, tf_motifs):
@@ -56,6 +82,7 @@ class MotifScorer:
         # Drop sites that don't meet threshold
         if cls.min_binding_ic is not None:
             tf_motifs = tf_motifs.loc[tf_motifs[SCAN_SCORE_COL] >= cls.min_binding_ic, :]
+
         n_sites = tf_motifs.shape[0]
 
         # If there's no data return None
@@ -66,10 +93,16 @@ class MotifScorer:
         tf_motifs = tf_motifs.sort_values(by=MotifScan.start_col)
         overlap = tf_motifs[MotifScan.start_col] < tf_motifs[MotifScan.stop_col].shift()
 
-        # Collapse together any overlapping motifs to the maximum score on a per-base basis
+        # Collapse together any overlapping motifs to the maximum score
+        # on a per-base basis
         if overlap.any():
             tf_motifs["GROUP"] = (~overlap).cumsum()
-            tf_motifs = pd.concat([cls._agg_per_base(group) for _, group in tf_motifs.groupby("GROUP")])
+            tf_motifs = pd.concat(
+                [
+                    cls._agg_per_base(group)
+                    for _, group in tf_motifs.groupby("GROUP")
+                ]
+            )
 
             n_sites = tf_motifs.shape[0]
 
@@ -195,41 +228,93 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
 
     motif_ids = motif_information[MOTIF_COL].unique()
     motif_names = motif_information[MOTIF_NAME_COL].unique()
-    pfunc("Building prior from {g} genes and {k} Motifs ({t} TFs)".format(g=genes.shape[0], k=len(motif_ids),
-                                                                          t=len(motif_names)))
+    pfunc(
+        f"Building prior from {genes.shape[0]} genes and "
+        f"{len(motif_ids)} Motifs ({len(motif_names)} TFs)"
+    )
 
-    motif_peaks, motif_information = MotifScorer.preprocess_motifs(motif_peaks, motif_information)
-    pfunc("Preliminary search identified {n} binding sites".format(n=motif_peaks.shape[0]))
+    motif_peaks, motif_information = MotifScorer.preprocess_motifs(
+        motif_peaks,
+        motif_information
+    )
+
+    pfunc(
+        f"Preliminary search identified {motif_peaks.shape[0]} binding sites"
+    )
 
     # Trim down the motif dataframe and put it into a dict by chromosome
-    motif_peaks = motif_peaks.reindex([MotifScan.name_col, MotifScan.chromosome_col, MotifScan.start_col,
-                                       MotifScan.stop_col, SCAN_SCORE_COL, SCORE_PER_BASE], axis=1)
+    motif_peaks = motif_peaks.reindex(
+        [
+            MotifScan.name_col,
+            MotifScan.chromosome_col,
+            MotifScan.start_col,
+            MotifScan.stop_col,
+            SCAN_SCORE_COL,
+            SCORE_PER_BASE
+        ],
+        axis=1
+    )
 
-    motif_id_to_name = motif_information.reindex([MOTIF_COL, MOTIF_NAME_COL], axis=1)
+    motif_id_to_name = motif_information.reindex(
+        [MOTIF_COL, MOTIF_NAME_COL],
+        axis=1
+    )
+
     invalid_names = (pd.isnull(motif_id_to_name[MOTIF_NAME_COL]) |
                      (motif_id_to_name[MOTIF_NAME_COL] == "") |
-                     (motif_id_to_name is None))
+                     (motif_id_to_name is None)
+                    )
 
     motif_id_to_name.loc[invalid_names, MOTIF_NAME_COL] = motif_id_to_name.loc[invalid_names, MOTIF_COL]
-    motif_peaks = motif_peaks.join(motif_id_to_name.set_index(MOTIF_COL, verify_integrity=True), on=MotifScan.name_col)
+    motif_peaks = motif_peaks.join(
+        motif_id_to_name.set_index(MOTIF_COL, verify_integrity=True),
+        on=MotifScan.name_col
+    )
 
-    motif_peaks = {chromosome: df for chromosome, df in motif_peaks.groupby(MotifScan.chromosome_col)}
+    motif_peaks = {
+        chromosome: df
+        for chromosome, df in motif_peaks.groupby(MotifScan.chromosome_col)
+    }
 
     _gen_func = _gene_gen if by_chromosome else _gene_gen_no_chromosome
 
     if num_workers == 1:
-        prior_data = list(map(lambda x: _build_prior_for_gene(*x),
-                              _gen_func(genes, motif_peaks, motif_information, debug=debug, silent=silent)))
+        prior_data = list(
+            map(
+                lambda x: _build_prior_for_gene(*x),
+                _gen_func(
+                    genes,
+                    motif_peaks,
+                    motif_information,
+                    debug=debug,
+                    silent=silent
+                )
+            )
+        )
 
     else:
         with multiprocessing.Pool(num_workers, maxtasksperchild=1000) as pool:
-            prior_data = pool.starmap(_build_prior_for_gene,
-                                      _gen_func(genes, motif_peaks, motif_information, debug=debug, silent=silent),
-                                      chunksize=20)
+            prior_data = pool.starmap(
+                _build_prior_for_gene,
+                _gen_func(
+                    genes,
+                    motif_peaks,
+                    motif_information,
+                    debug=debug,
+                    silent=silent
+                ),
+                chunksize=20
+            )
 
     # Combine priors for all genes
     if all([x is None for x in prior_data]):
-        return pd.DataFrame(0, index=genes[GTF_GENENAME], columns=motif_names, dtype=int), None
+        prior_data = pd.DataFrame(
+            0,
+            index=genes[GTF_GENENAME],
+            columns=motif_names,
+            dtype=int
+        )
+        return prior_data, None
 
 
     prior_data = pd.concat(prior_data).reset_index(drop=True)
@@ -237,8 +322,20 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
 
     # Pivot to a matrix, extend to all TFs, and fill with 0s
-    summarized_data = prior_data.pivot(index=PRIOR_GENE, columns=PRIOR_TF, values=PRIOR_SCORE)
-    summarized_data = summarized_data.reindex(motif_names, axis=1).reindex(genes[GTF_GENENAME], axis=0).fillna(0)
+    summarized_data = prior_data.pivot(
+        index=PRIOR_GENE,
+        columns=PRIOR_TF,
+        values=PRIOR_SCORE
+    )
+
+    summarized_data = summarized_data.reindex(
+        motif_names,
+        axis=1
+    ).reindex(
+        genes[GTF_GENENAME],
+        axis=0
+    ).fillna(0)
+
     summarized_data.index.name = PRIOR_GENE
 
     return summarized_data, prior_data

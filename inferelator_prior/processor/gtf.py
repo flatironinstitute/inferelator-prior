@@ -17,7 +17,24 @@ SEQ_TSS = 'TSS'
 WINDOW_UP = "Window_Start"
 WINDOW_DOWN = "Window_End"
 
-GTF_COLUMNS = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attributes"]
+GTF_COLUMNS = [
+    GTF_CHROMOSOME,
+    "source",
+    "feature",
+    SEQ_START,
+    SEQ_STOP,
+    "score",
+    "strand",
+    "frame",
+    "attributes"
+]
+
+GFF_FILETYPES = [
+    ".gff",
+    ".gff3",
+    ".gff.gz",
+    ".gff3.gz"
+]
 
 def _most_common(x):
     try:
@@ -33,12 +50,14 @@ AGGREGATE_FUNCS = {
     GTF_STRAND: _most_common
 }
 
+
 def load_gtf_to_dataframe(
     gtf_path,
     annotations=None,
     fasta_record_lengths=None,
     gene_id_regex=None,
-    additional_regex=None
+    additional_regex=None,
+    rename_chromosome_dict=None
 ):
     """
     Loads genes from a GTF or GFF into a dataframe and returns them
@@ -53,6 +72,9 @@ def load_gtf_to_dataframe(
     :param additional_regex: Dict of column: regex to extract values from
         annotations with regex and place into column, defaults to None
     :type additional_regex: dict, None
+    :param rename_chromosome_dict: Replace the chromosome names with these
+        values.
+    :type rename_chromosome_dict: dict, None
     :return annotations: Loaded and processed gene annotations
         'gene_name': str
         'strand': str
@@ -64,7 +86,7 @@ def load_gtf_to_dataframe(
 
     if gene_id_regex is not None:
         _gregex = gene_id_regex
-    elif any(gtf_path.lower().endswith(x) for x in [".gff", ".gff3", ".gff.gz", ".gff3.gz"]):
+    elif any(gtf_path.lower().endswith(x) for x in GFF_FILETYPES):
         _gregex = GFF_GENE_ID_REGEX
     else:
         _gregex = GTF_GENE_ID_REGEX
@@ -89,10 +111,14 @@ def load_gtf_to_dataframe(
 
     # Check chromosomes
     if fasta_record_lengths is not None:
-        check_chromosomes_match(annotations, list(fasta_record_lengths.keys()), file_name=gtf_path)
+        check_chromosomes_match(
+            annotations,
+            list(fasta_record_lengths.keys()),
+            file_name=gtf_path
+        )
 
     # Drop anything with NaNs which were probably comment lines
-    annotations = annotations.loc[~pd.isnull(annotations[SEQ_START]) & ~pd.isnull(annotations[SEQ_STOP]), :]
+    annotations = annotations.dropna(subset=[SEQ_START, SEQ_STOP])
 
     # Regex extract the gene_id from the annotations column
     annotations[GTF_GENENAME] = annotations[GTF_ATTRIBUTES].str.extract(
@@ -110,18 +136,37 @@ def load_gtf_to_dataframe(
     annotations.dropna(inplace=True, subset=[GTF_GENENAME])
 
     if len(annotations) == 0:
-        raise ValueError("Unable to parse gene IDs from annotation file attributes")
+        raise ValueError(
+            "Unable to parse gene IDs from annotation file attributes"
+        )
 
-    # Define genes as going from the minimum start for any subfeature to the maximum end for any subfeature
+    # Define genes as going from the minimum start for any subfeature
+    # to the maximum end for any subfeature
     annotations = _fix_genes(annotations, aggregate_functions)
+
+    # Fix chromosome names based on lookup table
+    if rename_chromosome_dict is not None:
+        annotations = _rename_chromosomes(
+            annotations,
+            GTF_CHROMOSOME,
+            rename_chromosome_dict,
+            drop_unknowns=True
+        )
 
     return _add_TSS(annotations)
 
 
-def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_lengths=None,
-                constrain_to_intergenic=False, include_entire_gene_body=False):
+def open_window(
+    annotation_dataframe,
+    window_size,
+    use_tss=False,
+    fasta_record_lengths=None,
+    constrain_to_intergenic=False,
+    include_entire_gene_body=False
+):
     """
-    This needs to adjust the start and stop in the annotation dataframe with window sizes
+    Adjust the start and stop in the annotation dataframe
+    with window sizes
 
     :param annotation_dataframe: pd.DataFrame
     :param window_size: int
@@ -130,8 +175,9 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
     :return window_annotate: pd.DataFrame
     """
 
-    window_annotate = annotation_dataframe.copy()
-    window_annotate[WINDOW_UP], window_annotate[WINDOW_DOWN] = pd.NA, pd.NA
+    new_df = annotation_dataframe.copy()
+
+    new_df[WINDOW_UP], new_df[WINDOW_DOWN] = pd.NA, pd.NA
 
     try:
         if len(window_size) == 1:
@@ -140,70 +186,103 @@ def open_window(annotation_dataframe, window_size, use_tss=False, fasta_record_l
             w_up, w_down = window_size[0], window_size[1]
         else:
             raise ValueError("window_size must have 1 or 2 values only")
+
     except TypeError:
         w_up, w_down = window_size, window_size
 
     if use_tss:
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_UP] = window_annotate[SEQ_TSS] - w_up
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_DOWN] = window_annotate[SEQ_TSS] + w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_UP] = window_annotate[SEQ_TSS] - w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_DOWN] = window_annotate[SEQ_TSS] + w_up
-    else:
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_UP] = window_annotate[SEQ_START] - w_up
-        window_annotate.loc[window_annotate[GTF_STRAND] == "+", WINDOW_DOWN] = window_annotate[SEQ_STOP] + w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_UP] = window_annotate[SEQ_START] - w_down
-        window_annotate.loc[window_annotate[GTF_STRAND] == "-", WINDOW_DOWN] = window_annotate[SEQ_STOP] + w_up
+        _up_key = SEQ_TSS
+        _down_key = SEQ_TSS
 
-    window_annotate.loc[window_annotate[WINDOW_UP] < 1, WINDOW_UP] = 1
+    else:
+        _up_key = SEQ_START
+        _down_key = SEQ_STOP
+
+    _pos_idx = new_df[GTF_STRAND] == "+"
+    _neg_idx = new_df[GTF_STRAND] == "-"
+
+    for didx, u, d in [
+        (_pos_idx, w_up, w_down),
+        (_neg_idx, w_down, w_up)
+    ]:
+
+        new_df.loc[didx, WINDOW_UP] = (
+            new_df.loc[didx, _up_key] - u
+        ).astype(new_df.loc[didx, WINDOW_UP].dtype)
+
+        new_df.loc[didx, WINDOW_DOWN] = (
+            new_df.loc[didx, _down_key] + d
+        ).astype(new_df.loc[didx, WINDOW_DOWN].dtype)
+
+    new_df[WINDOW_UP] = new_df[WINDOW_UP].astype(int)
+    new_df[WINDOW_DOWN] = new_df[WINDOW_DOWN].astype(int)
+
+    new_df.loc[new_df[WINDOW_UP] < 1, WINDOW_UP] = 1
 
     if include_entire_gene_body:
-        to_fix_pos = (window_annotate[GTF_STRAND] == "+") & (window_annotate[WINDOW_DOWN] < window_annotate[SEQ_STOP])
-        to_fix_neg = (window_annotate[GTF_STRAND] == "-") & (window_annotate[WINDOW_UP] > window_annotate[SEQ_STOP])
+        to_fix_pos = _pos_idx & (new_df[WINDOW_DOWN] < new_df[SEQ_STOP])
+        to_fix_neg = _neg_idx & (new_df[WINDOW_UP] > new_df[SEQ_STOP])
 
-        window_annotate.loc[to_fix_pos, WINDOW_DOWN] = window_annotate.loc[to_fix_pos, SEQ_STOP]
-        window_annotate.loc[to_fix_neg, WINDOW_UP] = window_annotate.loc[to_fix_neg, SEQ_START]
+        new_df.loc[to_fix_pos, WINDOW_DOWN] = new_df.loc[to_fix_pos, SEQ_STOP]
+        new_df.loc[to_fix_neg, WINDOW_UP] = new_df.loc[to_fix_neg, SEQ_START]
 
     if fasta_record_lengths is not None:
 
-        _gtf_fasta_match = set(window_annotate[GTF_CHROMOSOME].unique()).intersection(set(fasta_record_lengths.keys()))
+        _gtf_fasta_match = set(new_df[GTF_CHROMOSOME].unique()).intersection(
+            set(fasta_record_lengths.keys())
+        )
 
         for chromosome in _gtf_fasta_match:
             _chrlen = fasta_record_lengths[chromosome]
-            _idx = window_annotate[GTF_CHROMOSOME] == chromosome
-            window_annotate.loc[_idx & (window_annotate[WINDOW_UP] > _chrlen), WINDOW_UP] = _chrlen
-            window_annotate.loc[_idx & (window_annotate[WINDOW_DOWN] > _chrlen), WINDOW_DOWN] = _chrlen
+            _idx = new_df[GTF_CHROMOSOME] == chromosome
+            new_df.loc[_idx & (new_df[WINDOW_UP] > _chrlen), WINDOW_UP] = _chrlen
+            new_df.loc[_idx & (new_df[WINDOW_DOWN] > _chrlen), WINDOW_DOWN] = _chrlen
 
     if constrain_to_intergenic:
-        window_annotate = window_annotate.groupby(GTF_CHROMOSOME).apply(fix_overlap)
-        window_annotate.reset_index(level=GTF_CHROMOSOME, inplace=True, drop=True)
+        new_df = new_df.groupby(GTF_CHROMOSOME).apply(fix_overlap)
+        new_df.reset_index(level=GTF_CHROMOSOME, inplace=True, drop=True)
 
-    window_annotate[SEQ_START] = window_annotate[WINDOW_UP]
-    window_annotate[SEQ_STOP] = window_annotate[WINDOW_DOWN]
-    window_annotate.drop([WINDOW_UP, WINDOW_DOWN], axis=1, inplace=True)
+    new_df[SEQ_START] = new_df[WINDOW_UP]
+    new_df[SEQ_STOP] = new_df[WINDOW_DOWN]
+    new_df.drop([WINDOW_UP, WINDOW_DOWN], axis=1, inplace=True)
 
-    return window_annotate
+    return new_df
 
 
 def fix_overlap(dataframe):
     """
-    Apply function that sets window start and stop positions so that they do not overlap with features
+    Apply function that sets window start and stop positions so that they do
+    not overlap with features
 
     :param dataframe: pd.DataFrame
     :return dataframe: pd.DataFrame
     """
 
     dataframe = dataframe.sort_values(by=SEQ_START)
+
+    # Save a copy of the existing data before making changes
     windows = dataframe[[WINDOW_UP, WINDOW_DOWN]].copy()
 
-    start_idx = dataframe[WINDOW_UP] < dataframe[SEQ_STOP].shift(1)
-    dataframe.loc[start_idx, WINDOW_UP] = dataframe[SEQ_STOP].shift(1).loc[start_idx].astype(int)
+    _stop_shift = dataframe[SEQ_STOP].shift(1)
 
-    stop_idx = dataframe[WINDOW_DOWN] > dataframe[SEQ_START].shift(-1)
-    dataframe.loc[stop_idx, WINDOW_DOWN] = dataframe[SEQ_START].shift(-1).loc[stop_idx].astype(int)
+    start_idx = dataframe[WINDOW_UP] < _stop_shift
+    dataframe.loc[start_idx, WINDOW_UP] = _stop_shift.loc[start_idx].astype(
+        dataframe[WINDOW_UP].dtype
+    )
 
-    # Undo checking for intergenic when there's a problem - usually it means overlapping genes, which I can't deal with
+    _start_shift = dataframe[SEQ_START].shift(-1)
+
+    stop_idx = dataframe[WINDOW_DOWN] > _start_shift
+    dataframe.loc[stop_idx, WINDOW_DOWN] = _start_shift.loc[stop_idx].astype(
+        dataframe[WINDOW_DOWN].dtype
+    )
+
+    # Undo checking for intergenic when there's a problem
+    # usually it means overlapping genes, which I can't deal with
     bad_idx = dataframe[WINDOW_UP] >= dataframe[WINDOW_DOWN]
-    dataframe.loc[bad_idx, [WINDOW_UP, WINDOW_DOWN]] = windows.loc[bad_idx, [WINDOW_UP, WINDOW_DOWN]]
+    replace_cols = [WINDOW_UP, WINDOW_DOWN]
+
+    dataframe.loc[bad_idx, replace_cols] = windows.loc[bad_idx, replace_cols]
 
     return dataframe
 
@@ -237,10 +316,16 @@ def get_fasta_lengths(fasta_file):
     return fasta_len
 
 
-def check_chromosomes_match(data_frame, chromosome_names, chromosome_column=GTF_CHROMOSOME, raise_no_overlap=True,
-                            file_name=None):
+def check_chromosomes_match(
+    data_frame,
+    chromosome_names,
+    chromosome_column=GTF_CHROMOSOME,
+    raise_no_overlap=True,
+    file_name=None
+):
     """
-    Check and see if a list of chromosomes matches the unique chromsome names from a dataframe column
+    Check and see if a list of chromosomes matches the unique chromsome
+    names from a dataframe column
 
     :param data_frame: Dataframe with a column that has chromosome names
     :type data_frame: pd.DataFrame
@@ -248,29 +333,38 @@ def check_chromosomes_match(data_frame, chromosome_names, chromosome_column=GTF_
     :type chromosome_names: list, set
     :param chromosome_column: The column in the dataframe with chromosomes
     :type chromosome_column: str
-    :param raise_no_overlap: Raise a ValueError if the chromosomes don't match at all
+    :param raise_no_overlap: Raise a ValueError if the chromosomes don't
+        match at all
     :type raise_no_overlap: bool
-    :return: A list that is the intersection of the two chromosome lists (and therefore good)
+    :return: A list that is the intersection of the two chromosome lists
+        (and therefore good)
     :rtype: list
     """
 
-    _gtf_chromosomes = set(data_frame[chromosome_column].unique())
-    _fasta_chromsomes = set(chromosome_names)
-    _gtf_fasta_match = _gtf_chromosomes.intersection(_fasta_chromsomes)
+    _left_chr = set(data_frame[chromosome_column].unique())
+    _right_chr = set(chromosome_names)
+    _joint_match = _left_chr.intersection(_right_chr)
 
-    if len(_gtf_fasta_match) != len(_gtf_chromosomes):
-        _msg = "File {fn}: ".format(fn=file_name)
-        _msg += "Chromosomes {g} do not match FASTA File Chromosomes {f}\n"
-        _msg += "The following chromosomes will not map correctly: {ft}"
-        _msg = _msg.format(g=_gtf_chromosomes,
-                           f=_fasta_chromsomes,
-                           ft=_gtf_chromosomes.symmetric_difference(_fasta_chromsomes))
-        print(_msg)
+    if len(_joint_match) != len(_left_chr):
 
-    if len(_gtf_fasta_match) == 0 and raise_no_overlap:
-        raise ValueError("Unable to map FASTA and GTF chromosomes together")
+        _names_miss = _left_chr.symmetric_difference(_right_chr)
+        _n_miss = len(_names_miss)
 
-    return list(_gtf_fasta_match)
+        _names_left = list(_left_chr)[0:min(len(_left_chr), 10, _n_miss)]
+        _names_right = list(_right_chr)[0:min(len(_right_chr), 10, _n_miss)]
+
+        print(
+            f"File {file_name}: " if file_name is not None else ""
+            f"Chromosomes {_names_left} "
+            f"do not match Chromosomes {_names_right}\n"
+            f"The following chromosomes will not map correctly: "
+            f"{list(_names_miss)}"
+        )
+
+    if len(_joint_match) == 0 and raise_no_overlap:
+        raise ValueError("No overlap between chromosomes together")
+
+    return list(_joint_match)
 
 
 def select_genes(gene_dataframe, gene_constraint_list):
@@ -287,22 +381,40 @@ def select_genes(gene_dataframe, gene_constraint_list):
     if gene_constraint_list is None:
         return gene_dataframe
 
-    if len(gene_constraint_list) == 0:
-        raise ValueError("No elements provided in gene_constraint_list")
+    _n_constrain = len(gene_constraint_list)
 
-    _gene_constraint_list = list(map(lambda x: x.upper(), gene_constraint_list))
+    if _n_constrain == 0:
+        raise ValueError(
+            "No elements provided in gene_constraint_list"
+        )
+
+    _gene_constraint_list = list(
+        map(
+            lambda x: x.upper(),
+            gene_constraint_list
+        )
+    )
 
     _gene_constraint_idx = gene_dataframe[GTF_GENENAME].str.upper()
     _gene_constraint_idx = _gene_constraint_idx.isin(_gene_constraint_list)
 
     if _gene_constraint_idx.sum() == 0:
-        _msg = "No overlap between annotations ({an} ...) and constraint list ({li} ...)"
-        _msg = _msg.format(an=list(gene_dataframe[GTF_GENENAME][:min(3, gene_dataframe.shape[0])]),
-                           li=gene_constraint_list[:min(3, len(gene_constraint_list))])
-        raise ValueError(_msg)
+
+        _n_genes = gene_dataframe.shape[0]
+
+        raise ValueError(
+            "No overlap between annotations ("
+            f"{list(gene_dataframe[GTF_GENENAME][:min(3, _n_genes)])} "
+            " ...) and constraint list ("
+            f"{gene_constraint_list[:min(3, _n_constrain)]} ...)"
+        )
 
     gene_dataframe = gene_dataframe.loc[_gene_constraint_idx, :].copy()
-    print("{c} Genes Retained ({n} in constraint list)".format(c=gene_dataframe.shape[0], n=len(_gene_constraint_list)))
+
+    print(
+        f"{gene_dataframe.shape[0]} Genes Retained "
+        f"({len(_gene_constraint_list)} in constraint list)"
+    )
 
     return gene_dataframe
 
@@ -317,19 +429,64 @@ def _fix_genes(gene_dataframe, aggregate_functions):
     # Make sure that the strandedness doesn't reverse start/stop
     assert (gene_dataframe[SEQ_START] <= gene_dataframe[SEQ_STOP]).all()
 
-    return gene_dataframe.groupby(GTF_GENENAME).aggregate(aggregate_functions).reset_index()
+    return gene_dataframe.groupby(
+        GTF_GENENAME
+    ).aggregate(
+        aggregate_functions
+    ).reset_index()
 
 
 def _add_TSS(gene_dataframe):
     """
     Add a TSS column in place
+
     :param gene_dataframe: pd.DataFrame
     :return:
     """
-    gene_dataframe[SEQ_TSS] = gene_dataframe[SEQ_START].copy()
-    rev_strand = gene_dataframe[GTF_STRAND] == "-"
-    gene_dataframe.loc[rev_strand, SEQ_TSS] = gene_dataframe.loc[rev_strand, SEQ_STOP].copy()
+    gene_dataframe[SEQ_TSS] = gene_dataframe[SEQ_START]
+    _rev = gene_dataframe[GTF_STRAND] == "-"
+
+    gene_dataframe.loc[_rev, SEQ_TSS] = gene_dataframe.loc[_rev, SEQ_STOP]
     return gene_dataframe
+
+
+def _rename_chromosomes(
+    dataframe,
+    column_to_rename,
+    renamer_dict,
+    drop_unknowns=False
+):
+    """
+    Replace values in a dataframe column based on a lookup table
+
+    :param dataframe: Dataframe
+    :type dataframe: pd.DataFrame
+    :param column_to_rename: Column to rename
+    :type column_to_rename: str
+    :param renamer_dict: Dict, keyed by original value, value to replace
+    :type renamer_dict: dict
+    :param drop_unknowns: Remove any values not in the renamer_dict,
+        defaults to False
+    :type drop_unknowns: bool, optional
+    :return: Dataframe with the column changed
+    :rtype: pd.DataFrame
+    """
+
+    renamed_col = dataframe[column_to_rename].copy()
+    _is_replaced = pd.Series(False, index=renamed_col.index)
+
+    for k in renamer_dict.keys():
+        _kidx = renamed_col == k
+        renamed_col[_kidx] = renamer_dict[k]
+        _is_replaced |= _kidx
+
+    dataframe[column_to_rename] = renamed_col
+
+    if drop_unknowns and not _is_replaced.all():
+        return dataframe.loc[_is_replaced, :]
+
+    else:
+        return dataframe
 
 
 class ParseError(RuntimeError):
