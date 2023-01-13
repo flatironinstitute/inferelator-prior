@@ -10,6 +10,7 @@ GTF_ATTRIBUTES = 'attributes'
 GTF_CHROMOSOME = 'seqname'
 GTF_GENENAME = 'gene_name'
 GTF_STRAND = 'strand'
+GTF_PROTEIN = 'protein_coding'
 SEQ_START = 'start'
 SEQ_STOP = 'end'
 SEQ_TSS = 'TSS'
@@ -57,7 +58,8 @@ def load_gtf_to_dataframe(
     fasta_record_lengths=None,
     gene_id_regex=None,
     additional_regex=None,
-    rename_chromosome_dict=None
+    rename_chromosome_dict=None,
+    extract_protein_coding=False
 ):
     """
     Loads genes from a GTF or GFF into a dataframe and returns them
@@ -131,6 +133,13 @@ def load_gtf_to_dataframe(
                 reg, expand=False, flags=re.IGNORECASE
             )
             aggregate_functions[col] = _most_common
+
+    if extract_protein_coding:
+        annotations[GTF_PROTEIN] = annotations[GTF_ATTRIBUTES].str.contains(
+            "protein_coding",
+            case=False
+        )
+        aggregate_functions[GTF_PROTEIN] = any
 
     # Drop any NaNs in GENE_NAME:
     annotations.dropna(inplace=True, subset=[GTF_GENENAME])
@@ -348,16 +357,11 @@ def check_chromosomes_match(
     if len(_joint_match) != len(_left_chr):
 
         _names_miss = _left_chr.symmetric_difference(_right_chr)
-        _n_miss = len(_names_miss)
-
-        _names_left = list(_left_chr)[0:min(len(_left_chr), 10, _n_miss)]
-        _names_right = list(_right_chr)[0:min(len(_right_chr), 10, _n_miss)]
 
         print(
             f"File {file_name}: " if file_name is not None else ""
-            f"Chromosomes {_names_left} "
-            f"do not match Chromosomes {_names_right}\n"
-            f"The following chromosomes will not map correctly: "
+            f"Chromosomes do not match; the following "
+            f"{len(_names_miss)} chromosomes will not map correctly: "
             f"{list(_names_miss)}"
         )
 
