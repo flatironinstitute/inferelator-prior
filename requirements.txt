@@ -6,3 +6,4 @@ scipy
 pathos
 scikit-learn
 tqdm
+inferelator
