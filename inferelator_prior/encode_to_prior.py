@@ -13,22 +13,26 @@ from .processor.bedtools import (
 
 from .processor.encode import (
     ENCODE_TF_COL,
-    GENE_COL
+    GENE_COL,
+    BED_SIGNAL_COL
 )
+
+from .processor.prior import build_prior_from_motifs
 
 ENCODE_PRIOR_COLS = [
     BED_CHROMOSOME,
     SEQ_START,
     SEQ_STOP,
     ENCODE_TF_COL,
-    GENE_COL
+    GENE_COL,
+    BED_SIGNAL_COL
 ]
 
 
 def main():
 
     ap = argparse.ArgumentParser(
-        description="Link ATAC peaks in a BED file to genes in a GTF file"
+        description="Generate a ENCODE-derived prior"
     )
 
     ap.add_argument(
@@ -59,23 +63,15 @@ def main():
         default="prior.tsv.gz"
     )
 
-    ap.add_argument(
-        "-w",
-        "--wide",
-        dest="wide",
-        help="Return wide [genes x TFs] matrix",
-        action='store_const', const=False, default=True
-    )
-
     args = ap.parse_args()
 
-    long_df = encode_prior(
+    long_df, wide_df = encode_prior(
         args.linked,
         args.mask,
         return_long=args.wide
     )
 
-    long_df.to_csv(
+    wide_df.to_csv(
         args.out,
         sep="\t",
         index=False
@@ -86,8 +82,8 @@ def encode_prior(
     linked_bed_files,
     mask_bed_file,
     overlap_requirement=0.75,
-    return_all_cols=False,
-    return_wide=True
+    do_thresholding=True,
+    random_seed=100
 ):
     """
     Generate an ENCODE prior by taking ENCODE TF-ChIP peaks linked to genes
@@ -105,7 +101,10 @@ def encode_prior(
     :rtype: _type_
     """
 
-    if is_string(linked_bed_files):
+    if (
+        is_string(linked_bed_files) or
+        isinstance(linked_bed_files, pd.DataFrame)
+    ):
         linked_bed_files = [linked_bed_files]
 
     mask_bed = load_bed_to_bedtools(mask_bed_file)
@@ -125,9 +124,6 @@ def encode_prior(
             names=linked_file.columns
         )
 
-        if not return_all_cols:
-            intersected_bed = intersected_bed[ENCODE_PRIOR_COLS]
-
         intersected_bed = intersected_bed.drop_duplicates(
             subset=ENCODE_PRIOR_COLS
         )
@@ -141,22 +137,25 @@ def encode_prior(
         axis=0
     )
 
-    if return_wide:
+    wide_prior = all_prior.pivot_table(
+        values=BED_SIGNAL_COL,
+        index=GENE_COL,
+        columns=ENCODE_TF_COL,
+        fill_value=0,
+        aggfunc='sum'
+    )
 
-        all_prior = all_prior[[GENE_COL, ENCODE_TF_COL]].drop_duplicates()
-        all_prior['Fill'] = 1
+    wide_prior.index.name = None
+    wide_prior.columns.name = None
 
-        all_prior = all_prior.pivot_table(
-            values='Fill',
-            index=GENE_COL,
-            columns=ENCODE_TF_COL,
-            fill_value=0
-        ).astype(bool).astype(int)
+    wide_prior = build_prior_from_motifs(
+        wide_prior,
+        num_workers=None,
+        seed=random_seed,
+        do_threshold=do_thresholding
+    ).astype(int)
 
-        all_prior.index.name = None
-        all_prior.columns.name = None
-
-    return all_prior
+    return all_prior, wide_prior
 
 
 if __name__ == '__main__':

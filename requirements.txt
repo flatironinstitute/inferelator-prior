@@ -5,5 +5,6 @@ pybedtools
 scipy
 pathos
 scikit-learn
+joblib
 tqdm
 inferelator

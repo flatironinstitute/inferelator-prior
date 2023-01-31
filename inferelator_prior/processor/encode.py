@@ -6,7 +6,7 @@ from inferelator_prior.processor.bedtools import (
     link_bed_to_genes,
     BED_COLS,
     GENE_COL,
-    PEAK_COL
+    BED_SIGNAL_COL
 )
 
 ENCODE_TF_COL = 'TF'
@@ -25,7 +25,7 @@ ENCODE_BED_EXT = ".bed.gz"
 EXTRA_ENCODE_COLS = [
     ENCODE_TF_COL,
     GENE_COL,
-    PEAK_COL,
+    BED_SIGNAL_COL,
     ENCODE_ACCESSION_COL
 ]
 
@@ -114,6 +114,7 @@ def process_encode_bed_files(
             gene_annotations,
             None,
             window_size=None,
+            narrowpeak_bed=True,
             dprint=lambda *x: x,
             non_gene_key=None,
             check_chromosomes=i == 0 or debug
@@ -122,7 +123,12 @@ def process_encode_bed_files(
         n_bed_records += n_before
         n_linked_records += n_after
 
-        linked_bed[ENCODE_TF_COL] = record[ENCODE_TF_COL]
+        linked_bed.insert(
+            5,
+            ENCODE_TF_COL,
+            record[ENCODE_TF_COL]
+        )
+
         linked_bed[ENCODE_ACCESSION_COL] = record[_ENCODE_ACCESSION_COL]
 
         linked_data.append(linked_bed)

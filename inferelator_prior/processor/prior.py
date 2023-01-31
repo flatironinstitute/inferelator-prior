@@ -19,6 +19,7 @@ import pandas as pd
 import numpy as np
 import pathos.multiprocessing as multiprocessing
 from sklearn.cluster import DBSCAN
+import joblib
 
 PRIOR_TF = 'regulator'
 PRIOR_GENE = 'target'
@@ -209,8 +210,15 @@ class MotifScorer:
                              MOTIF_NAME_COL: [overlap_df[MOTIF_NAME_COL].unique()[0]]})
 
 
-def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_workers=None, debug=False,
-                                   by_chromosome=True, silent=False):
+def summarize_target_per_regulator(
+    genes,
+    motif_peaks,
+    motif_information,
+    num_workers=None,
+    debug=False,
+    by_chromosome=True,
+    silent=False
+):
     """
     Process a large dataframe of motif hits into a dataframe with the best hit for each regulator-target pair
     :param genes: pd.DataFrame [G x n]
@@ -316,7 +324,6 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
         )
         return prior_data, None
 
-
     prior_data = pd.concat(prior_data).reset_index(drop=True)
     prior_data[PRIOR_START] = prior_data[PRIOR_START].astype(int)
     prior_data[PRIOR_STOP] = prior_data[PRIOR_STOP].astype(int)
@@ -341,7 +348,14 @@ def summarize_target_per_regulator(genes, motif_peaks, motif_information, num_wo
     return summarized_data, prior_data
 
 
-def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=True, debug=False, silent=False):
+def build_prior_from_motifs(
+    raw_matrix,
+    num_workers=None,
+    seed=42,
+    do_threshold=True,
+    debug=False,
+    silent=False
+):
     """
     Construct a prior [G x K] interaction matrix
     :param raw_matrix: pd.DataFrame [G x K]
@@ -361,19 +375,46 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
 
     if do_threshold:
         # Threshold per-TF using DBSCAN
-        pfunc("Selecting edges to retain with DBSCAN")
-        prior_matrix = pd.DataFrame(False, index=raw_matrix.index, columns=raw_matrix.columns)
+        pfunc(
+            "Selecting edges to retain with DBSCAN"
+        )
+
+        prior_matrix = pd.DataFrame(
+            False,
+            index=raw_matrix.index,
+            columns=raw_matrix.columns
+        )
 
         if num_workers == 1:
-            prior_matrix_idx = list(map(lambda x: _prior_clusterer(*x),
-                                        _prior_gen(raw_matrix, debug=debug, silent=silent)))
+            prior_matrix_idx = list(
+                map(
+                    lambda x: _prior_clusterer(
+                        *x,
+                        n=raw_matrix.shape[1],
+                        debug=debug,
+                        silent=silent
+                    ),
+                    _prior_gen(raw_matrix)
+                )
+            )
 
         else:
-            with multiprocessing.Pool(num_workers, maxtasksperchild=1) as pool:
-                prior_matrix_idx = pool.starmap(_prior_clusterer, _prior_gen(raw_matrix, debug=debug, silent=silent),
-                                                chunksize=1)
+            prior_matrix_idx = [
+                r for r in joblib.Parallel(n_jobs=num_workers)(
+                    joblib.delayed(_prior_clusterer)(
+                        *x,
+                        n=raw_matrix.shape[1],
+                        debug=debug,
+                        silent=silent
+                    )
+                    for x in _prior_gen(raw_matrix)
+                )
+            ]
 
-        pfunc("Completed edge selection with DBSCAN")
+        pfunc(
+            "Completed edge selection with DBSCAN"
+        )
+
         for reg, reg_idx in prior_matrix_idx:
             prior_matrix.loc[reg_idx, reg] = True
 
@@ -384,25 +425,32 @@ def build_prior_from_motifs(raw_matrix, num_workers=None, seed=42, do_threshold=
         return raw_matrix != 0
 
 
-def _prior_gen(prior_matrix, debug=False, silent=False):
-
-    n = len(prior_matrix.columns)
+def _prior_gen(prior_matrix):
 
     for i, col_name in enumerate(prior_matrix.columns):
-        yield i, col_name, prior_matrix[col_name], n, debug, silent
+        yield i, col_name, prior_matrix[col_name]
 
 
-def _prior_clusterer(i, col_name, col_data, n, debug=False, silent=False):
+def _prior_clusterer(
+    i,
+    col_name,
+    col_data,
+    n=1,
+    debug=False,
+    silent=False
+):
 
     pfunc = print if not silent else lambda *x: None
 
     if not debug and (i % 50 == 0):
-        pfunc("Clustering {col} [{i} / {n}]".format(i=i, n=n, col=col_name))
+        pfunc(f"Clustering {col_name} [{i} / {n}]")
 
     keep_idx = _find_outliers_dbscan(col_data)
 
     if debug:
-        pfunc("Keeping {ed} edges for gene {col} [{i} / {n}]".format(ed=keep_idx.sum(), i=i, n=n, col=col_name))
+        pfunc(
+            f"Keeping {keep_idx.sum()} edges for gene {col_name} [{i} / {n}]"
+        )
 
     return col_name, keep_idx
 
