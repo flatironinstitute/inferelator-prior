@@ -29,12 +29,32 @@ SEQ_BIN = 'bin'
 SEQ_SCORE = 'p-value'
 
 GENE_COL = "gene"
-PEAK_COL = "peak"
 DIST_COL = "distance"
+
+BED_NAME_COL = "name"
+BED_SCORE_COL = "score"
+BED_SIGNAL_COL = "signalValue"
+BED_PVAL_COL = "pValue"
+BED_QVAL_COL = "qValue"
+BED_PEAK_COL = "peak"
+
+NARROWPEAK_COLS = [
+    BED_CHROMOSOME,
+    SEQ_START,
+    SEQ_STOP,
+    BED_NAME_COL,
+    BED_SCORE_COL,
+    GTF_STRAND,
+    BED_SIGNAL_COL,
+    BED_PVAL_COL,
+    BED_QVAL_COL,
+    BED_PEAK_COL
+]
 
 
 def load_bed_to_dataframe(
     bed_file_path,
+    narrowpeak=False,
     **kwargs
 ):
     """
@@ -72,9 +92,12 @@ def load_bed_to_dataframe(
             **kwargs
         )
 
+    if narrowpeak:
+        _colnames = NARROWPEAK_COLS
+
     # If not, use the standard headers
     # Padding if needed for extra columns
-    if first_2_cols.shape[1] > 4:
+    elif first_2_cols.shape[1] > 4:
         _colnames = BED_COLS + list(
             map(
                 lambda x: str(x),
@@ -199,6 +222,7 @@ def link_bed_to_genes(
     bed_file,
     gene_annotation_file,
     out_file,
+    narrowpeak_bed=False,
     use_tss=True,
     window_size=1000,
     dprint=print,
@@ -285,7 +309,11 @@ def link_bed_to_genes(
         dprint(f"Loading BED from file ({bed_file})")
 
         # Load genes and open a window
-        bed_df = load_bed_to_dataframe(bed_file)
+        bed_df = load_bed_to_dataframe(
+            bed_file,
+            narrowpeak=narrowpeak_bed
+        )
+
         dprint(f"{bed_df.shape[0]} BED annotations loaded")
 
     elif isinstance(bed_file, pd.DataFrame):
@@ -302,60 +330,42 @@ def link_bed_to_genes(
 
     bed_locs = load_bed_to_bedtools(bed_df)
 
-    try:
-        ia = intersect_bed(
-            gene_bed,
-            bed_locs,
-            wb=True
-        )
+    ia = intersect_bed(
+        gene_bed,
+        bed_locs,
+        wb=True
+    )
 
-        _new_cols = [
+    # Create a dataframe and select the necessary
+    # columns to make a BED file
+    ia = ia.to_dataframe(
+        names=[
             'a_chrom',
             'a_start',
             'a_end',
-            GTF_STRAND,
-            GENE_COL,
-            BED_CHROMOSOME,
-            SEQ_START,
-            SEQ_STOP
-        ]
-
-        # Check to see if there are extra mystery fields
-        # And give them names
-        if ia.field_count() > 8:
-            _extra_cols = list(
-                map(
-                    str,
-                    range(8, ia.field_count())
-                )
-            )
-        else:
-            _extra_cols = []
-
-        # Create a dataframe and select the necessary
-        # columns to make a BED file
-        ia = ia.to_dataframe(
-            names=_new_cols + _extra_cols
-        )
-
-        ia = ia[[
-            BED_CHROMOSOME,
-            SEQ_START,
-            SEQ_STOP,
-            GTF_STRAND,
+            'a_strand',
             GENE_COL
-        ]].copy()
+        ] + bed_df.columns.tolist()
+    ).drop(
+        [
+            'a_chrom',
+            'a_start',
+            'a_end',
+            'a_strand'
+        ],
+        axis=1
+    )
 
-    # Print some of the file structures
-    # because there's a structure problem if intersect fails
-    except:
-        print("Gene BED file:")
-        print(gene_bed.to_dataframe().head())
-        print("Target BED dataframe:")
-        print(bed_df.head())
-        print("Target BED file:")
-        print(bed_locs.to_dataframe().head())
-        raise
+    # Reorder for BED file compatibility
+    _new_cols = BED_COLS + [GENE_COL]
+    _new_cols = _new_cols + [
+        c for c in ia.columns if c not in _new_cols
+    ]
+
+    ia = ia.reindex(
+        _new_cols,
+        axis=1
+    )
 
     # Add an intergenic key if set
     # otherwise peaks that don't overlap will be dropped
@@ -369,22 +379,6 @@ def link_bed_to_genes(
 
         ia[GENE_COL] = ia[GENE_COL].fillna(non_gene_key)
         ia[GTF_STRAND] = ia[GTF_STRAND].fillna(".")
-
-    # Make unique peak IDs based on gene
-    ia[PEAK_COL] = ia[GENE_COL].groupby(
-        ia[GENE_COL]
-    ).transform(
-        lambda x: pd.Series(
-            map(lambda y: "_" + str(y), range(len(x))),
-            index=x.index
-        )
-    )
-
-    ia[PEAK_COL] = ia[GENE_COL].str.cat(ia[PEAK_COL])
-
-    peaks = ia[PEAK_COL].copy()
-    ia.drop(PEAK_COL, inplace=True, axis=1)
-    ia.insert(5, PEAK_COL, peaks)
 
     if add_distance:
         ia = ia.merge(
