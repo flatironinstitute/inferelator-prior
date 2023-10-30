@@ -354,7 +354,8 @@ def build_prior_from_motifs(
     seed=42,
     do_threshold=True,
     debug=False,
-    silent=False
+    silent=False,
+    **kwargs
 ):
     """
     Construct a prior [G x K] interaction matrix
@@ -392,7 +393,8 @@ def build_prior_from_motifs(
                         *x,
                         n=raw_matrix.shape[1],
                         debug=debug,
-                        silent=silent
+                        silent=silent,
+                        **kwargs
                     ),
                     _prior_gen(raw_matrix)
                 )
@@ -405,7 +407,8 @@ def build_prior_from_motifs(
                         *x,
                         n=raw_matrix.shape[1],
                         debug=debug,
-                        silent=silent
+                        silent=silent,
+                        **kwargs
                     )
                     for x in _prior_gen(raw_matrix)
                 )
@@ -437,7 +440,8 @@ def _prior_clusterer(
     col_data,
     n=1,
     debug=False,
-    silent=False
+    silent=False,
+    **kwargs
 ):
 
     pfunc = print if not silent else lambda *x: None
@@ -445,7 +449,7 @@ def _prior_clusterer(
     if not debug and (i % 50 == 0):
         pfunc(f"Clustering {col_name} [{i} / {n}]")
 
-    keep_idx = _find_outliers_dbscan(col_data)
+    keep_idx = _find_outliers_dbscan(col_data, **kwargs)
 
     if debug:
         pfunc(
@@ -527,14 +531,29 @@ def _gene_gen(genes, motif_peaks, motif_information, debug=False, silent=False):
         pfunc("{n} genes annotated to chromosome {c} have been skipped".format(n=bad_genes, c=chromosome))
 
 
-def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
+def _find_outliers_dbscan(
+    tf_data,
+    min_samples=None,
+    max_sparsity=0.05,
+    eps=1
+):
     scores, weights = np.unique(tf_data.values, return_counts=True)
 
-    labels = DBSCAN(min_samples=max(int(scores.size * 0.001), 10), eps=1, n_jobs=None)\
-        .fit_predict(scores.reshape(-1, 1), sample_weight=weights)
+    if min_samples is None:
+        min_samples = max(int(scores.size * 0.001), 10)
+
+    labels = DBSCAN(
+        min_samples=min_samples,
+        eps=eps,
+        n_jobs=None
+    ).fit_predict(
+        scores.reshape(-1, 1),
+        sample_weight=weights
+    )
 
     # Short circuit if all the labels are outliers
-    # This shouldn't happen real-world unless there aren't many genes in the network
+    # This shouldn't happen real-world unless there aren't
+    # many genes in the network
     if np.all(labels == -1):
         return pd.Series(tf_data.values > 0, index=tf_data.index)
 
@@ -542,18 +561,28 @@ def _find_outliers_dbscan(tf_data, max_sparsity=0.05):
     if np.all(labels == 0):
         return pd.Series(False, index=tf_data.index)
 
-    largest_cluster = np.argmax(np.array([np.min(scores[labels == i]) for i in range(np.max(labels) + 1)]))
+    largest_cluster = np.argmax(
+        np.array([
+            np.min(scores[labels == i])
+            for i in range(np.max(labels) + 1)
+        ])
+    )
     min_score = np.min(scores[labels == largest_cluster])
 
-    # If the largest cluster is less than max_sparsity, keep it and any outliers greater than it
+    # If the largest cluster is less than max_sparsity, keep it
+    # and any outliers greater than it
     keep_all_values = tf_data >= min_score
+
     if keep_all_values.sum() / keep_all_values.size <= max_sparsity:
         return keep_all_values
 
     # If the largest cluster exceeds max_sparsity, only keep outliers
     else:
         keep_outlier_values = scores[(labels == -1) & (scores > min_score)]
-        return pd.Series(np.isin(tf_data.values, keep_outlier_values), index=tf_data.index)
+        return pd.Series(
+            np.isin(tf_data.values, keep_outlier_values),
+            index=tf_data.index
+        )
 
 
 def _build_prior_for_gene(gene_info, motif_data, motif_information):

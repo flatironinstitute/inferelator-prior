@@ -2,14 +2,43 @@ import os
 
 import pandas as pd
 
-from inferelator_prior import (SRR_SUBPATH, FASTQ_SUBPATH, STAR_ALIGNMENT_SUBPATH, HTSEQ_ALIGNMENT_SUBPATH,
-                               KALLISTO_ALIGNMENT_SUBPATH)
-from inferelator_prior.processor.htseq_count import htseq_count_aligned
-from inferelator_prior.processor.matrix import pileup_raw_counts, normalize_matrix_to_fpkm, normalize_matrix_to_tpm
-from inferelator_prior.processor.srr import get_srr_files, unpack_srr_files
-from inferelator_prior.processor.star import star_align_fastqs
-from inferelator_prior.processor.kallisto import kallisto_align_fastqs, KALLISTO_COUNT_COL, KALLISTO_TPM_COL
-from inferelator_prior.processor.utils import file_path_abs, ArgParseTestRequirements
+from inferelator_prior import (
+    SRR_SUBPATH,
+    FASTQ_SUBPATH,
+    STAR_ALIGNMENT_SUBPATH,
+    HTSEQ_ALIGNMENT_SUBPATH,
+    KALLISTO_ALIGNMENT_SUBPATH
+)
+
+from inferelator_prior.processor.htseq_count import (
+    htseq_count_aligned
+)
+
+from inferelator_prior.processor.matrix import (
+    pileup_raw_counts,
+    normalize_matrix_to_fpkm,
+    normalize_matrix_to_tpm
+)
+
+from inferelator_prior.processor.srr import (
+    get_srr_files,
+    unpack_srr_files
+)
+
+from inferelator_prior.processor.star import (
+    star_align_fastqs
+)
+
+from inferelator_prior.processor.kallisto import (
+    kallisto_align_fastqs,
+    KALLISTO_COUNT_COL,
+    KALLISTO_TPM_COL
+)
+
+from inferelator_prior.processor.utils import (
+    file_path_abs,
+    ArgParseTestRequirements
+)
 
 OUTPUT_COUNT_FILE_NAME = "srr_counts.tsv"
 OUTPUT_COUNT_METADATA_NAME = "srr_alignment_metadata.tsv"
@@ -19,21 +48,94 @@ OUTPUT_T2G_FILE_NAME = "srr_tpm_t2g.tsv"
 
 
 def main():
-    ap = ArgParseTestRequirements(description="Turn a list of RNAseq expression SRRs from NCBI GEO into a count matrix")
-    ap.add_argument("-s", "--srr", dest="srr", help="SRR record IDs", nargs="+", metavar="SRRID", default=None)
-    ap.add_argument("-f", "--file", dest="file", help="List of SRR records in a TXT file", metavar="FILE", default=None)
-    ap.add_argument("-g", "--genome", dest="genome", help="Reference genome (STAR or Kallisto)", metavar="PATH",
-                    required=True)
-    ap.add_argument("-a", "--annotation", dest="anno", help="GTF/GFF Annotation File", metavar="FILE", default=None)
-    ap.add_argument("-t", "--t2g", dest="t2g", help="Transcript2Gene File", metavar="FILE", default=None)
-    ap.add_argument("-o", "--out", dest="out", help="Output PATH", metavar="PATH", required=True)
-    ap.add_argument("--gzip", dest="gzip", help="GZIP output file", action='store_const', const=True, default=False)
-    ap.add_argument("--cpu", dest="cpu", help="NUM of cores to use", metavar="NUM", type=int, default=4)
-    ap.add_argument("--star_jobs", dest="sjob", help="NUM of STAR workers to use", metavar="NUM", type=int, default=4)
-    ap.add_argument("--kallisto", dest="kallisto", help="Align and quant with Kallisto", action='store_const',
-                    const=True, default=False)
-    ap.add_argument("--skip_srr", dest="skip", help="Skip downloading & unpacking SRRs", action='store_const',
-                    const=True, default=False)
+
+    ap = ArgParseTestRequirements(
+        description="Turn a list of RNAseq expression SRRs "
+        "from NCBI GEO into a count matrix"
+    )
+
+    ap.add_argument(
+        "-s", "--srr", dest="srr",
+        help="SRR record IDs",
+        nargs="+",
+        metavar="SRRID",
+        default=None
+    )
+
+    ap.add_argument(
+        "-f", "--file", dest="file",
+        help="List of SRR records in a TXT file",
+        metavar="FILE",
+        default=None
+    )
+
+    ap.add_argument(
+        "-g", "--genome", dest="genome",
+        help="Reference genome (STAR or Kallisto)",
+        metavar="PATH",
+        required=True
+    )
+
+    ap.add_argument(
+        "-a", "--annotation", dest="anno",
+        help="GTF/GFF Annotation File",
+        metavar="FILE",
+        default=None
+    )
+
+    ap.add_argument(
+        "-t", "--t2g", dest="t2g",
+        help="Transcript2Gene File",
+        metavar="FILE",
+        default=None
+    )
+
+    ap.add_argument(
+        "-o", "--out", dest="out",
+        help="Output PATH",
+        metavar="PATH",
+        required=True
+    )
+
+    ap.add_argument(
+        "--gzip", dest="gzip",
+        help="GZIP output file",
+        action='store_const',
+        const=True,
+        default=False
+    )
+
+    ap.add_argument(
+        "--cpu", dest="cpu",
+        help="NUM of cores to use",
+        metavar="NUM",
+        type=int,
+        default=4
+    )
+
+    ap.add_argument(
+        "--star_jobs", dest="sjob",
+        help="NUM of STAR workers to use",
+        metavar="NUM",
+        type=int,
+        default=4
+    )
+
+    ap.add_argument(
+        "--kallisto", dest="kallisto",
+        help="Align and quant with Kallisto",
+        action='store_const',
+        const=True,
+        default=False
+    )
+
+    ap.add_argument(
+        "--skip_srr", dest="skip",
+        help="Skip downloading & unpacking SRRs",
+        action='store_const',
+        const=True,
+        default=False
+    )
 
     args, star_args = ap.parse_known_args()
 
@@ -50,9 +152,16 @@ def main():
         srr_ids = args.srr
     elif args.file is not None:
         # SRR IDs are in a .txt file; read them into a list
-        srr_ids = pd.read_csv(args.file, sep="\t", index_col=None, header=None).iloc[:, 0].tolist()
+        srr_ids = pd.read_csv(
+            args.file,
+            sep="\t",
+            index_col=None,
+            header=None
+        ).iloc[:, 0].tolist()
     else:
-        raise ValueError("There is something wrong with this switch")
+        raise ValueError(
+            "There is something wrong with this switch"
+        )
 
     srr_tomat0(
         srr_ids,
@@ -88,7 +197,11 @@ def srr_tomat0(
 
     # Download all the SRR files
     print("Downloading SRR files")
-    os.makedirs(os.path.join(output_path, SRR_SUBPATH), exist_ok=True)
+    os.makedirs(
+        os.path.join(output_path, SRR_SUBPATH),
+        exist_ok=True
+    )
+
     srr_file_names = get_srr_files(
         srr_ids,
         os.path.join(output_path, SRR_SUBPATH),
@@ -98,7 +211,11 @@ def srr_tomat0(
 
     # Unpack all the SRR files into FASTQ files
     print("Unpacking SRR files")
-    os.makedirs(os.path.join(output_path, FASTQ_SUBPATH), exist_ok=True)
+    os.makedirs(
+        os.path.join(output_path, FASTQ_SUBPATH),
+        exist_ok=True
+    )
+
     fastq_file_names = unpack_srr_files(
         srr_ids,
         srr_file_names,
@@ -107,16 +224,26 @@ def srr_tomat0(
         skip=skip
     )
 
-    gz_extension = ".gz" if gzip_output else ""
+    def _make_output_path(fn):
+        fn = os.path.join(output_path, fn)
 
-    count_matrix_file_name = os.path.join(output_path, OUTPUT_COUNT_FILE_NAME) + gz_extension
-    fpkm_file_name = os.path.join(output_path, OUTPUT_FPKM_FILE_NAME) + gz_extension
-    tpm_file_name = os.path.join(output_path, OUTPUT_TPM_FILE_NAME) + gz_extension
+        if gzip_output:
+            fn += ".gz"
+
+        return fn
+
+    count_matrix_file_name = _make_output_path(OUTPUT_COUNT_FILE_NAME)
+    fpkm_file_name = _make_output_path(OUTPUT_FPKM_FILE_NAME)
+    tpm_file_name = _make_output_path(OUTPUT_TPM_FILE_NAME)
 
     if kallisto:
 
         print("Aligning FASTQ files")
-        os.makedirs(os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH), exist_ok=True)
+        os.makedirs(
+            os.path.join(output_path, KALLISTO_ALIGNMENT_SUBPATH),
+            exist_ok=True
+        )
+
         count_file_names = kallisto_align_fastqs(
             srr_ids, fastq_file_names,
             reference_genome,
@@ -135,10 +262,18 @@ def srr_tomat0(
             counts = pd.read_csv(cf, sep="\t", index_col=0)
 
             if tpm_df is None:
-                tpm_df = pd.DataFrame(0., index=counts.index, columns=srr_ids)
+                tpm_df = pd.DataFrame(
+                    0.,
+                    index=counts.index,
+                    columns=srr_ids
+                )
 
             if count_matrix is None:
-                count_matrix = pd.DataFrame(0, index=counts.index, columns=srr_ids)
+                count_matrix = pd.DataFrame(
+                    0,
+                    index=counts.index,
+                    columns=srr_ids
+                )
 
             tpm_df[sid] = counts[KALLISTO_TPM_COL]
             count_matrix[sid] = counts[KALLISTO_COUNT_COL]
@@ -152,52 +287,92 @@ def srr_tomat0(
         print("Aligning FASTQ files")
         star_args = [] if star_args is None else star_args
 
-        os.makedirs(os.path.join(output_path, STAR_ALIGNMENT_SUBPATH), exist_ok=True)
-        thread_count = max(int(cores / len(srr_ids)), int(cores / star_jobs))
-        sam_file_names = star_align_fastqs(srr_ids, fastq_file_names, reference_genome,
-                                           os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
-                                           num_workers=star_jobs, threads_per_worker=thread_count,
-                                           star_options=star_args)
+        os.makedirs(
+            os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
+            exist_ok=True
+        )
+
+        thread_count = max(
+            int(cores / len(srr_ids)),
+            int(cores / star_jobs)
+        )
+
+        sam_file_names = star_align_fastqs(
+            srr_ids,
+            fastq_file_names,
+            reference_genome,
+            os.path.join(output_path, STAR_ALIGNMENT_SUBPATH),
+            num_workers=star_jobs,
+            threads_per_worker=thread_count,
+            star_options=star_args
+        )
 
         # Run all the SAM files through HTSeq.count to count
         print("Counting SAM alignments")
-        os.makedirs(os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), exist_ok=True)
-        count_file_names = htseq_count_aligned(srr_ids, sam_file_names, annotation_file,
-                                               os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH), num_workers=cores)
+        os.makedirs(
+            os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH),
+            exist_ok=True
+        )
+
+        count_file_names = htseq_count_aligned(
+            srr_ids,
+            sam_file_names,
+            annotation_file,
+            os.path.join(output_path, HTSEQ_ALIGNMENT_SUBPATH),
+            num_workers=cores
+        )
 
         # Convert the count files into a matrix and save it to a TSV
         print("Assembling result matrix")
-        count_matrix, count_metadata = pileup_raw_counts(srr_ids, count_file_names)
+        count_matrix, count_metadata = pileup_raw_counts(
+            srr_ids,
+            count_file_names
+        )
 
         # Save the raw counts file
-        count_matrix.to_csv(count_matrix_file_name, sep="\t")
+        count_matrix.to_csv(
+            count_matrix_file_name,
+            sep="\t"
+        )
 
         # Save the count metadata file
-        count_metadata.to_csv(os.path.join(output_path, OUTPUT_COUNT_METADATA_NAME), sep="\t")
+        count_metadata.to_csv(
+            os.path.join(output_path, OUTPUT_COUNT_METADATA_NAME),
+            sep="\t"
+        )
 
         # Normalize to FPKM
         print("Normalizing result matrix to FPKM")
-        normalized_count_matrix_fpkm = normalize_matrix_to_fpkm(count_matrix, annotation_file)
+        normalized_count_matrix_fpkm = normalize_matrix_to_fpkm(
+            count_matrix,
+            annotation_file
+        )
 
         # Save the normalized counts file
-        normalized_count_matrix_fpkm.to_csv(fpkm_file_name, sep="\t")
+        normalized_count_matrix_fpkm.to_csv(
+            fpkm_file_name,
+            sep="\t"
+        )
 
         # Normalize to TPM
         print("Normalizing result matrix to TPM")
-        tpm_df = normalize_matrix_to_tpm(count_matrix, annotation_file)
+        tpm_df = normalize_matrix_to_tpm(
+            count_matrix,
+            annotation_file
+        )
 
         # Save the normalized counts file
         tpm_df.to_csv(tpm_file_name, sep="\t")
-        
-    print(f"Count file {count_matrix.shape} generated from {len(srr_ids)} SRA files")
+
+    print(
+        f"Count file {count_matrix.shape} generated "
+        f"from {len(srr_ids)} SRA files"
+    )
 
     # Save an aggregated gene TPM file
     # If transcripts_to_genes_file has been provided
     if transcripts_to_genes_file is not None:
-        gene_file_name = os.path.join(
-            output_path,
-            OUTPUT_T2G_FILE_NAME
-        ) + gz_extension
+        gene_file_name = _make_output_path(OUTPUT_T2G_FILE_NAME)
 
         tpm_df = tpm_df.join(
             pd.read_csv(

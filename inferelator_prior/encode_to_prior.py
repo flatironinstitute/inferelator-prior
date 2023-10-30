@@ -68,7 +68,6 @@ def main():
     long_df, wide_df = encode_prior(
         args.linked,
         args.mask,
-        return_long=args.wide
     )
 
     wide_df.to_csv(
@@ -97,7 +96,7 @@ def encode_prior(
     :param overlap_requirement: How much of the TF-ChIP peak has to overlap
         with the regulatory region, defaults to 0.75
     :type overlap_requirement: float, optional
-    :return: Long TF
+    :return: Wide TF
     :rtype: _type_
     """
 
@@ -137,7 +136,7 @@ def encode_prior(
         axis=0
     )
 
-    wide_prior = all_prior.pivot_table(
+    score_prior = all_prior.pivot_table(
         values=BED_SIGNAL_COL,
         index=GENE_COL,
         columns=ENCODE_TF_COL,
@@ -145,11 +144,11 @@ def encode_prior(
         aggfunc='sum'
     )
 
-    wide_prior.index.name = None
-    wide_prior.columns.name = None
+    score_prior.index.name = None
+    score_prior.columns.name = None
 
     wide_prior = build_prior_from_motifs(
-        wide_prior,
+        score_prior,
         num_workers=None,
         seed=random_seed,
         do_threshold=do_thresholding
