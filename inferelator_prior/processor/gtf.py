@@ -45,8 +45,8 @@ def _most_common(x):
 
 # Define the functions for aggregating gene records
 AGGREGATE_FUNCS = {
-    SEQ_START: min,
-    SEQ_STOP: max,
+    SEQ_START: "min",
+    SEQ_STOP: "max",
     GTF_CHROMOSOME: _most_common,
     GTF_STRAND: _most_common
 }
@@ -139,7 +139,7 @@ def load_gtf_to_dataframe(
             "protein_coding",
             case=False
         )
-        aggregate_functions[GTF_PROTEIN] = any
+        aggregate_functions[GTF_PROTEIN] = "any"
 
     # Drop any NaNs in GENE_NAME:
     annotations.dropna(inplace=True, subset=[GTF_GENENAME])
@@ -171,7 +171,8 @@ def open_window(
     use_tss=False,
     fasta_record_lengths=None,
     constrain_to_intergenic=False,
-    include_entire_gene_body=False
+    include_entire_gene_body=False,
+    truncate_to_gene=False
 ):
     """
     Adjust the start and stop in the annotation dataframe
@@ -230,7 +231,14 @@ def open_window(
 
     if include_entire_gene_body:
         to_fix_pos = _pos_idx & (new_df[WINDOW_DOWN] < new_df[SEQ_STOP])
-        to_fix_neg = _neg_idx & (new_df[WINDOW_UP] > new_df[SEQ_STOP])
+        to_fix_neg = _neg_idx & (new_df[WINDOW_UP] > new_df[SEQ_START])
+
+        new_df.loc[to_fix_pos, WINDOW_DOWN] = new_df.loc[to_fix_pos, SEQ_STOP]
+        new_df.loc[to_fix_neg, WINDOW_UP] = new_df.loc[to_fix_neg, SEQ_START]
+    
+    if truncate_to_gene:
+        to_fix_pos = _pos_idx & (new_df[WINDOW_DOWN] > new_df[SEQ_STOP])
+        to_fix_neg = _neg_idx & (new_df[WINDOW_UP] < new_df[SEQ_START])
 
         new_df.loc[to_fix_pos, WINDOW_DOWN] = new_df.loc[to_fix_pos, SEQ_STOP]
         new_df.loc[to_fix_neg, WINDOW_UP] = new_df.loc[to_fix_neg, SEQ_START]
@@ -248,7 +256,7 @@ def open_window(
             new_df.loc[_idx & (new_df[WINDOW_DOWN] > _chrlen), WINDOW_DOWN] = _chrlen
 
     if constrain_to_intergenic:
-        new_df = new_df.groupby(GTF_CHROMOSOME).apply(fix_overlap)
+        new_df = new_df.groupby(GTF_CHROMOSOME, observed=True).apply(fix_overlap)
         new_df.reset_index(level=GTF_CHROMOSOME, inplace=True, drop=True)
 
     new_df[SEQ_START] = new_df[WINDOW_UP]
